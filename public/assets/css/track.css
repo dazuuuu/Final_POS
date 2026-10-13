@@ -1,0 +1,159 @@
+/* public/assets/css/track.css
+   App shell theme shared by the owner and staff layouts: green brand block +
+   white top bar, dark navy sidebar, light grey page, flat square cards with
+   solid colour icon blocks. Loaded last so it wins over page styles. */
+
+:root {
+  --tk-green: #3cb878;
+  --tk-green-dark: #2f9d63;
+  --tk-green-light: #e6f6ee;
+  --tk-navy: #2c3e50;
+  --tk-navy-dark: #22303d;
+  --tk-navy-hover: #34495e;
+  --tk-nav-text: #c3ccd5;
+  --tk-page: #ececec;
+  --tk-ink: #333;
+  --tk-muted: #8a8f96;
+  --tk-red: #f2473f;
+  --tk-orange: #ff9800;
+  --tk-blue: #2196f3;
+  --tk-teal: #1abc9c;
+  --tk-yellow: #f1b44c;
+  --tk-header-h: 56px;
+  --tk-side-w: 220px;
+  /* POS screens read these */
+  --pos-green: var(--tk-green);
+  --pos-green-dark: var(--tk-green-dark);
+  --pos-green-light: var(--tk-green-light);
+  --pos-bg: var(--tk-page);
+  --pos-ink: var(--tk-ink);
+}
+
+body {
+  font-family: 'Open Sans', -apple-system, 'Segoe UI', Roboto, Arial, sans-serif !important;
+  background: var(--tk-page) !important;
+  color: var(--tk-ink) !important;
+  font-size: 14px;
+}
+
+/* ---------- Header ---------- */
+.tk-header { position: fixed; top: 0; left: 0; right: 0; height: var(--tk-header-h); display: flex; z-index: 1003; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.tk-brand { width: var(--tk-side-w); flex-shrink: 0; background: var(--tk-green); color: #fff !important; display: flex; align-items: center; gap: 10px; padding: 0 16px; text-decoration: none; font-weight: 700; font-size: 1.15rem; letter-spacing: .02em; text-transform: uppercase; overflow: hidden; }
+.tk-brand img { width: 30px; height: 30px; object-fit: contain; background: #fff; border-radius: 3px; padding: 2px; flex-shrink: 0; }
+.tk-brand span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk-bar { flex: 1; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; min-width: 0; }
+.tk-toggle { width: 30px; height: 30px; border: 0; border-radius: 50%; background: #e9ecef; color: #6c757d; display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; cursor: pointer; }
+.tk-toggle:hover { background: #dee2e6; }
+.tk-right { display: flex; align-items: center; gap: 22px; color: #555; font-size: .85rem; }
+.tk-right a { color: #666; text-decoration: none; }
+.tk-right a:hover { color: var(--tk-green-dark); }
+.tk-user { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; color: #333; }
+.tk-user i { color: #777; }
+.tk-date { color: var(--tk-muted); }
+
+/* ---------- Sidebar ---------- */
+.t-sidebar { position: fixed; top: var(--tk-header-h); left: 0; bottom: 0; width: var(--tk-side-w); background: var(--tk-navy); color: var(--tk-nav-text); overflow-y: auto; z-index: 1001; transition: transform .25s ease; }
+.t-brand { display: none; }
+.t-nav { padding: 0 0 20px; }
+.t-section { padding: 14px 16px 6px; margin: 0; color: #7f8fa0; font-size: .66rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.t-link { display: flex; align-items: center; gap: 10px; padding: 9px 16px; margin: 0; border-radius: 0; color: var(--tk-nav-text) !important; text-decoration: none; font-size: .8rem; font-weight: 400; border-bottom: 1px solid rgba(255,255,255,.05); border-left: 3px solid transparent; }
+.t-link i { width: 16px; text-align: center; font-size: .8rem; color: #93a2b1; }
+.t-link:hover { background: var(--tk-navy-hover); color: #fff !important; }
+.t-link:hover i { color: #fff; }
+.t-link.active { background: var(--tk-navy-dark); color: #fff !important; font-weight: 600; border-left-color: var(--tk-green); box-shadow: none; }
+.t-link.active i { color: var(--tk-green); }
+.t-danger { color: #e7a9a4 !important; }
+.t-nav hr { border: 0; border-top: 1px solid rgba(255,255,255,.08); margin: 8px 0; }
+.t-soon { margin-left: auto; font-size: .6rem; background: rgba(255,255,255,.1); color: #c3ccd5; padding: 1px 6px; border-radius: 2px; }
+.t-close { display: none; }
+.t-sidebar-toggle { display: none !important; } /* the header has the toggle now */
+.t-sidebar-overlay { position: fixed; inset: var(--tk-header-h) 0 0 0; background: rgba(0,0,0,.45); z-index: 1000; display: none; }
+.t-sidebar-overlay.active { display: block; }
+body.tk-collapsed .t-sidebar { transform: translateX(-100%); }
+body.tk-collapsed .t-main { margin-left: 0 !important; width: 100% !important; }
+
+/* ---------- Page ---------- */
+.t-wrap { display: block !important; min-height: 100vh; }
+.t-main { margin-left: var(--tk-side-w) !important; width: calc(100% - var(--tk-side-w)) !important; padding: calc(var(--tk-header-h) + 20px) 22px 30px !important; transition: margin .25s ease; }
+.t-topbar { display: none !important; }
+.tk-pagehead { margin: 0 0 18px; padding-bottom: 12px; border-bottom: 1px solid #dcdcdc; }
+.tk-pagehead h1 { font-size: 1.9rem; font-weight: 400; color: #333; margin: 0 0 6px; letter-spacing: -.01em; }
+.tk-crumbs { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; font-size: .72rem; color: #555; }
+.tk-crumbs li + li::before { content: '/'; color: #aaa; margin-right: 6px; }
+.tk-crumbs a { color: #555; text-decoration: none; }
+.tk-crumbs a:hover { color: var(--tk-green-dark); }
+.t-flash { border-radius: 2px !important; }
+
+/* ---------- Flat components ---------- */
+.card { border-radius: 2px !important; border: 0 !important; box-shadow: 0 1px 2px rgba(0,0,0,.1) !important; }
+.card-body { border-radius: 2px; }
+.btn { border-radius: 2px; }
+.form-control, .form-select, .input-group-text { border-radius: 2px; }
+.alert { border-radius: 2px; }
+.badge { border-radius: 2px; }
+.table-responsive { border-radius: 0 !important; }
+.btn-primary { --bs-btn-bg: var(--tk-green); --bs-btn-border-color: var(--tk-green); --bs-btn-hover-bg: var(--tk-green-dark); --bs-btn-hover-border-color: var(--tk-green-dark); --bs-btn-active-bg: var(--tk-green-dark); --bs-btn-active-border-color: var(--tk-green-dark); background-color: var(--tk-green); border-color: var(--tk-green); }
+.btn-primary:hover { background-color: var(--tk-green-dark); border-color: var(--tk-green-dark); }
+.btn-outline-primary { color: var(--tk-green-dark); border-color: var(--tk-green); }
+.btn-outline-primary:hover { background: var(--tk-green); border-color: var(--tk-green); color: #fff; }
+a { color: var(--tk-green-dark); }
+.text-primary { color: var(--tk-green-dark) !important; }
+
+/* Stat tile: solid colour icon block + white number panel (dashboard). */
+.tk-stat { display: flex; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.1); border-radius: 2px; min-height: 92px; overflow: hidden; text-decoration: none; color: inherit; height: 100%; }
+.tk-stat-icon { width: 38%; max-width: 110px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.9rem; flex-shrink: 0; }
+.tk-stat-body { flex: 1; padding: 14px 14px; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.tk-stat-num { font-size: 1.35rem; color: #333; line-height: 1.2; overflow-wrap: anywhere; }
+.tk-stat-label { font-size: .75rem; font-weight: 700; color: #333; margin-top: 8px; }
+.tk-red { background: var(--tk-red); } .tk-orange { background: var(--tk-orange); } .tk-blue { background: var(--tk-blue); } .tk-greenbg { background: var(--tk-green); }
+
+/* Ring tile: title + circular percentage (dashboard). */
+.tk-ring-card { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.1); border-radius: 2px; padding: 20px 12px 24px; text-align: center; height: 100%; }
+.tk-ring-title { font-size: 1rem; color: #333; margin-bottom: 14px; }
+.tk-ring { --p: 0; --c: var(--tk-blue); width: 92px; height: 92px; margin: 0 auto; border-radius: 50%; background: conic-gradient(var(--c) calc(var(--p) * 1%), #e6e6e6 0); display: flex; align-items: center; justify-content: center; }
+.tk-ring::before { content: ''; position: absolute; }
+.tk-ring span { width: 82px; height: 82px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; color: var(--c); }
+.tk-ring-sub { font-size: .75rem; color: var(--tk-muted); margin-top: 10px; }
+
+/* ---------- POS screen: flatten to match ---------- */
+.pos-side, .pos-card, .pos-search input, .pos-cat, .pos-held, .pos-held-chip, .pos-customer, .pos-btn, .pos-add, .pos-price-mode, .pos-dim, .pos-cust-menu, .pos-offer-banner, .pos-qty button, .pos-qty-input { border-radius: 2px !important; }
+.pos-price-mode button, .pos-cat-img { border-radius: 2px !important; }
+.pos-side, .pos-card { border: 0 !important; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+.pos-side-title { font-weight: 600 !important; font-size: 1rem !important; text-transform: uppercase; letter-spacing: .03em; color: #555; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+.pos-search input { border-color: #ddd !important; }
+.pos-card-price { color: var(--tk-green-dark) !important; }
+.pos-ribbon { border-radius: 2px !important; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 992px) {
+  .tk-brand { width: auto; max-width: 60vw; }
+  .t-sidebar { transform: translateX(-100%); box-shadow: 0 0 30px rgba(0,0,0,.3); }
+  .t-sidebar.active { transform: translateX(0); }
+  body.tk-collapsed .t-sidebar { transform: translateX(-100%); }
+  .t-main { margin-left: 0 !important; width: 100% !important; padding: calc(var(--tk-header-h) + 14px) 14px 24px !important; }
+  .tk-date { display: none; }
+  .tk-pagehead h1 { font-size: 1.5rem; }
+}
+@media (max-width: 576px) {
+  .tk-bar { padding: 0 10px; }
+  .tk-right { gap: 14px; }
+  .tk-user span { display: none; }
+  .tk-brand { font-size: .95rem; padding: 0 12px; }
+  .t-main { padding: calc(var(--tk-header-h) + 10px) 10px 20px !important; }
+  .tk-pagehead { margin-bottom: 12px; }
+  .tk-pagehead h1 { font-size: 1.3rem; }
+  .tk-stat { min-height: 78px; }
+  .tk-stat-icon { font-size: 1.5rem; }
+  .tk-stat-num { font-size: 1.1rem; }
+  /* POS cart is pinned under the fixed header on phones */
+  .pos-side { top: var(--tk-header-h) !important; }
+}
+
+/* ---------- Shop switcher (owners with several shops) ---------- */
+.tk-shopswitch .btn { border-radius: 16px; font-size: .78rem; font-weight: 600; max-width: 220px; display: inline-flex; align-items: center; }
+.tk-shopswitch .btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-shopswitch .dropdown-item.active { background: var(--tk-green); }
+@media (max-width: 576px) { .tk-shopswitch .btn { max-width: 130px; min-height: 32px; padding: 4px 10px; } }
+
+/* ---------- "You are managing <shop>" bar (owner inside a branch shop) ---------- */
+.t-shopbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; background: #fff7e6; border: 1px solid #fde3a7; color: #7a4b00; border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; font-size: .85rem; }
