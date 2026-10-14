@@ -51,6 +51,8 @@ ob_start();
       <div>
         <div class="h5 fw-bold mb-0"><?php echo htmlspecialchars($data['shop']['name'] ?: 'Shop'); ?></div>
         <div class="text-muted"><?php echo htmlspecialchars(ucfirst($type)); ?> report · <?php echo date('l, j F Y', strtotime($date)); ?><?php echo $isToday ? ' · today' : ''; ?></div>
+        <div class="small text-muted"><i class="far fa-clock me-1"></i>Generated <?php echo date('l, j M Y \a\t g:i:s a', strtotime($data['generated_at'])); ?> by <?php echo htmlspecialchars($data['generated_by']); ?></div>
+        <?php if ($data['sales']): ?><div class="small text-muted">First sale <?php echo date('g:i:s a', strtotime($data['sales'][0]['created_at'])); ?> · last sale <?php echo date('g:i:s a', strtotime(end($data['sales'])['created_at'])); ?></div><?php endif; ?>
       </div>
       <div class="text-end small text-muted">
         <?php if ($data['shop']['phone']): ?><div><?php echo htmlspecialchars($data['shop']['phone']); ?></div><?php endif; ?>
@@ -77,16 +79,18 @@ ob_start();
     <div class="table-responsive mb-4">
       <table class="table table-sm align-middle mb-0">
         <?php $hasDevices = (bool) array_filter(array_column($data['sales'], 'devices')); ?>
-        <thead><tr class="text-muted small text-uppercase"><th>Receipt</th><th>Time</th><th>Staff</th><th>Customer</th><?php if ($hasDevices): ?><th>Serial / IMEI</th><?php endif; ?><th>Pay</th><th class="text-end">Total</th></tr></thead>
+        <thead><tr class="text-muted small text-uppercase"><th>#</th><th>Receipt</th><th>Date &amp; time</th><th>Staff</th><th>Customer</th><th>Items</th><?php if ($hasDevices): ?><th>Serial / IMEI</th><?php endif; ?><th>Pay</th><th class="text-end">Total</th></tr></thead>
         <tbody>
-          <?php foreach ($data['sales'] as $s): ?>
+          <?php foreach ($data['sales'] as $n => $s): ?>
           <tr>
+            <td class="small text-muted"><?php echo $n + 1; ?></td>
             <td class="small fw-semibold"><?php echo htmlspecialchars($s['receipt_number']); ?></td>
-            <td class="small text-nowrap"><?php echo date('g:i a', strtotime($s['created_at'])); ?></td>
+            <td class="small text-nowrap"><?php echo date('D j M Y', strtotime($s['created_at'])); ?><div class="fw-semibold"><?php echo date('g:i:s a', strtotime($s['created_at'])); ?></div></td>
             <td class="small"><?php echo htmlspecialchars($s['staff_name'] ?: '—'); ?></td>
-            <td class="small"><?php echo htmlspecialchars($s['customer_name'] ?: '—'); ?></td>
+            <td class="small"><?php echo htmlspecialchars($s['customer_name'] ?: '—'); ?><?php if (!empty($s['customer_phone'])): ?><div class="text-muted"><?php echo htmlspecialchars($s['customer_phone']); ?></div><?php endif; ?></td>
+            <td class="small"><?php echo htmlspecialchars(SalesReport::itemsText($s['items'] ?? [])) ?: '—'; ?></td>
             <?php if ($hasDevices): ?><td class="small"><?php echo Models\ElectronicsModel::serialsHtml($s['devices'] ?? []) ?: '—'; ?></td><?php endif; ?>
-            <td><?php echo $s['payment_method']==='cash' ? '<span class="badge bg-light text-dark">Cash</span>' : '<span class="badge bg-success text-white">M-Pesa</span>'; ?></td>
+            <td><?php echo ['cash' => '<span class="badge bg-light text-dark">Cash</span>', 'mpesa' => '<span class="badge bg-success">M-Pesa</span>', 'split' => '<span class="badge bg-info text-dark">Split</span>', 'credit' => '<span class="badge bg-warning text-dark">Credit</span>'][$s['payment_method']] ?? htmlspecialchars((string) $s['payment_method']); ?></td>
             <td class="text-end fw-semibold"><?php echo $money($s['total']); ?></td>
           </tr>
           <?php endforeach; ?>
@@ -106,7 +110,7 @@ ob_start();
           <?php foreach ($data['services'] as $v): ?>
           <tr class="small">
             <td class="fw-semibold"><?php echo htmlspecialchars($v['number']); ?></td>
-            <td class="text-nowrap"><?php echo date('g:i a', strtotime($v['paid_at'])); ?></td>
+            <td class="text-nowrap"><?php echo date('D j M Y, g:i:s a', strtotime($v['paid_at'])); ?></td>
             <td><?php echo htmlspecialchars($v['customer_name']); ?></td>
             <td><?php echo htmlspecialchars($v['services'] ?? ''); ?></td>
             <td><?php echo $v['payment_method'] === 'split' ? 'Split' : ($v['payment_method'] === 'mpesa' ? 'M-Pesa' : 'Cash'); ?></td>
@@ -144,11 +148,13 @@ ob_start();
     <h2 class="h6 fw-bold mb-2">Products sold</h2>
     <div class="table-responsive mb-4">
       <table class="table table-sm align-middle mb-0">
-        <thead><tr class="text-muted small text-uppercase"><th>Product</th><th class="text-end">Qty</th><th class="text-end">Revenue</th></tr></thead>
+        <thead><tr class="text-muted small text-uppercase"><th>Product</th><th>First sold</th><th>Last sold</th><th class="text-end">Qty</th><th class="text-end">Revenue</th></tr></thead>
         <tbody>
           <?php foreach ($data['products'] as $p): ?>
           <tr>
             <td class="small"><?php echo htmlspecialchars($p['product_name']); ?></td>
+            <td class="small text-nowrap"><?php echo !empty($p['first_at']) ? date('g:i:s a', strtotime($p['first_at'])) : '—'; ?></td>
+            <td class="small text-nowrap"><?php echo !empty($p['last_at']) ? date('g:i:s a', strtotime($p['last_at'])) : '—'; ?></td>
             <td class="text-end small"><?php echo rtrim(rtrim(number_format((float)$p['qty'],2),'0'),'.'); ?></td>
             <td class="text-end fw-semibold"><?php echo $money($p['revenue']); ?></td>
           </tr>
@@ -180,7 +186,7 @@ ob_start();
         <thead><tr class="text-muted small text-uppercase"><th>Staff</th><th>Clock in</th><th>Clock out</th><th>Status</th></tr></thead>
         <tbody>
           <?php foreach ($data['attendance'] as $a): ?>
-          <tr><td class="small"><?php echo htmlspecialchars($a['username']); ?></td><td class="small"><?php echo date('g:i a', strtotime($a['clock_in_at'])); ?></td><td class="small"><?php echo $a['clock_out_at'] ? date('g:i a', strtotime($a['clock_out_at'])) : 'Still in'; ?></td><td><?php echo !empty($a['late_clock_in']) ? '<span class="badge bg-danger">Late</span>' : (!empty($a['auto_closed']) ? '<span class="badge bg-warning text-dark">Auto closed</span>' : '<span class="badge bg-success">On time</span>'); ?></td></tr>
+          <tr><td class="small"><?php echo htmlspecialchars($a['username']); ?></td><td class="small"><?php echo date('D j M Y, g:i:s a', strtotime($a['clock_in_at'])); ?></td><td class="small"><?php echo $a['clock_out_at'] ? date('D j M Y, g:i:s a', strtotime($a['clock_out_at'])) : 'Still in'; ?></td><td><?php echo !empty($a['late_clock_in']) ? '<span class="badge bg-danger">Late</span>' : (!empty($a['auto_closed']) ? '<span class="badge bg-warning text-dark">Auto closed</span>' : '<span class="badge bg-success">On time</span>'); ?></td></tr>
           <?php endforeach; ?>
         </tbody>
       </table>

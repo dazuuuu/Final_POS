@@ -75,6 +75,7 @@ $shopName = $__tenant['name'] ?? 'My Shop';
     <?php echo $extra_css ?? ''; ?>
 </head>
 <body>
+<?php include __DIR__ . '/../../components/preview_banner.php'; ?>
 <?php include __DIR__ . '/../../components/shell_header.php'; ?>
 <div class="t-wrap">
     <?php include __DIR__ . '/../../components/tenants/sidebar.php'; ?>
@@ -96,6 +97,7 @@ $shopName = $__tenant['name'] ?? 'My Shop';
                 </form>
             </div>
         <?php endif; ?>
+        <?php include __DIR__ . '/../../components/activation_notice.php'; ?>
         <?php if (!empty($_SESSION['flash']['success'])): ?>
             <div class="t-flash ok"><?php echo htmlspecialchars($_SESSION['flash']['success']); unset($_SESSION['flash']['success']); ?></div>
         <?php endif; ?>

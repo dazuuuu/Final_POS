@@ -11,7 +11,10 @@ class AccountGuard
      */
     public static function evaluate(array $user): array
     {
-        if (empty($user['is_active']) || empty($user['email_verified'])) {
+        if (empty($user['is_active'])) {
+            return ['ok' => false, 'reason' => 'switched_off'];
+        }
+        if (empty($user['email_verified'])) {
             return ['ok' => false, 'reason' => 'not_activated'];
         }
 
@@ -22,6 +25,7 @@ class AccountGuard
     {
         return [
             'not_activated' => 'Please activate your account using the link we emailed you.',
+            'switched_off'  => 'This login is switched off. Ask the shop owner or support to turn it back on.',
         ][$reason] ?? 'Your account cannot be accessed right now. Please contact support.';
     }
 }

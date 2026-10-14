@@ -1,0 +1,8 @@
+# domain/<shop-slug>/… → index.php, which runs the page for that shop
+# (see app/helpers/ShopUrl.php).
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^([a-z0-9-]+)(/.*)?$ index.php [L,QSA]
+</IfModule>

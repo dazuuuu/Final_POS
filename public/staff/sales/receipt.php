@@ -185,6 +185,7 @@ $editUrl = public_url(($isStaffViewer ? 'staff' : 'super') . '/sales/edit.php?id
 <title>Receipt <?php echo htmlspecialchars($sale['receipt_number']); ?> — <?php echo htmlspecialchars($RECEIPT_BUSINESS['name']); ?></title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<?php $autoPrint = !empty($_GET['new']); include __DIR__ . '/../../components/printer_script.php'; ?>
 <style>
   body{background:#f1f5f9;margin:0;padding:24px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;}
   .sheet{background:#fff;max-width:420px;margin:0 auto 18px;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.1);padding:24px;}
@@ -201,7 +202,7 @@ $editUrl = public_url(($isStaffViewer ? 'staff' : 'super') . '/sales/edit.php?id
 
   <div class="actions">
     <div class="d-flex gap-2 mb-2">
-      <button onclick="window.print()" class="btn btn-primary flex-fill"><i class="fas fa-print me-1"></i> Print / Save PDF</button>
+      <button onclick="TasoPrinter.printClick()" class="btn btn-primary flex-fill"><i class="fas fa-print me-1"></i> Print / Save PDF</button>
       <a href="<?php echo htmlspecialchars($waLink); ?>" target="_blank" rel="noopener" class="btn btn-success flex-fill"><i class="fab fa-whatsapp me-1"></i> WhatsApp</a>
     </div>
     <?php if (TenantContext::can(Capabilities::SALES_RECORD)): ?>

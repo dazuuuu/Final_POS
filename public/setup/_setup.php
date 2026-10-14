@@ -77,6 +77,7 @@ function setup_render_header(string $title, string $activeStep = 'migrations'): 
     .step { display: block; margin-bottom: 8px; }
   }
 </style>
+<?php include __DIR__ . '/../components/password_toggle.php'; ?>
 </head>
 <body>
 <div class="wrap">

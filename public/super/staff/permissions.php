@@ -34,6 +34,13 @@ if (Features::enabled(Features::SERVICES)) {
     $toggles[] = ['key' => 'svc_cashier', 'label' => 'Services: cashier',      'desc' => 'Take payment for services and print the receipt.',          'caps' => [Capabilities::SERVICES_CASHIER]];
     $toggles[] = ['key' => 'svc_manage',  'label' => 'Services: manage price list', 'desc' => 'Add services, change prices and which shops offer them (otherwise owner only).', 'caps' => [Capabilities::SERVICES_MANAGE]];
     $toggles[] = ['key' => 'svc_money',   'label' => 'Services: see money',    'desc' => 'See service prices and amounts, and their own commission.', 'caps' => [Capabilities::SERVICES_MONEY]];
+    $toggles[] = ['key' => 'svc_payout',  'label' => 'Services: pay staff commission', 'desc' => 'Pay staff what they have earned — their commission balance goes back to zero.', 'caps' => [Capabilities::SERVICES_PAYOUT]];
+}
+// Restaurant + Rooms package.
+if (Features::enabled(Features::RESTAURANT_ROOMS)) {
+    $toggles[] = ['key' => 'rooms_manage', 'label' => 'Rooms: set up rooms',   'desc' => 'Add and edit rooms, their prices and the late check-out fee.', 'caps' => [Capabilities::ROOMS_MANAGE]];
+    $toggles[] = ['key' => 'rooms_desk',   'label' => 'Rooms: reception',      'desc' => 'Book guests into rooms, add room service, check guests out and take payment.', 'caps' => [Capabilities::ROOMS_DESK]];
+    $toggles[] = ['key' => 'table_book',   'label' => 'Table bookings',        'desc' => 'Take group / family table bookings with their menu, and manage family platters.', 'caps' => [Capabilities::TABLE_BOOKINGS]];
 }
 $manageable = [];
 foreach ($toggles as $t) { foreach ($t['caps'] as $c) { $manageable[] = $c; } }

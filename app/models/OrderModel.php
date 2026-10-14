@@ -905,7 +905,8 @@ class OrderModel extends Model
     {
         $date = preg_replace('/[^0-9-]/', '', $date);
         $stmt = $this->db->prepare(
-            "SELECT oi.product_name, SUM(oi.quantity) AS qty, SUM(oi.line_total) AS revenue
+            "SELECT oi.product_name, SUM(oi.quantity) AS qty, SUM(oi.line_total) AS revenue,
+                    MIN(o.paid_at) AS first_at, MAX(o.paid_at) AS last_at
                FROM order_items oi
                JOIN orders o ON o.id = oi.order_id AND o.tenant_id = oi.tenant_id
               WHERE oi.tenant_id = ? AND o.status = 'paid' AND DATE(o.paid_at) = ?

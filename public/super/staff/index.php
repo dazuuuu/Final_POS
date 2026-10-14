@@ -72,6 +72,12 @@ ob_start();
     <div class="card border-0 shadow-sm" style="border-radius:12px;">
       <div class="card-body p-4">
         <h2 class="h5 mb-1">Add staff</h2>
+        <?php if (Features::isBasic()): $__used = $svc->accountStaffCount((int) $tenantId); ?>
+          <div class="alert <?php echo $__used >= Features::BASIC_STAFF_LIMIT ? 'alert-warning' : 'alert-light border'; ?> small py-2">
+            <i class="fas fa-users me-1"></i><?php echo $__used; ?> of <?php echo Features::BASIC_STAFF_LIMIT; ?> staff used on the Basic package.
+            <?php if ($__used >= Features::BASIC_STAFF_LIMIT): ?><a href="<?php echo public_url('super/upgrade.php?f=' . urlencode('More staff')); ?>">Upgrade to Pro</a> for unlimited staff.<?php endif; ?>
+          </div>
+        <?php endif; ?>
         <p class="text-muted small mb-3">Staff log in at the terminal with their name and PIN — no email or password needed. Set what they're allowed to do afterwards on the Permissions page.</p>
         <?php if (!empty($errors['_'])): ?><div class="alert alert-danger py-2"><?php echo htmlspecialchars($errors['_']); ?></div><?php endif; ?>
         <form method="post" novalidate>

@@ -16,6 +16,11 @@
 //                         a price list of services, walk-ins and bookings,
 //                         assigning staff, invoices/receipts and commissions.
 //                         Like electronics it includes the shop template.
+//   shop_basic_20k /    — Basic tier of the shop / services POS: one shop
+//   services_basic_20k    only, up to 3 staff, no admins, USB printing only.
+//                         Pro pages (PRO_PAGES) stay in the menu badged "Pro"
+//                         and open super/upgrade.php. Any 30k shop package
+//                         on the same account lifts these limits.
 //
 // Multi-shop is also per account (tenants.multi_shop on the top-level
 // tenant, on by default): when support turns it off the owner can't open
@@ -27,13 +32,32 @@ class Features
     const RESTAURANT_POS = 'restaurant_pos_30k';
     const ELECTRONICS    = 'electronics_30k';
     const SERVICES       = 'services_30k';
+    const RESTAURANT_ROOMS = 'restaurant_rooms_40k';
+    // Basic tier (20k): one shop, up to BASIC_STAFF_LIMIT staff, no admins,
+    // USB / device printing only. Pro features show in the menu with a "Pro"
+    // badge and open the upgrade page (super/upgrade.php).
+    const SHOP_BASIC     = 'shop_basic_20k';
+    const SERVICES_BASIC = 'services_basic_20k';
+    const BASIC_STAFF_LIMIT = 3;
+
+    /** Pages that are Pro-only: path fragment => feature name shown on the upgrade page. */
+    const PRO_PAGES = [
+        '/super/shops/'     => 'Multiple shops',
+        '/super/warehouse/' => 'Warehouse',
+        '/super/transfer/'  => 'Transfers between shops',
+        '/super/purchases/' => 'Purchases',
+        '/super/admins/'    => 'Admins',
+    ];
 
     /** key => [label, price, description, icon] */
     public static function catalog(): array
     {
         return [
+            self::SHOP_BASIC => ['Shop POS Basic', 20000, 'One shop: sales, credit, held sales, payments, returns, inventory, stock, suppliers, expenses, finances, customers, reports and settings. Up to 3 staff, USB printing. (Basic.)', 'fa-store'],
+            self::SERVICES_BASIC => ['Services Basic', 20000, 'Shop POS Basic plus services: a price list, walk-ins and bookings, assigning staff, invoices, receipts and commissions. One shop, up to 3 staff, USB printing. (Basic.)', 'fa-user-gear'],
             self::SHOP_POS => ['Shop POS', 30000, 'Full retail POS: sales, credit, held sales, payments, returns, inventory, stock, suppliers, staff, expenses, finances, customers, reports and settings.', 'fa-cash-register'],
             self::RESTAURANT_POS => ['Restaurant POS', 30000, 'Restaurant POS: tables, menu, kitchen orders and bills. (In development.)', 'fa-utensils'],
+            self::RESTAURANT_ROOMS => ['Restaurant + Rooms', 40000, 'Everything in the Restaurant POS, plus Rooms & Accommodation (rooms, guest bookings, invoices, check-out with late fees, receipts) and table bookings with pre-set group menus and family platters.', 'fa-hotel'],
             self::SERVICES => ['Services', 30000, 'Everything in the Shop POS, plus for service businesses: a price list of services, walk-in clients and bookings, assigning staff, invoices and receipts, and staff commissions.', 'fa-user-gear'],
             self::ELECTRONICS => ['Electronics', 30000, 'Everything in the Shop POS, plus for phone & electronics shops: serial number / IMEI for every unit, warranties that start at sale, and warranty / repair returns.', 'fa-mobile-screen'],
         ];
@@ -52,6 +76,7 @@ class Features
     const ALWAYS_ALLOWED = [
         '/super/dashboard/', '/staff/dashboard/', '/super/profile/',
         '/staff/reset-password.php', '/staff/change-pin.php',
+        '/super/guide/', '/staff/guide/', '/super/help/',
     ];
 
     private static array $cache = [];
@@ -64,8 +89,15 @@ class Features
             return false;
         }
         $state = self::forAccount(self::accountId($tenantId));
-        if ($key === self::SHOP_POS && (!empty($state[self::ELECTRONICS]) || !empty($state[self::SERVICES]))) {
+        if ($key === self::SHOP_POS && (!empty($state[self::ELECTRONICS]) || !empty($state[self::SERVICES])
+            || !empty($state[self::SHOP_BASIC]) || !empty($state[self::SERVICES_BASIC]))) {
             return true; // these are the shop template plus their own features
+        }
+        if ($key === self::SERVICES && !empty($state[self::SERVICES_BASIC])) {
+            return true;
+        }
+        if ($key === self::RESTAURANT_POS && !empty($state[self::RESTAURANT_ROOMS])) {
+            return true; // the restaurant POS is part of Restaurant + Rooms
         }
         return $state[$key] ?? false;
     }
@@ -123,11 +155,34 @@ class Features
         self::setForAccount($accountId, array_values($on_keys));
     }
 
-    /** Can this account open branch shops? On unless support turned it off. */
+    /**
+     * Is this account on the Basic (20k) tier — a basic package and no Pro
+     * shop package (Shop POS, Services or Electronics 30k)?
+     */
+    public static function isBasic(?int $tenantId = null): bool
+    {
+        $tenantId ??= TenantContext::tenantId();
+        if ($tenantId === null) { return false; }
+        $state = self::forAccount(self::accountId($tenantId));
+        return (!empty($state[self::SHOP_BASIC]) || !empty($state[self::SERVICES_BASIC]))
+            && empty($state[self::SHOP_POS]) && empty($state[self::SERVICES]) && empty($state[self::ELECTRONICS]);
+    }
+
+    /** Pro feature name if $path is a Pro-only page, else null. */
+    public static function proPage(string $path): ?string
+    {
+        foreach (self::PRO_PAGES as $frag => $name) {
+            if (strpos($path, $frag) !== false) { return $name; }
+        }
+        return null;
+    }
+
+    /** Can this account open branch shops? On unless support turned it off; never on Basic. */
     public static function multiShop(?int $tenantId = null): bool
     {
         $tenantId ??= TenantContext::tenantId();
         if ($tenantId === null) { return true; }
+        if (self::isBasic($tenantId)) { return false; }
         try {
             self::ensureMultiShopColumn();
             $stmt = Database::pdo()->prepare('SELECT multi_shop FROM tenants WHERE id = ?');
@@ -202,6 +257,11 @@ class Features
             unset($_SESSION['logged_in'], $_SESSION['otp_verified'], $_SESSION['user_id'],
                   $_SESSION['tenant_id'], $_SESSION['role'], $_SESSION['capabilities']);
             header('Location: ' . public_url('auth/login.php?locked=1'));
+            exit;
+        }
+
+        if (self::isBasic($account) && ($pro = self::proPage($script)) !== null) {
+            header('Location: ' . public_url('super/upgrade.php?f=' . urlencode($pro)));
             exit;
         }
 

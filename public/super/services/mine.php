@@ -19,9 +19,22 @@ $done = array_slice(array_values(array_filter($items, fn($i) => $i['status'] ===
 $showMoney = $canMoney;
 $week = $showMoney ? $SD->myEarnings($me, date('Y-m-d', strtotime('monday this week')), date('Y-m-d')) : null;
 $month = $showMoney ? $SD->myEarnings($me, date('Y-m-01'), date('Y-m-d')) : null;
+// What they're owed since their last payout — always visible to them; it
+// goes back to zero when the owner (or whoever pays staff) pays them.
+$owed = $SD->unpaidFor($me);
+$lastPaid = $SD->payouts($me, 1)[0] ?? null;
 
 ob_start();
 ?>
+<div class="card border-0 shadow-sm mb-3" style="border-radius:14px;background:linear-gradient(135deg,#ecfdf5,#fff);"><div class="card-body p-3 p-md-4 d-flex flex-wrap align-items-center gap-3">
+  <div class="flex-grow-1">
+    <div class="small text-muted text-uppercase fw-semibold">Commission owed to me</div>
+    <div class="fw-bold text-success" style="font-size:1.9rem;line-height:1.1"><?php echo svc_money($owed['amount']); ?></div>
+    <div class="small text-muted"><?php echo $owed['count']; ?> paid service<?php echo $owed['count'] === 1 ? '' : 's'; ?> since <?php echo $lastPaid ? 'you were last paid (' . svc_money($lastPaid['amount']) . ' on ' . date('j M', strtotime($lastPaid['created_at'])) . ')' : 'you started'; ?>. Resets to zero when you're paid.</div>
+  </div>
+  <a href="<?php echo public_url('super/services/my-job.php'); ?>" class="btn btn-success"><i class="fas fa-plus me-1"></i>Record a job I did</a>
+</div></div>
+
 <?php if ($showMoney): ?>
 <div class="row g-3 mb-3">
   <div class="col-6 col-lg-3"><div class="tk-stat"><div class="tk-stat-icon tk-greenbg"><i class="fas fa-coins"></i></div><div class="tk-stat-body"><div class="tk-stat-num"><?php echo svc_money($week['commission']); ?></div><div class="tk-stat-label">My commission this week</div></div></div></div>

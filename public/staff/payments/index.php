@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'settl
             $_SESSION['flash']['success'] = $res['fully_paid']
                 ? 'Paid in full — ' . $order['receipt_number'] . ' is settled.'
                 : 'KES ' . number_format($res['amount'], 0) . ' received. ' . $order['table_name'] . ' still owes KES ' . number_format($res['balance'], 0) . '.';
-            header('Location: ' . public_url($area . '/orders/receipt.php?id=' . (int) $order['id']));
+            header('Location: ' . public_url($area . '/orders/receipt.php?id=' . (int) $order['id'] . '&new=1'));
             exit;
         }
         $error = $res['error'] ?? 'Could not record the payment.';

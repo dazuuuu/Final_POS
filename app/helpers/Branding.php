@@ -29,6 +29,23 @@ class Branding
     }
 
     /**
+     * The platform's own brand (set in Support → Settings, saved to
+     * app/config/platform.php). The login / signup screens are shared by every
+     * shop, so they show this — never one client's logo.
+     * Returns ['name' => string, 'logo' => url].
+     */
+    public static function platform(): array
+    {
+        $file = ROOT_PATH . '/app/config/platform.php';
+        $cfg = is_file($file) ? (include $file) : [];
+        $cfg = is_array($cfg) ? $cfg : [];
+        return [
+            'name' => ($cfg['name'] ?? '') !== '' ? $cfg['name'] : 'Dazu Modern POS',
+            'logo' => !empty($cfg['logo']) ? public_url(self::normalizeStoredPath($cfg['logo'])) : self::loginLogo(),
+        ];
+    }
+
+    /**
      * Older rows (or a differently-configured server) may have a stored path
      * that's already absolute (leading '/', with or without a 'public/'
      * prefix). Strip that down to a path relative to the public root so it

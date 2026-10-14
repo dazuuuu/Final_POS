@@ -1,201 +1,149 @@
 <?php
 // public/components/bottom_nav.php
-// App-style bottom navigation for phones/tablets (≤992px). Desktop keeps the
-// sidebar. Related menus are grouped: a tab either opens a page directly or
-// slides up a sheet of its links; "More" opens the full sidebar. Every link
-// is capability-gated the same way as the sidebar.
+// App-style bottom bar for phones/tablets (≤992px); desktop keeps the sidebar.
+//   Home · <group> · [ big action ] · <group> · Menu
+// A group tab slides up a sheet of its pages; the centre button is the main
+// action (New sale / New order / New client); "Menu" opens a full-screen app
+// drawer with every group and a search. Everything comes from PosMenu.
 
-$__isStaff = TenantContext::role() === 'staff';
-$__a = $__isStaff ? 'staff' : 'super';
-$__uri = $_SERVER['REQUEST_URI'] ?? '';
-$__can = fn(string $c) => TenantContext::can($c);
-$__credit = $__can(Capabilities::CREDIT_SALES);
-$__pay = $__can(Capabilities::PAYMENTS_PROCESS);
-$__invView = $__can(Capabilities::INVENTORY_VIEW) || $__can(Capabilities::INVENTORY_EDIT);
+$__groups = PosMenu::groups();
+$__byKey = array_column($__groups, null, 'key');
+$__activePath = PosMenu::activePath($__groups);
+$__activeGroup = PosMenu::activeGroup($__groups, $__activePath);
 
-// [label, icon, path, visible]
-if ($__isStaff) {
-    $__tabs = [
-        ['key' => 'pos', 'label' => 'POS', 'icon' => 'fa-cash-register', 'url' => 'staff/dashboard/', 'match' => ['/staff/dashboard']],
-        ['key' => 'credit', 'label' => 'Credit', 'icon' => 'fa-hand-holding-dollar', 'links' => [
-            ['Credit sales', 'fa-hand-holding-dollar', 'staff/orders/', $__credit],
-            ['Credit book', 'fa-book', 'staff/credits/', $__credit || $__pay],
-            ['Payments', 'fa-money-check-dollar', 'staff/payments/', $__pay],
-            ['Held sales', 'fa-pause', 'staff/orders/held.php', $__can(Capabilities::SALES_RECORD)],
-            ['Returns', 'fa-rotate-left', 'staff/orders/return.php', $__pay],
-        ]],
-        ['key' => 'inv', 'label' => 'Inventory', 'icon' => 'fa-boxes-stacked', 'links' => [
-            ['Inventory', 'fa-warehouse', 'staff/inventory/', $__invView],
-            ['Record stock', 'fa-truck-loading', 'staff/stock/new.php', $__can(Capabilities::STOCK_ENTER)],
-            ['Suppliers', 'fa-truck-field', 'staff/suppliers/', $__can(Capabilities::INVENTORY_EDIT)],
-        ]],
-        ['key' => 'fin', 'label' => 'Finance', 'icon' => 'fa-wallet', 'links' => [
-            ['Expenses', 'fa-file-invoice', 'staff/expenses/', $__can(Capabilities::EXPENSES_RECORD)],
-            ['My sales', 'fa-receipt', 'staff/sales/', $__can(Capabilities::SALES_VIEW)],
-            ['Payments', 'fa-money-check-dollar', 'staff/payments/', $__pay],
-        ]],
-    ];
-} else {
-    $__tabs = [
-        ['key' => 'home', 'label' => 'Dashboard', 'icon' => 'fa-house', 'url' => 'super/dashboard/', 'match' => ['/super/dashboard']],
-        ['key' => 'pos', 'label' => 'POS', 'icon' => 'fa-cash-register', 'url' => 'super/pos/', 'match' => ['/super/pos']],
-        ['key' => 'shops', 'label' => 'Shops', 'icon' => 'fa-shop', 'links' => [
-            ['My shops', 'fa-shop', 'super/shops/', true],
-            ['Guide', 'fa-circle-question', 'super/guide/', true],
-            ['Credit sales', 'fa-hand-holding-dollar', 'super/orders/', $__credit],
-            ['Credit book', 'fa-book', 'super/credits/', $__credit],
-            ['Held sales', 'fa-pause', 'super/orders/held.php', $__can(Capabilities::SALES_RECORD)],
-            ['Customers', 'fa-address-book', 'super/customers/', $__can(Capabilities::CUSTOMERS_MANAGE)],
-            ['Catalogue', 'fa-store', 'super/catalogue/', $__can(Capabilities::CATALOGUE_SEND)],
-        ]],
-        ['key' => 'inv', 'label' => 'Inventory', 'icon' => 'fa-boxes-stacked', 'links' => [
-            ['Inventory', 'fa-warehouse', 'super/inventory/', $__invView],
-            ['Record stock', 'fa-truck-loading', 'super/stock/new.php', $__can(Capabilities::STOCK_ENTER)],
-            ['Purchases', 'fa-cart-flatbed', 'super/purchases/', TenantContext::role() === 'tenant_owner'],
-            ['Warehouse', 'fa-building', 'super/warehouse/', ShopContext::isMainShop()],
-            ['Transfer to shops', 'fa-right-left', 'super/transfer/', ShopContext::isMainShop()],
-            ['Products', 'fa-box', 'super/products/', $__can(Capabilities::INVENTORY_EDIT)],
-            ['Categories', 'fa-tags', 'super/categories/', $__can(Capabilities::INVENTORY_EDIT)],
-            ['Suppliers', 'fa-truck-field', 'super/suppliers/', $__can(Capabilities::INVENTORY_EDIT)],
-        ]],
-        ['key' => 'fin', 'label' => 'Finance', 'icon' => 'fa-wallet', 'links' => [
-            ['Expenses', 'fa-file-invoice', 'super/expenses/', true],
-            ['Finances', 'fa-scale-balanced', 'super/finances/', true],
-            ['Payments', 'fa-money-check-dollar', 'super/payments/', $__pay],
-            ['Returns', 'fa-rotate-left', 'super/orders/return.php', $__pay],
-            ['Sales', 'fa-receipt', 'super/sales/', true],
-            ['Reports', 'fa-chart-line', 'super/reports/', $__can(Capabilities::REPORTS_VIEW)],
-        ]],
-    ];
-}
-
-// Shop POS package off: only the dashboard tab remains.
-if (!Features::enabled(Features::SHOP_POS)) {
-    $__tabs = [$__isStaff
-        ? ['key' => 'pos', 'label' => 'Home', 'icon' => 'fa-house', 'url' => 'staff/dashboard/', 'match' => ['/staff/dashboard']]
-        : $__tabs[0]];
-}
-if ($__isStaff && Features::enabled(Features::RESTAURANT_POS)) {
-    $__rest = [
-        ['key' => 'rpos', 'label' => 'Order', 'icon' => 'fa-cash-register', 'url' => 'super/restaurant/pos.php', 'match' => ['/restaurant/pos']],
-        ['key' => 'rord', 'label' => 'My orders', 'icon' => 'fa-receipt', 'url' => 'super/restaurant/orders.php', 'match' => ['/restaurant/orders']],
-    ];
-    if ($__pay) {
-        $__rest[] = ['key' => 'rpay', 'label' => 'Payments', 'icon' => 'fa-money-bill-wave', 'url' => 'super/restaurant/payments.php', 'match' => ['/restaurant/payments']];
-    }
-    $__tabs = Features::enabled(Features::SHOP_POS) ? array_merge($__rest, $__tabs) : $__rest;
-}
-if (!$__isStaff && Features::enabled(Features::RESTAURANT_POS)) {
-    $__inv = $__can(Capabilities::INVENTORY_EDIT);
-    array_splice($__tabs, 1, 0, [['key' => 'rest', 'label' => 'Restaurant', 'icon' => 'fa-utensils', 'links' => [
-        ['New order', 'fa-cash-register', 'super/restaurant/pos.php', $__can(Capabilities::SALES_RECORD)],
-        ['Orders', 'fa-receipt', 'super/restaurant/orders.php', $__can(Capabilities::SALES_RECORD)],
-        ['Payments', 'fa-money-bill-wave', 'super/restaurant/payments.php', $__pay],
-        ['Waiters', 'fa-user-tie', 'super/restaurant/staff.php', $__can(Capabilities::STAFF_MANAGE)],
-        ['Share menu', 'fa-qrcode', 'super/restaurant/share.php', $__can(Capabilities::SETTINGS_MANAGE)],
-        ['Menu', 'fa-utensils', 'super/restaurant/menu.php', $__inv],
-        ['Categories', 'fa-tags', 'super/restaurant/categories.php', $__inv],
-        ['Ingredients', 'fa-carrot', 'super/restaurant/ingredients.php', $__inv],
-        ['Store stock', 'fa-boxes-stacked', 'super/restaurant/stock.php', $__inv],
-        ['Transfers', 'fa-right-left', 'super/restaurant/transfer.php', $__inv],
-    ]]]);
-}
-
-// Electronics package: device serials + warranty/repairs under Inventory.
-if (Features::enabled(Features::ELECTRONICS)) {
-    foreach ($__tabs as &$__t) {
-        if (($__t['key'] ?? '') === 'inv' && isset($__t['links'])) {
-            $__t['links'][] = ['Devices & serials', 'fa-mobile-screen', 'super/electronics/', $__can(Capabilities::INVENTORY_VIEW)];
-            $__t['links'][] = ['Warranty & repairs', 'fa-screwdriver-wrench', 'super/electronics/repairs.php', $__can(Capabilities::SALES_RECORD)];
-        }
-    }
-    unset($__t);
-}
-
-// Services package: its own tab (front desk, new client, my clients…).
-if (Features::enabled(Features::SERVICES)) {
-    $__desk = !$__isStaff || $__can(Capabilities::SERVICES_BOOK) || $__can(Capabilities::SERVICES_CASHIER);
-    array_splice($__tabs, 2, 0, [['key' => 'svc', 'label' => 'Services', 'icon' => 'fa-user-gear', 'links' => [
-        ['Front desk', 'fa-clipboard-list', 'super/services/', $__desk],
-        ['New client', 'fa-user-plus', 'super/services/new.php', $__can(Capabilities::SERVICES_BOOK)],
-        ['My clients', 'fa-user-check', 'super/services/mine.php', true],
-        ['Services & prices', 'fa-list', 'super/services/catalog.php', $__can(Capabilities::SERVICES_MANAGE)],
-        ['Commissions', 'fa-percent', 'super/services/commissions.php', !$__isStaff],
-    ]]]);
-}
-
-// Drop hidden links and empty groups; work out which tab is active.
-$__active = null;
-foreach ($__tabs as $i => &$__t) {
-    if (isset($__t['links'])) {
-        $__t['links'] = array_values(array_filter($__t['links'], fn($l) => $l[3]));
-        if (!$__t['links']) { unset($__tabs[$i]); continue; }
-        foreach ($__t['links'] as $l) {
-            $path = '/' . rtrim(preg_replace('/index\.php$/', '', $l[2]), '/');
-            if ($__active === null && strpos($__uri, $path) !== false) { $__active = $__t['key']; }
-        }
-    } else {
-        foreach ($__t['match'] as $m) { if ($__active === null && strpos($__uri, $m) !== false) { $__active = $__t['key']; } }
+// The two group tabs: the first available of each preference list.
+$__tabKeys = [];
+foreach ([['shop', 'restaurant', 'services'], ['stock', 'restaurant', 'services', 'money']] as $__prefs) {
+    foreach ($__prefs as $__k) {
+        if (isset($__byKey[$__k]) && !in_array($__k, $__tabKeys, true)) { $__tabKeys[] = $__k; break; }
     }
 }
-unset($__t);
+// Centre action.
+$__fab = null;
+foreach ([['shop', 0], ['restaurant', 0], ['services', 1]] as [$__k, $__i]) {
+    if (isset($__byKey[$__k]['links'][$__i]) && in_array($__byKey[$__k]['links'][$__i][0], ['New sale', 'New order', 'New client'], true)) {
+        $__fab = $__byKey[$__k]['links'][$__i];
+        break;
+    }
+}
+$__home = $__byKey['home']['links'][0];
+$__shopName = $shopName ?? 'My Shop';
+$__drawerOn = !in_array($__activeGroup, array_merge(['home'], $__tabKeys), true) && $__activeGroup !== null;
 ?>
 <nav class="bn" id="bnBar" aria-label="Main">
-  <?php foreach ($__tabs as $t): $on = $__active === $t['key'] ? ' on' : ''; ?>
-    <?php if (isset($t['url'])): ?>
-      <a class="bn-tab<?php echo $on; ?>" href="<?php echo public_url($t['url']); ?>"><i class="fas <?php echo $t['icon']; ?>"></i><span><?php echo $t['label']; ?></span></a>
-    <?php else: ?>
-      <button type="button" class="bn-tab<?php echo $on; ?>" data-sheet="bn-<?php echo $t['key']; ?>"><i class="fas <?php echo $t['icon']; ?>"></i><span><?php echo $t['label']; ?></span></button>
-    <?php endif; ?>
+  <a class="bn-tab<?php echo $__activeGroup === 'home' ? ' on' : ''; ?>" href="<?php echo public_url($__home[2]); ?>"><i class="fas fa-house"></i><span>Home</span></a>
+  <?php foreach (array_slice($__tabKeys, 0, 1) as $__k): $__g = $__byKey[$__k]; ?>
+    <button type="button" class="bn-tab<?php echo $__activeGroup === $__k ? ' on' : ''; ?>" data-sheet="bn-<?php echo $__k; ?>"><i class="fas <?php echo $__g['icon']; ?>"></i><span><?php echo $__g['label']; ?></span></button>
   <?php endforeach; ?>
-  <button type="button" class="bn-tab" id="bnMore"><i class="fas fa-ellipsis"></i><span>More</span></button>
+  <?php if ($__fab): ?>
+    <a class="bn-fab<?php echo $__activePath === $__fab[2] ? ' on' : ''; ?>" href="<?php echo public_url($__fab[2]); ?>" aria-label="<?php echo htmlspecialchars($__fab[0]); ?>">
+      <span class="bn-fab-btn"><i class="fas fa-plus"></i></span><span class="bn-fab-lbl"><?php echo $__fab[0] === 'New sale' ? 'Sell' : htmlspecialchars(ucfirst(substr($__fab[0], 4))); ?></span>
+    </a>
+  <?php endif; ?>
+  <?php foreach (array_slice($__tabKeys, 1) as $__k): $__g = $__byKey[$__k]; ?>
+    <button type="button" class="bn-tab<?php echo $__activeGroup === $__k ? ' on' : ''; ?>" data-sheet="bn-<?php echo $__k; ?>"><i class="fas <?php echo $__g['icon']; ?>"></i><span><?php echo $__g['label']; ?></span></button>
+  <?php endforeach; ?>
+  <button type="button" class="bn-tab<?php echo $__drawerOn ? ' on' : ''; ?>" id="bnMore"><i class="fas fa-grip"></i><span>Menu</span></button>
 </nav>
 
 <div class="bn-backdrop" id="bnBackdrop"></div>
-<?php foreach ($__tabs as $t): if (!isset($t['links'])) { continue; } ?>
-<div class="bn-sheet" id="bn-<?php echo $t['key']; ?>" role="dialog" aria-label="<?php echo $t['label']; ?>">
+<?php foreach ($__tabKeys as $__k): $__g = $__byKey[$__k]; ?>
+<div class="bn-sheet" id="bn-<?php echo $__k; ?>" role="dialog" aria-label="<?php echo $__g['label']; ?>">
   <div class="bn-grip"></div>
-  <div class="bn-title"><?php echo $t['label']; ?></div>
+  <div class="bn-title"><i class="fas <?php echo $__g['icon']; ?> me-2"></i><?php echo $__g['label']; ?></div>
   <div class="bn-grid">
-    <?php foreach ($t['links'] as $l): ?>
-      <a href="<?php echo public_url($l[2]); ?>"><i class="fas <?php echo $l[1]; ?>"></i><span><?php echo htmlspecialchars($l[0]); ?></span></a>
+    <?php foreach ($__g['links'] as $__l): ?>
+      <a href="<?php echo public_url($__l[2]); ?>" class="<?php echo $__l[2] === $__activePath ? 'on' : ''; ?>"><i class="fas <?php echo $__l[1]; ?>"></i><span><?php echo htmlspecialchars($__l[0]); ?></span><?php if ($__l[3]): ?><em><?php echo htmlspecialchars($__l[3]); ?></em><?php endif; ?></a>
     <?php endforeach; ?>
   </div>
 </div>
 <?php endforeach; ?>
 
+<div class="bn-drawer" id="bnDrawer" role="dialog" aria-label="Menu">
+  <div class="bn-dhead">
+    <div><small>Menu</small><strong><?php echo htmlspecialchars($__shopName); ?></strong></div>
+    <button type="button" class="bn-x" id="bnDrawerClose" aria-label="Close"><i class="fas fa-xmark"></i></button>
+  </div>
+  <div class="bn-search"><i class="fas fa-magnifying-glass"></i><input type="search" id="bnFind" placeholder="Find a page… (e.g. returns, stock)" autocomplete="off"></div>
+  <div class="bn-dbody">
+    <?php foreach ($__groups as $__g): ?>
+    <section class="bn-sec" data-sec>
+      <h6><i class="fas <?php echo $__g['icon']; ?>"></i><?php echo htmlspecialchars($__g['label']); ?></h6>
+      <div class="bn-grid">
+        <?php foreach ($__g['links'] as $__l): ?>
+          <a href="<?php echo public_url($__l[2]); ?>" class="<?php echo $__l[2] === $__activePath ? 'on' : ''; ?>" data-name="<?php echo htmlspecialchars(strtolower($__l[0] . ' ' . $__g['label'])); ?>"><i class="fas <?php echo $__l[1]; ?>"></i><span><?php echo htmlspecialchars($__l[0]); ?></span><?php if ($__l[3]): ?><em><?php echo htmlspecialchars($__l[3]); ?></em><?php endif; ?></a>
+        <?php endforeach; ?>
+      </div>
+    </section>
+    <?php endforeach; ?>
+    <p class="bn-none" id="bnNone">Nothing matches. Try the <a href="<?php echo public_url(TenantContext::role() === 'staff' ? 'staff/guide/' : 'super/guide/'); ?>">Help centre</a>.</p>
+    <a class="bn-logout" href="<?php echo public_url('auth/logout.php'); ?>"><i class="fas fa-arrow-right-from-bracket me-2"></i>Log out</a>
+  </div>
+</div>
+
 <style>
-.bn,.bn-sheet,.bn-backdrop{display:none;}
+.bn,.bn-sheet,.bn-backdrop,.bn-drawer{display:none;}
 @media (max-width:992px){
-  body{padding-bottom:calc(64px + env(safe-area-inset-bottom));}
-  .bn{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:1004;background:#fff;border-top:1px solid #e5e7eb;
-      box-shadow:0 -4px 18px rgba(16,24,40,.08);padding:0 4px env(safe-area-inset-bottom);height:calc(62px + env(safe-area-inset-bottom));}
-  .bn-tab{flex:1 1 0;min-width:0;border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
-          color:#8a8f96 !important;text-decoration:none;font-size:.66rem;font-weight:600;padding:6px 0;position:relative;-webkit-tap-highlight-color:transparent;}
-  .bn-tab i{font-size:1.15rem;}
+  body{padding-bottom:calc(84px + env(safe-area-inset-bottom));-webkit-tap-highlight-color:transparent;}
+  .t-main{animation:bnIn .25s ease-out;}
+  @keyframes bnIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .bn{display:flex;align-items:flex-end;position:fixed;left:10px;right:10px;bottom:calc(8px + env(safe-area-inset-bottom));z-index:1004;
+      height:64px;padding:0 4px;background:rgba(255,255,255,.94);backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);
+      border:1px solid rgba(15,23,42,.06);border-radius:22px;box-shadow:0 10px 30px rgba(15,23,42,.14);}
+  .bn-tab{flex:1 1 0;min-width:0;height:100%;border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+          color:#8a8f96 !important;text-decoration:none;font-size:.66rem;font-weight:700;position:relative;}
+  .bn-tab i{font-size:1.18rem;transition:transform .18s;}
+  .bn-tab:active i{transform:scale(.82);}
   .bn-tab span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
-  .bn-tab.on{color:var(--tk-green-dark) !important;}
-  .bn-tab.on::before{content:'';position:absolute;top:0;left:28%;right:28%;height:3px;border-radius:0 0 3px 3px;background:var(--tk-green);}
-  .bn-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:1005;}
-  .bn-backdrop.show{display:block;}
-  .bn-sheet{display:block;position:fixed;left:0;right:0;bottom:0;z-index:1006;background:#fff;border-radius:20px 20px 0 0;
-            padding:8px 16px calc(78px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .22s ease;box-shadow:0 -10px 30px rgba(0,0,0,.15);}
+  .bn-tab.on{color:var(--tk-green-dark,#15803d) !important;}
+  .bn-tab.on::after{content:'';position:absolute;bottom:5px;width:5px;height:5px;border-radius:50%;background:var(--tk-green,#16a34a);}
+  .bn-fab{flex:1 1 0;display:flex;flex-direction:column;align-items:center;gap:3px;text-decoration:none;transform:translateY(-14px);}
+  .bn-fab-btn{width:58px;height:58px;border-radius:20px;display:grid;place-items:center;color:#fff;font-size:1.35rem;
+      background:linear-gradient(135deg,var(--tk-green,#16a34a),#0d9488);border:4px solid var(--pos-bg,#f7f7fb);
+      box-shadow:0 10px 22px rgba(22,163,74,.4);transition:transform .15s;}
+  .bn-fab:active .bn-fab-btn{transform:scale(.9);}
+  .bn-fab-lbl{font-size:.66rem;font-weight:800;color:var(--tk-green-dark,#15803d);}
+  .bn-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.42);z-index:1005;opacity:0;transition:opacity .2s;}
+  .bn-backdrop.show{display:block;opacity:1;}
+  .bn-sheet{display:block;position:fixed;left:0;right:0;bottom:0;z-index:1006;background:#fff;border-radius:24px 24px 0 0;
+            padding:8px 16px calc(96px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .28s cubic-bezier(.2,.9,.3,1);
+            box-shadow:0 -10px 30px rgba(0,0,0,.15);}
   .bn-sheet.show{transform:translateY(0);}
-  .bn-grip{width:40px;height:4px;border-radius:4px;background:#d1d5db;margin:4px auto 10px;}
-  .bn-title{font-weight:700;font-size:.95rem;margin-bottom:12px;color:#333;}
+  .bn-grip{width:42px;height:5px;border-radius:5px;background:#d1d5db;margin:4px auto 12px;}
+  .bn-title{font-weight:800;font-size:1rem;margin-bottom:14px;color:#1f2330;}
   .bn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-  .bn-grid a{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 6px;border-radius:14px;background:#f5f7f6;
-             color:#333 !important;text-decoration:none;font-size:.76rem;font-weight:600;text-align:center;}
-  .bn-grid a i{width:40px;height:40px;border-radius:12px;background:#fff;color:var(--tk-green-dark);display:flex;align-items:center;justify-content:center;font-size:1.05rem;box-shadow:0 1px 2px rgba(0,0,0,.08);}
-  .bn-grid a:active{background:#e6f6ee;}
-  /* Header hamburger is redundant with "More" on phones. */
+  .bn-grid a{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 6px;border-radius:16px;background:#f5f7f6;
+             color:#333 !important;text-decoration:none;font-size:.76rem;font-weight:600;text-align:center;transition:transform .12s;}
+  .bn-grid a:active{transform:scale(.95);background:#e6f6ee;}
+  .bn-grid a.on{background:#e6f6ee;box-shadow:inset 0 0 0 1.5px var(--tk-green,#16a34a);}
+  .bn-grid a i{width:42px;height:42px;border-radius:13px;background:#fff;color:var(--tk-green-dark,#15803d);display:flex;align-items:center;justify-content:center;
+               font-size:1.05rem;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  .bn-grid a em{position:absolute;top:6px;right:6px;font-style:normal;font-size:.58rem;font-weight:800;background:#ef4444;color:#fff;border-radius:99px;padding:1px 6px;}
+  .bn-drawer{display:flex;flex-direction:column;position:fixed;inset:0;z-index:1010;background:var(--pos-bg,#f7f7fb);
+             transform:translateY(100%);transition:transform .32s cubic-bezier(.2,.9,.3,1);padding-top:env(safe-area-inset-top);}
+  .bn-drawer.show{transform:none;}
+  .bn-dhead{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 8px;}
+  .bn-dhead small{display:block;font-size:.68rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#8a8f96;}
+  .bn-dhead strong{font-size:1.3rem;font-weight:800;letter-spacing:-.02em;}
+  .bn-x{width:40px;height:40px;border-radius:50%;border:0;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.1);font-size:1.1rem;}
+  .bn-search{margin:6px 18px 10px;position:relative;}
+  .bn-search i{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9aa0a6;}
+  .bn-search input{width:100%;border:1px solid #e5e7eb;border-radius:14px;padding:12px 14px 12px 40px;font-size:16px;background:#fff;outline:none;}
+  .bn-search input:focus{border-color:var(--tk-green,#16a34a);}
+  .bn-dbody{flex:1;overflow-y:auto;padding:4px 18px calc(30px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch;}
+  .bn-sec{margin-bottom:18px;}
+  .bn-sec h6{font-size:.72rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#6b7280;margin:0 0 10px;display:flex;gap:8px;align-items:center;}
+  .bn-sec .bn-grid a{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.05);}
+  .bn-sec .bn-grid a i{background:#f0fdf4;box-shadow:none;}
+  .bn-none{display:none;text-align:center;color:#6b7280;padding:30px 0;}
+  .bn-logout{display:block;text-align:center;padding:14px;border-radius:14px;background:#fff;color:#dc2626 !important;font-weight:700;text-decoration:none;margin-top:8px;}
+  /* The header hamburger and slide-out sidebar are replaced by Menu on phones. */
   .tk-toggle{display:none !important;}
-  .t-sidebar{bottom:calc(62px + env(safe-area-inset-bottom)) !important;}
 }
 </style>
 <script>
 (function () {
-  var back = document.getElementById('bnBackdrop'), open = null;
+  var back = document.getElementById('bnBackdrop'), drawer = document.getElementById('bnDrawer'), open = null;
   function closeAll() {
     document.querySelectorAll('.bn-sheet.show').forEach(function (s) { s.classList.remove('show'); });
     back.classList.remove('show'); open = null;
@@ -203,21 +151,29 @@ unset($__t);
   document.querySelectorAll('.bn-tab[data-sheet]').forEach(function (b) {
     b.addEventListener('click', function () {
       var id = b.getAttribute('data-sheet'), was = open === id;
-      closeAll(); closeSidebar();
+      closeAll();
       if (!was) { document.getElementById(id).classList.add('show'); back.classList.add('show'); open = id; }
     });
   });
   back.addEventListener('click', closeAll);
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(); });
-  function closeSidebar() {
-    var sb = document.getElementById('tSidebar'), ov = document.getElementById('tSidebarOverlay');
-    sb && sb.classList.remove('active'); ov && ov.classList.remove('active'); document.body.style.overflow = '';
-  }
+  function closeDrawer() { drawer.classList.remove('show'); document.body.style.overflow = ''; }
   document.getElementById('bnMore').addEventListener('click', function () {
-    closeAll();
-    var sb = document.getElementById('tSidebar'), ov = document.getElementById('tSidebarOverlay');
-    var show = !(sb && sb.classList.contains('active'));
-    sb && sb.classList.toggle('active', show); ov && ov.classList.toggle('active', show);
+    closeAll(); drawer.classList.add('show'); document.body.style.overflow = 'hidden';
+  });
+  document.getElementById('bnDrawerClose').addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeAll(); closeDrawer(); } });
+  var find = document.getElementById('bnFind'), none = document.getElementById('bnNone');
+  find.addEventListener('input', function () {
+    var q = find.value.trim().toLowerCase(), any = false;
+    document.querySelectorAll('.bn-sec').forEach(function (sec) {
+      var hit = 0;
+      sec.querySelectorAll('a[data-name]').forEach(function (a) {
+        var m = !q || a.getAttribute('data-name').indexOf(q) !== -1;
+        a.style.display = m ? '' : 'none'; if (m) hit++;
+      });
+      sec.style.display = hit ? '' : 'none'; if (hit) any = true;
+    });
+    none.style.display = any ? 'none' : 'block';
   });
 })();
 </script>

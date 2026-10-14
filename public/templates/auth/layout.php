@@ -1,19 +1,11 @@
 <?php
 // public/templates/auth/layout.php
 // Centered card used by register / login / otp-verify / activate / forgot-password.
-// Shows the real business's logo (single-tenant deployment — see TenantModel::primary()).
-
-// The database may not be set up yet (fresh install, or just reset) — the
-// login pages must still open, with the default name and logo.
-if (!isset($__authTenant)) {
-    try {
-        $__authTenant = (new Models\TenantModel(Database::pdo()))->primary();
-    } catch (Throwable $e) {
-        $__authTenant = null;
-    }
-}
-$__authShop   = $__authTenant['name'] ?? 'Dazu Modern POS';
-$__authLogo   = Branding::tenantLogo($__authTenant);
+// Multi-tenant: these screens are shared by every shop, so they always show
+// the platform's brand (Support → Settings), never one client's logo.
+$__authBrand = Branding::platform();
+$__authShop  = $__authBrand['name'];
+$__authLogo  = $__authBrand['logo'];
 ?>
 <!DOCTYPE html>
 <html lang="en">

@@ -168,7 +168,7 @@ ob_start();
     <?php else: ?>
       <div class="table-responsive">
         <table class="table table-bordered align-middle mb-0 sales-sheet">
-          <thead><tr class="text-muted small text-uppercase"><th>Receipt</th><th>When</th><th>Customer</th><th>Products</th><th>Pay</th><th class="text-end">Total</th><th></th></tr></thead>
+          <thead><tr class="text-muted small text-uppercase"><th>Receipt</th><th>Date &amp; time</th><th>Customer</th><th>Products</th><th>Pay</th><th class="text-end">Total</th><th></th></tr></thead>
           <tbody>
             <?php foreach ($salesByDay as $day => $daySales):
               $daySum = Models\SaleModel::summarize($daySales);
@@ -184,7 +184,7 @@ ob_start();
             <?php foreach ($daySales as $s): ?>
             <tr>
               <td class="fw-semibold small"><?php echo htmlspecialchars($s['receipt_number']); ?></td>
-              <td class="small text-nowrap"><?php echo date('g:i a', strtotime($s['created_at'])); ?></td>
+              <td class="small text-nowrap"><?php echo date('D j M Y', strtotime($s['created_at'])); ?><div class="fw-semibold"><?php echo date('g:i:s a', strtotime($s['created_at'])); ?></div><?php if (!empty($s['edited_at'])): ?><div class="text-warning" style="font-size:.7rem;">edited <?php echo date('j M, g:i a', strtotime($s['edited_at'])); ?></div><?php endif; ?></td>
               <td class="small">
                 <?php if ($s['customer_name'] && $s['customer_name'] !== 'Walk-in Customer'): ?>
                   <a href="<?php echo public_url('staff/sales/customer.php?name=' . urlencode($s['customer_name'])); ?>"><?php echo htmlspecialchars($s['customer_name']); ?></a>

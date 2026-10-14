@@ -103,6 +103,7 @@ class StockIntakeModel extends Model
                         'product_type'    => $i['product_type'] ?? 'book',
                         'name'            => $name,
                         'category_id'     => (int) ($i['category_id'] ?? 0),
+                        'subcategory_id'  => (int) ($i['subcategory_id'] ?? 0),
                         'grade_id'        => (int) ($i['grade_id'] ?? 0),
                         'publisher_id'    => (int) ($i['publisher_id'] ?? 0),
                         'author_id'       => (int) ($i['author_id'] ?? 0),

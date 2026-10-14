@@ -28,6 +28,7 @@ class SalesReport
             }
             unset($s);
         }
+        self::attachItems($db, $tenantId, $sales);
         $repairs = \Features::enabled(\Features::ELECTRONICS, $tenantId)
             ? (new \Models\ElectronicsModel($db))->repairsCollectedOn($tenantId, $date) : [];
         $services = \Features::enabled(\Features::SERVICES, $tenantId)
@@ -49,6 +50,8 @@ class SalesReport
             'inventory' => self::inventory($db, $tenantId),
             'attendance'=> self::attendance($db, $tenantId, $date),
             'finance'   => self::finance($db, $tenantId),
+            'generated_at' => date('Y-m-d H:i:s'),
+            'generated_by' => (string) ($_SESSION['username'] ?? 'System'),
         ];
     }
 
@@ -90,10 +93,40 @@ class SalesReport
         return $r ?: ['name' => 'Shop', 'currency' => 'KES', 'phone' => null, 'address' => null, 'receipt_footer' => null, 'owner_email' => null, 'owner_name' => null];
     }
 
+    /** Each sale's line items as $s['items'] = [[name, qty, total], …]. Explicit tenant (cron-safe). */
+    private static function attachItems(\PDO $db, int $tenantId, array &$sales): void
+    {
+        $ids = ['sale' => [], 'order' => []];
+        foreach ($sales as $s) { $ids[($s['source'] ?? 'sale') === 'order' ? 'order' : 'sale'][] = (int) $s['id']; }
+        $items = ['sale' => [], 'order' => []];
+        foreach (['sale' => ['sale_items', 'sale_id'], 'order' => ['order_items', 'order_id']] as $k => [$table, $fk]) {
+            if (!$ids[$k]) continue;
+            $in = implode(',', array_fill(0, count($ids[$k]), '?'));
+            $st = $db->prepare("SELECT $fk AS pid, product_name, quantity, line_total FROM $table
+                                 WHERE tenant_id = ? AND $fk IN ($in) AND quantity > 0 ORDER BY id");
+            $st->execute(array_merge([$tenantId], $ids[$k]));
+            foreach ($st->fetchAll() as $r) { $items[$k][(int) $r['pid']][] = $r; }
+        }
+        foreach ($sales as &$s) {
+            $s['items'] = $items[($s['source'] ?? 'sale') === 'order' ? 'order' : 'sale'][(int) $s['id']] ?? [];
+        }
+        unset($s);
+    }
+
+    /** "2 × Bread, 1 × Milk" */
+    public static function itemsText(array $items): string
+    {
+        return implode(', ', array_map(
+            fn($i) => rtrim(rtrim(number_format((float) $i['quantity'], 2), '0'), '.') . ' × ' . $i['product_name'],
+            $items
+        ));
+    }
+
     private static function productBreakdown(\PDO $db, int $tenantId, string $date): array
     {
         $st = $db->prepare(
-            "SELECT si.product_name, SUM(si.quantity) AS qty, SUM(si.line_total) AS revenue
+            "SELECT si.product_name, SUM(si.quantity) AS qty, SUM(si.line_total) AS revenue,
+                    MIN(s.created_at) AS first_at, MAX(s.created_at) AS last_at
                FROM sale_items si
                JOIN sales s ON s.id = si.sale_id
               WHERE si.tenant_id = ? AND s.status = 'completed' AND DATE(s.created_at) = ?
@@ -107,7 +140,10 @@ class SalesReport
         $byName = [];
         foreach (array_merge($legacy, $fromOrders) as $r) {
             $name = $r['product_name'];
-            if (!isset($byName[$name])) { $byName[$name] = ['product_name' => $name, 'qty' => 0.0, 'revenue' => 0.0]; }
+            if (!isset($byName[$name])) { $byName[$name] = ['product_name' => $name, 'qty' => 0.0, 'revenue' => 0.0, 'first_at' => null, 'last_at' => null]; }
+            foreach (['first_at' => -1, 'last_at' => 1] as $k => $dir) {
+                if (!empty($r[$k]) && ($byName[$name][$k] === null || ($r[$k] <=> $byName[$name][$k]) === $dir)) $byName[$name][$k] = $r[$k];
+            }
             $byName[$name]['qty']     += (float) $r['qty'];
             $byName[$name]['revenue'] += (float) $r['revenue'];
         }
@@ -204,16 +240,16 @@ class SalesReport
             $pdf->Cell(0, 8, self::t('No sales recorded on this day.'), 0, 1);
             $pdf->SetTextColor(0, 0, 0);
         } else {
-            $cols = [['Receipt', 30, 'L'], ['Time', 22, 'L'], ['Staff', 33, 'L'], ['Customer', 45, 'L'], ['Pay', 20, 'L'], ['Total', 30, 'R']];
+            $cols = [['Receipt', 26, 'L'], ['Date & time', 36, 'L'], ['Staff', 26, 'L'], ['Customer / items', 54, 'L'], ['Pay', 16, 'L'], ['Total', 24, 'R']];
             self::tableHead($pdf, $cols);
             $pdf->SetFont('Helvetica', '', 9);
             $fill = false;
             foreach ($data['sales'] as $s) {
                 $row = [
                     $s['receipt_number'],
-                    date('g:i a', strtotime($s['created_at'])),
+                    date('d/m/Y H:i:s', strtotime($s['created_at'])),
                     $s['staff_name'] ?: '-',
-                    ($s['customer_name'] ?: '-') . (!empty($s['devices']) ? ' - ' . \Models\ElectronicsModel::serialsText($s['devices']) : ''),
+                    ($s['customer_name'] ?: '-') . (!empty($s['items']) ? ': ' . self::itemsText($s['items']) : '') . (!empty($s['devices']) ? ' - ' . \Models\ElectronicsModel::serialsText($s['devices']) : ''),
                     $s['payment_method'] === 'cash' ? 'Cash' : 'M-Pesa',
                     self::money($cur, $s['total']),
                 ];
@@ -293,7 +329,7 @@ class SalesReport
         $pdf->Ln(2);
         $pdf->SetFont('Helvetica', 'I', 8);
         $pdf->SetTextColor(140, 140, 140);
-        $foot = 'Generated ' . date('j M Y, g:i a');
+        $foot = 'Generated ' . date('j M Y, g:i:s a', strtotime($data['generated_at'] ?? 'now')) . ' by ' . ($data['generated_by'] ?? 'System');
         if (!empty($shop['receipt_footer'])) { $foot .= '  -  ' . $shop['receipt_footer']; }
         $pdf->Cell(0, 5, self::t($foot), 0, 1, 'C');
 

@@ -29,6 +29,13 @@ if ($field === 'subject' || $field === 'category') {
     $items = (new Models\CategoryModel($pdo))->suggestions($q, 8, 'stationery');
 } elseif ($field === 'supplier') {
     $items = (new Models\SupplierModel($pdo))->suggestions($q);
+} elseif ($field === 'subcategory') {
+    $st = $pdo->prepare(
+        "SELECT DISTINCT s.id, s.name FROM subcategories s JOIN categories c ON c.id = s.category_id
+          WHERE c.tenant_id = ? AND s.name LIKE ? ORDER BY (s.name LIKE ?) DESC, s.name ASC LIMIT 8"
+    );
+    $st->execute([TenantContext::tenantId(), '%' . $q . '%', $q . '%']);
+    $items = $st->fetchAll();
 } elseif (in_array($field, Models\BookAttributeModel::TYPES, true)) {
     $items = (new Models\BookAttributeModel($pdo))->suggestions($field, $q);
 }

@@ -27,6 +27,10 @@ class Capabilities
     const SERVICES_CASHIER = 'services.cashier'; // take payment for services and print receipts
     const SERVICES_MONEY   = 'services.money';   // see service prices/amounts and their own commission
     const SERVICES_MANAGE  = 'services.manage';  // add / edit services and their prices (owner unless delegated)
+    const SERVICES_PAYOUT  = 'services.payout';  // pay staff their commission (resets their balance to zero)
+    const ROOMS_MANAGE     = 'rooms.manage';     // add / edit rooms, prices and the late-checkout fee
+    const ROOMS_DESK       = 'rooms.desk';       // book guests in, add room service, check out and take payment
+    const TABLE_BOOKINGS   = 'tables.book';      // group / family table bookings with pre-set menus and platters
 
     // Platform-scoped capabilities (what you, the SaaS owner, can do).
     const PLATFORM_TENANTS = 'platform.tenants.manage';
@@ -45,6 +49,7 @@ class Capabilities
             self::SETTINGS_MANAGE, self::BILLING_MANAGE,
             self::CREDIT_SALES, self::EXPENSES_RECORD,
             self::SERVICES_BOOK, self::SERVICES_CASHIER, self::SERVICES_MONEY, self::SERVICES_MANAGE,
+            self::SERVICES_PAYOUT, self::ROOMS_MANAGE, self::ROOMS_DESK, self::TABLE_BOOKINGS,
         ];
     }
 

@@ -98,14 +98,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $img = stock_handle_image(stock_row_image_file((int) $i));
             if (!$img['ok']) { $error = $title . ': ' . $img['error']; break; }
 
+            $catId = (int) $C->findOrCreate($row['category'] ?? '', 'subject');
             $items[] = [
                 'mode'            => 'new',
                 'name'            => $title,
-                'category_id'     => (int) $C->findOrCreate($row['category'] ?? '', 'subject'),
-                'grade_id'        => 0,
-                'publisher_id'    => 0,
-                'author_id'       => 0,
-                'edition_id'      => 0,
+                'category_id'     => $catId,
+            ] + ProductFields::resolve($row['fx'] ?? [], $catId) + [
                 'barcode'         => trim($row['barcode'] ?? ''),
                 'quantity'        => $qty,
                 'buying_price'    => (float) ($row['buying_price'] ?? 0),
@@ -261,6 +259,16 @@ ob_start();
           <div class="ta-menu"></div>
         </div>
       </div>
+
+      <?php foreach (ProductFields::enabled() as $k): [$label, , , $example] = ProductFields::FIELDS[$k]; ?>
+      <div class="col-6 col-sm-3 mt-2 newProductFields">
+        <label class="form-label small mb-1"><?php echo htmlspecialchars($label); ?></label>
+        <div class="ta-wrap">
+          <input type="text" name="items[__I__][fx][<?php echo $k; ?>]" class="form-control form-control-sm ta-input" data-field="<?php echo $k; ?>" placeholder="<?php echo htmlspecialchars($example); ?>" autocomplete="off">
+          <div class="ta-menu"></div>
+        </div>
+      </div>
+      <?php endforeach; ?>
 
       <div class="col-6 col-sm-3 mt-2">
         <label class="form-label small mb-1 qtyLabel">Opening stock</label>
@@ -594,7 +602,7 @@ ob_start();
     var restock = makeRestockControls(row);
     wireTitleField(row, restock);
     wireBarcodeField(row, restock);
-    ['category'].forEach(function (field) {
+    ['category'].concat(<?php echo json_encode(ProductFields::enabled()); ?>).forEach(function (field) {
       var el = row.querySelector('[data-field="' + field + '"]');
       if (el) attachTypeahead(el, field);
     });

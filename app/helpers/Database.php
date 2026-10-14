@@ -6,6 +6,9 @@
 
 class Database
 {
+    /** The collation every table, column and connection uses. */
+    const COLLATION = 'utf8mb4_general_ci';
+
     private static ?PDO $pdo = null;
 
     public static function pdo(): PDO
@@ -57,6 +60,84 @@ class Database
     }
 
     /**
+     * Is the app ready to run? Returns ['state' => 'ok' | 'server_down' | 'needs_setup', 'error' => string].
+     *   needs_setup  no config / no database name, wrong credentials, unknown
+     *                database, or the tables aren't installed → setup wizard.
+     *   server_down  config is fine but the MySQL server can't be reached
+     *                (stopped, wrong socket/port) → setup can't fix that, so
+     *                the app shows a "start your database" page instead.
+     */
+    public static function status(): array
+    {
+        $cfg = self::config();
+        if (empty($cfg['host']) || empty($cfg['dbname'])) {
+            return ['state' => 'needs_setup', 'error' => 'No database is configured yet.'];
+        }
+        try {
+            $pdo = self::pdo();
+        } catch (\PDOException $e) {
+            // 2002 no socket / refused, 2003 can't connect, 2005 unknown host, 2006 gone away
+            $code = preg_match('/\[(\d{4})\]/', $e->getMessage(), $m) ? (int) $m[1] : 0;
+            $state = in_array($code, [2002, 2003, 2005, 2006], true) ? 'server_down' : 'needs_setup';
+            return ['state' => $state, 'error' => $e->getMessage()];
+        }
+        $n = (int) $pdo->query(
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('roles', 'users', 'tenants')"
+        )->fetchColumn();
+        return $n === 3 ? ['state' => 'ok', 'error' => ''] : ['state' => 'needs_setup', 'error' => 'The database has no tables yet.'];
+    }
+
+    /**
+     * Convert the database default and every table / text column that isn't on
+     * COLLATION. Tables the app creates at runtime (CREATE TABLE IF NOT EXISTS)
+     * take the server's default, which differs between hosts. Returns the
+     * converted table names. Safe to re-run.
+     */
+    public static function normalizeCollation(?PDO $pdo = null): array
+    {
+        $pdo ??= self::pdo();
+        $c = self::COLLATION;
+        $tables = $pdo->query(
+            "SELECT DISTINCT t.table_name FROM information_schema.tables t
+               LEFT JOIN information_schema.columns c
+                      ON c.table_schema = t.table_schema AND c.table_name = t.table_name
+                     AND c.collation_name IS NOT NULL AND c.collation_name <> '$c'
+              WHERE t.table_schema = DATABASE() AND t.table_type = 'BASE TABLE'
+                AND (t.table_collation <> '$c' OR c.column_name IS NOT NULL)"
+        )->fetchAll(PDO::FETCH_COLUMN);
+        $db = $pdo->query('SELECT DATABASE()')->fetchColumn();
+        $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+        try {
+            $pdo->exec("ALTER DATABASE `$db` CHARACTER SET utf8mb4 COLLATE $c"); // new runtime tables follow
+            foreach ($tables as $t) {
+                $pdo->exec("ALTER TABLE `$t` CONVERT TO CHARACTER SET utf8mb4 COLLATE $c");
+            }
+        } finally {
+            $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+        }
+        return $tables;
+    }
+
+    /**
+     * Run normalizeCollation() once per database (a marker file in
+     * app/storage remembers it). Called from app.php; errors are logged, never shown.
+     */
+    public static function ensureCollation(): void
+    {
+        try {
+            $db = (string) self::pdo()->query('SELECT DATABASE()')->fetchColumn();
+            $flag = ROOT_PATH . '/app/storage/collation_' . preg_replace('/\W/', '_', $db) . '.ok';
+            if (is_file($flag)) {
+                return;
+            }
+            self::normalizeCollation();
+            @file_put_contents($flag, date('c'));
+        } catch (\Throwable $e) {
+            error_log('Database::ensureCollation: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Rewrite app/config/database.php — used by the setup wizard so the owner
      * never has to edit files outside public/ on shared hosting.
      */
@@ -103,6 +184,10 @@ class Database
         // fixed +03:00 offset (Kenya has no DST) so NOW()/CURDATE() in MySQL
         // always agree with PHP's time()/date().
         $pdo->exec("SET time_zone = '+03:00'");
+        // One collation everywhere (full_schema.sql's). Without this, text from a
+        // table the server created with its own default (unicode_ci, 0900_ai_ci…)
+        // can't be compared with ours: "Illegal mix of collations".
+        $pdo->exec("SET NAMES utf8mb4 COLLATE " . self::COLLATION);
 
         return $pdo;
     }

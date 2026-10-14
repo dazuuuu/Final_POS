@@ -6,9 +6,10 @@
 
 class SupportAccount
 {
+    /** Path of the support login file (DAZU_SUPPORT_CONFIG env var overrides, for tests). */
     public static function configPath(): string
     {
-        return ROOT_PATH . '/app/config/support.php';
+        return getenv('DAZU_SUPPORT_CONFIG') ?: ROOT_PATH . '/app/config/support.php';
     }
 
     /** ['email' => ..., 'password_hash' => ...] or null when setup hasn't created it yet. */

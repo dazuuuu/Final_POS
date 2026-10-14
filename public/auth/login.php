@@ -59,6 +59,11 @@ $verdict = AccountGuard::evaluate($user);
             // can use $user directly.
             session_regenerate_id(true);
             TenantContext::establish($pdo, $user);
+            if (!empty($user['tenant_id'])) { // remember the owner's shop address for install/branding
+                $slugStmt = $pdo->prepare('SELECT slug FROM tenants WHERE id = ?');
+                $slugStmt->execute([Features::accountId((int) $user['tenant_id'])]);
+                $_SESSION['shop_slug'] = (string) $slugStmt->fetchColumn();
+            }
             $_SESSION['username']     = $user['username'];
             $_SESSION['logged_in']    = true;
             $_SESSION['otp_verified'] = true;  // no 2FA step; kept true so existing guards pass
@@ -98,6 +103,9 @@ ob_start();
     </div>
     <button class="btn-auth">Log in</button>
 </form>
+<?php if (Signup::enabled()): ?>
+<a href="<?php echo public_url('auth/signup.php'); ?>" class="btn btn-outline-success w-100 mt-2" style="border-radius:10px;padding:10px;font-weight:600;">New shop? Create your account</a>
+<?php endif; ?>
 <div class="auth-foot">
     <a href="<?php echo public_url('auth/forgot-password.php'); ?>">Forgot password?</a>
     <br>

@@ -76,6 +76,7 @@ $shopName = $__tenant['name'] ?? 'My Shop';
     <?php echo $extra_css ?? ''; ?>
 </head>
 <body>
+<?php include __DIR__ . '/../../components/preview_banner.php'; ?>
 <?php include __DIR__ . '/../../components/shell_header.php'; ?>
 <div class="t-wrap">
     <?php include __DIR__ . '/../../components/staff/sidebar.php'; ?>
@@ -87,6 +88,7 @@ $shopName = $__tenant['name'] ?? 'My Shop';
                 <?php if (($page_title ?? '') !== 'Home'): ?><li><?php echo htmlspecialchars($page_title ?? 'Dashboard'); ?></li><?php endif; ?>
             </ol>
         </div>
+        <?php include __DIR__ . '/../../components/activation_notice.php'; ?>
         <?php if (!empty($_SESSION['flash']['success'])): ?>
             <div class="t-flash ok"><?php echo htmlspecialchars($_SESSION['flash']['success']); unset($_SESSION['flash']['success']); ?></div>
         <?php endif; ?>

@@ -98,6 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upgra
         }
     }
     $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+    try { Database::normalizeCollation($pdo); } catch (\Throwable $e) { $results['errors'][] = ['statement' => 'collation', 'message' => $e->getMessage()]; }
     $tableCount = setup_table_count($pdo);
     $roleCount = (int) $pdo->query('SELECT COUNT(*) FROM roles')->fetchColumn();
     $missing = setup_missing_changes($pdo, setup_split_sql(file_get_contents($schemaFile)));

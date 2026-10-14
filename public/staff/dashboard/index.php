@@ -244,7 +244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     $_SESSION['sale_form_token'] = bin2hex(random_bytes(16));
                     $_SESSION['flash']['success'] = $okMsg;
-                    header('Location: ' . public_url($area . '/orders/receipt.php?id=' . $orderId));
+                    header('Location: ' . public_url($area . '/orders/receipt.php?id=' . $orderId . '&new=1'));
                     exit;
                 }
                 // Rare: opened fine but settling failed. It's now a normal open
@@ -334,18 +334,18 @@ ob_start();
     <div class="pos-cats" id="catRow-category" data-dim-row="category">
       <button type="button" class="pos-cat active" data-cat="">
         <span class="pos-cat-img pos-cat-all"><i class="fas fa-border-all"></i></span>
-        <span>All</span>
+        <span class="pos-cat-name">All</span>
       </button>
       <?php foreach ($categories as $c): ?>
-        <button type="button" class="pos-cat" data-cat="<?php echo (int) $c['id']; ?>">
+        <button type="button" class="pos-cat" data-cat="<?php echo (int) $c['id']; ?>" title="<?php echo htmlspecialchars($c['name']); ?>">
           <span class="pos-cat-img">
             <?php if (!empty($c['image_path'])): ?>
-              <img src="<?php echo htmlspecialchars($c['image_path']); ?>" alt="">
+              <img src="<?php echo htmlspecialchars($c['image_path']); ?>" alt="" onerror="this.outerHTML='<i class=&quot;fas fa-tag&quot;></i>'">
             <?php else: ?>
               <i class="fas fa-tag"></i>
             <?php endif; ?>
           </span>
-          <span><?php echo htmlspecialchars($c['name']); ?></span>
+          <span class="pos-cat-name"><?php echo htmlspecialchars($c['name']); ?></span>
         </button>
       <?php endforeach; ?>
     </div>
@@ -366,7 +366,7 @@ ob_start();
           <?php if (!empty($p['on_offer'])): ?><span class="pos-ribbon">OFFER</span><?php endif; ?>
           <?php if (!empty($p['is_archived'])): ?><span class="pos-ribbon pos-ribbon-archive">ARCHIVE</span><?php endif; ?>
           <div class="pos-card-img">
-            <?php if (!empty($p['image_path'])): ?><img src="<?php echo htmlspecialchars($p['image_path']); ?>" alt="">
+            <?php if (!empty($p['image_path'])): ?><img src="<?php echo htmlspecialchars($p['image_path']); ?>" alt="" onerror="this.outerHTML='<i class=&quot;fas fa-box&quot;></i>'">
             <?php else: ?><i class="fas fa-box"></i><?php endif; ?>
           </div>
           <div class="pos-card-name"><?php echo htmlspecialchars($p['name']); ?><?php echo $sub ? '<br><small>' . htmlspecialchars($sub) . '</small>' : ''; ?></div>
@@ -544,7 +544,9 @@ ob_start();
 .pos-dim{border:1px solid #eef0f4;background:#fff;color:#5b6070;border-radius:999px;padding:8px 14px;font-size:.8rem;font-weight:600;min-height:38px;white-space:nowrap;}
 .pos-dim.active{border-color:var(--pos-green);color:var(--pos-green);background:var(--pos-green-light);}
 .pos-cats{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;margin-bottom:16px;}
-.pos-cat{flex:0 0 auto;width:88px;min-height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1px solid #eef0f4;background:#fff;border-radius:14px;padding:12px 8px;font-size:.78rem;font-weight:600;color:#5b6070;white-space:nowrap;}
+.pos-cat{flex:0 0 auto;width:104px;min-height:104px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:8px;border:1px solid #eef0f4;background:#fff;border-radius:14px;padding:12px 8px;font-size:.76rem;font-weight:600;color:#5b6070;}
+/* Long category names wrap inside the box (2 lines max, then …) instead of running into the next one. */
+.pos-cat-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;width:100%;text-align:center;line-height:1.25;word-break:break-word;white-space:normal;}
 .pos-cat-img{width:44px;height:44px;border-radius:12px;background:#f7f7fb;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#b7bac3;font-size:1.1rem;}
 .pos-cat-img img{width:100%;height:100%;object-fit:cover;}
 .pos-cat.active{border-color:var(--pos-green);color:var(--pos-green);background:var(--pos-green-light);}
@@ -615,7 +617,7 @@ ob_start();
   .pos-dim-tabs{gap:7px;margin-left:-2px;margin-right:-2px;}
   .pos-dim{flex:1 0 auto;font-size:.82rem;}
   .pos-cats{gap:8px;margin-left:-2px;margin-right:-2px;}
-  .pos-cat{width:78px;min-height:86px;border-radius:12px;font-size:.72rem;padding:10px 6px;}
+  .pos-cat{width:88px;min-height:92px;border-radius:12px;font-size:.7rem;padding:10px 6px;}
   .pos-cat-img{width:38px;height:38px;border-radius:10px;}
   .pos-prod-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
   .pos-card{padding:10px;border-radius:12px;}

@@ -16,6 +16,13 @@
 //                         (hair, gel…) — stock comes off when it's added and
 //                         goes back if it's removed or the visit is cancelled
 //   svc_commission_rules  % rules; NULL service/weekday/staff = "any"
+//   svc_payouts           commission paid out to a staff member. Each paid
+//                         line is stamped with its payout, so a staff
+//                         member's balance (unstamped commission) goes back
+//                         to zero when they're paid.
+// Staff can also record a job they did themselves ("Record my job"): a paid
+// visit with source = 'staff'. They tick whether it earns commission or the
+// whole amount is theirs (staff_keeps_all → 100%).
 namespace Models;
 
 class ServiceDeskModel
@@ -111,6 +118,25 @@ class ServiceDeskModel
             $db->exec("ALTER TABLE svc_ticket_items ADD COLUMN kind ENUM('service','product') NOT NULL DEFAULT 'service' AFTER service_name,
                        ADD COLUMN product_id INT NULL AFTER kind, ADD COLUMN quantity DECIMAL(12,2) NOT NULL DEFAULT 1 AFTER product_id");
         }
+        $col = fn(string $t, string $c) => (int) $db->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '$t' AND column_name = '$c'")->fetchColumn();
+        if (!$col('svc_ticket_items', 'payout_id')) {
+            $db->exec('ALTER TABLE svc_ticket_items ADD COLUMN payout_id INT NULL, ADD COLUMN staff_keeps_all TINYINT(1) NOT NULL DEFAULT 0, ADD KEY idx_svc_item_payout (staff_id, payout_id)');
+        }
+        if (!$col('svc_tickets', 'source')) {
+            $db->exec("ALTER TABLE svc_tickets ADD COLUMN source ENUM('desk','staff') NOT NULL DEFAULT 'desk'");
+        }
+        $db->exec("CREATE TABLE IF NOT EXISTS svc_payouts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            account_id INT NOT NULL,
+            staff_id INT NOT NULL,
+            amount DECIMAL(12,2) NOT NULL,
+            items INT NOT NULL DEFAULT 0,
+            method VARCHAR(10) NOT NULL DEFAULT 'cash',
+            note VARCHAR(255) NULL,
+            paid_by INT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            KEY idx_svc_payout_staff (account_id, staff_id, created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         $done = true;
     }
 
@@ -561,6 +587,7 @@ class ServiceDeskModel
         $svcDefault = $this->db->prepare('SELECT commission_pct FROM svc_services WHERE id = ?');
         foreach ($this->items($ticketId) as $it) {
             if (!$it['staff_id'] || $it['kind'] !== 'service') { $upd->execute([null, null, $it['id']]); continue; }
+            if (!empty($it['staff_keeps_all'])) { $upd->execute([100, round((float) $it['price'] * $ratio, 2), $it['id']]); continue; }
             $svcDefault->execute([$it['service_id']]);
             $default = $svcDefault->fetchColumn();
             $pct = self::pctFor($rules, (int) $it['service_id'], $weekday, (int) $it['staff_id'], $default === false || $default === null ? null : (float) $default);
@@ -641,6 +668,142 @@ class ServiceDeskModel
         $stmt->execute([$userId, $from . ' 00:00:00', $to . ' 23:59:59']);
         $r = $stmt->fetch();
         return ['count' => (int) $r['n'], 'commission' => round((float) $r['commission'], 2)];
+    }
+
+    // ---- staff-recorded jobs & payouts ---------------------------------------
+
+    /**
+     * A staff member records a job they did and was paid for. $in: service_id
+     * (optional, from the price list) or service_name, amount, customer_name,
+     * customer_phone, method (cash|mpesa), keeps_all (whole amount is theirs), notes.
+     */
+    public function recordOwnJob(int $userId, array $in): array
+    {
+        $tid = $this->tid();
+        $sid = (int) ($in['service_id'] ?? 0) ?: null;
+        $name = trim((string) ($in['service_name'] ?? ''));
+        if ($sid) {
+            $offered = array_column($this->servicesForShop($tid), null, 'id');
+            if (!isset($offered[$sid])) { return ['ok' => false, 'error' => 'That service isn\'t offered in this shop.']; }
+            if ($name === '') { $name = $offered[$sid]['name']; }
+        }
+        if ($name === '') { return ['ok' => false, 'error' => 'Say what service you did.']; }
+        $amount = round((float) ($in['amount'] ?? 0), 2);
+        if ($amount <= 0) { return ['ok' => false, 'error' => 'Enter how much you charged.']; }
+        $method = in_array($in['method'] ?? '', ['cash', 'mpesa'], true) ? $in['method'] : 'cash';
+        $client = trim((string) ($in['customer_name'] ?? '')) ?: 'Walk-in client';
+        $keepsAll = !empty($in['keeps_all']) ? 1 : 0;
+
+        $this->db->beginTransaction();
+        try {
+            $this->db->prepare(
+                "INSERT INTO svc_tickets (tenant_id, customer_name, customer_phone, status, notes, subtotal, total, payment_method, cash_amount, mpesa_amount,
+                                          created_by, paid_by, paid_at, source)
+                 VALUES (?,?,?,'paid',?,?,?,?,?,?,?,?,NOW(),'staff')"
+            )->execute([$tid, mb_substr($client, 0, 150), trim((string) ($in['customer_phone'] ?? '')) ?: null,
+                        trim((string) ($in['notes'] ?? '')) !== '' ? mb_substr(trim($in['notes']), 0, 255) : null,
+                        $amount, $amount, $method, $method === 'cash' ? $amount : null, $method === 'mpesa' ? $amount : null, $userId, $userId]);
+            $id = (int) $this->db->lastInsertId();
+            $number = 'SVC-' . str_pad((string) $id, 6, '0', STR_PAD_LEFT);
+            $this->db->prepare('UPDATE svc_tickets SET number = ? WHERE id = ?')->execute([$number, $id]);
+            $this->db->prepare(
+                "INSERT INTO svc_ticket_items (ticket_id, tenant_id, service_id, service_name, price, staff_id, status, done_at, staff_keeps_all)
+                 VALUES (?,?,?,?,?,?,'done',NOW(),?)"
+            )->execute([$id, $tid, $sid, mb_substr($name, 0, 150), $amount, $userId, $keepsAll]);
+            $this->db->commit();
+            $this->computeCommissions($id);
+            return ['ok' => true, 'error' => null, 'id' => $id, 'number' => $number];
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) { $this->db->rollBack(); }
+            error_log('ServiceDeskModel::recordOwnJob failed: ' . $e->getMessage());
+            return ['ok' => false, 'error' => 'Could not save the job. Please try again.'];
+        }
+    }
+
+    /** Jobs a staff member recorded themselves, newest first. */
+    public function ownJobs(int $userId, int $limit = 30): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT t.number, t.customer_name, t.payment_method, t.paid_at, i.service_name, i.price, i.staff_keeps_all, i.commission_amount, i.payout_id
+               FROM svc_ticket_items i JOIN svc_tickets t ON t.id = i.ticket_id
+              WHERE i.staff_id = ? AND t.source = 'staff' ORDER BY t.id DESC LIMIT " . (int) $limit
+        );
+        $stmt->execute([$userId]);
+        return $stmt->fetchAll();
+    }
+
+    /** Commission earned but not yet paid out — what the staff portal shows. */
+    public function unpaidFor(int $userId): array
+    {
+        $stmt = $this->db->prepare(
+            "SELECT COUNT(*) n, COALESCE(SUM(i.commission_amount),0) amount FROM svc_ticket_items i JOIN svc_tickets t ON t.id = i.ticket_id
+              WHERE i.staff_id = ? AND i.kind = 'service' AND t.status = 'paid' AND i.payout_id IS NULL AND i.commission_amount > 0"
+        );
+        $stmt->execute([$userId]);
+        $r = $stmt->fetch();
+        return ['count' => (int) $r['n'], 'amount' => round((float) $r['amount'], 2)];
+    }
+
+    /** Everyone with commission waiting to be paid, in the given shops. */
+    public function unpaidBalances(array $tenantIds): array
+    {
+        $tenantIds = array_values(array_filter(array_map('intval', $tenantIds)));
+        if (!$tenantIds) { return []; }
+        $in = implode(',', array_fill(0, count($tenantIds), '?'));
+        $stmt = $this->db->prepare(
+            "SELECT i.staff_id, u.username, COUNT(*) AS services, COALESCE(SUM(i.commission_amount),0) AS amount,
+                    MIN(t.paid_at) AS since, SUM(t.source = 'staff') AS own_jobs
+               FROM svc_ticket_items i JOIN svc_tickets t ON t.id = i.ticket_id LEFT JOIN users u ON u.id = i.staff_id
+              WHERE t.tenant_id IN ($in) AND t.status = 'paid' AND i.kind = 'service' AND i.staff_id IS NOT NULL
+                AND i.payout_id IS NULL AND i.commission_amount > 0
+           GROUP BY i.staff_id, u.username ORDER BY amount DESC"
+        );
+        $stmt->execute($tenantIds);
+        return $stmt->fetchAll();
+    }
+
+    /** Pay a staff member everything they're owed in the given shops; their balance resets to zero. */
+    public function payStaff(int $staffId, array $tenantIds, string $method, string $note = ''): array
+    {
+        $tenantIds = array_values(array_filter(array_map('intval', $tenantIds)));
+        if (!$staffId || !$tenantIds) { return ['ok' => false, 'error' => 'Pick a staff member.']; }
+        $method = in_array($method, ['cash', 'mpesa', 'bank'], true) ? $method : 'cash';
+        $in = implode(',', array_fill(0, count($tenantIds), '?'));
+        $this->db->beginTransaction();
+        try {
+            $stmt = $this->db->prepare(
+                "SELECT i.id, i.commission_amount FROM svc_ticket_items i JOIN svc_tickets t ON t.id = i.ticket_id
+                  WHERE i.staff_id = ? AND t.tenant_id IN ($in) AND t.status = 'paid' AND i.kind = 'service'
+                    AND i.payout_id IS NULL AND i.commission_amount > 0 FOR UPDATE"
+            );
+            $stmt->execute(array_merge([$staffId], $tenantIds));
+            $rows = $stmt->fetchAll();
+            $amount = round(array_sum(array_map(fn($r) => (float) $r['commission_amount'], $rows)), 2);
+            if ($amount <= 0) { $this->db->rollBack(); return ['ok' => false, 'error' => 'Nothing to pay — their balance is already zero.']; }
+            $this->db->prepare('INSERT INTO svc_payouts (account_id, staff_id, amount, items, method, note, paid_by) VALUES (?,?,?,?,?,?,?)')
+                ->execute([$this->account(), $staffId, $amount, count($rows), $method, $note !== '' ? mb_substr($note, 0, 255) : null, \TenantContext::userId()]);
+            $payout = (int) $this->db->lastInsertId();
+            $ids = array_map(fn($r) => (int) $r['id'], $rows);
+            $this->db->prepare('UPDATE svc_ticket_items SET payout_id = ? WHERE id IN (' . implode(',', $ids) . ')')->execute([$payout]);
+            $this->db->commit();
+            return ['ok' => true, 'error' => null, 'amount' => $amount, 'items' => count($rows)];
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) { $this->db->rollBack(); }
+            error_log('ServiceDeskModel::payStaff failed: ' . $e->getMessage());
+            return ['ok' => false, 'error' => 'Could not record the payment. Please try again.'];
+        }
+    }
+
+    /** Past payouts for the account (optionally one staff member). */
+    public function payouts(?int $staffId = null, int $limit = 50): array
+    {
+        $sql = 'SELECT p.*, u.username AS staff_name, pb.username AS paid_by_name FROM svc_payouts p
+             LEFT JOIN users u ON u.id = p.staff_id LEFT JOIN users pb ON pb.id = p.paid_by WHERE p.account_id = ?';
+        $args = [$this->account()];
+        if ($staffId) { $sql .= ' AND p.staff_id = ?'; $args[] = $staffId; }
+        $stmt = $this->db->prepare($sql . ' ORDER BY p.id DESC LIMIT ' . (int) $limit);
+        $stmt->execute($args);
+        return $stmt->fetchAll();
     }
 
     // ---- money ------------------------------------------------------------

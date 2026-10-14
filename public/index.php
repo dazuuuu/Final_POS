@@ -1,6 +1,12 @@
 <?php
 // public/index.php — the staff terminal. Type your PIN, then Login, Clock In
 // or Clock Out. Owners go to /admin instead.
+// domain/<shop-slug>/<page> lands here (no such file) — run that page.
+require_once __DIR__ . '/../app/helpers/ShopUrl.php';
+if ($__shopPage = ShopUrl::dispatch()) {
+    require $__shopPage;
+    exit;
+}
 require_once __DIR__ . '/../app/app.php';
 
 // Already fully logged in? Skip straight to the dashboard.
@@ -34,6 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         "SELECT u.*, r.role_name FROM users u JOIN roles r ON r.id = u.role_id
            JOIN tenants t ON t.id = u.tenant_id
           WHERE r.role_name = 'staff' AND u.is_active = 1 AND u.pin_hash IS NOT NULL AND t.status = 'active'"
+        // Opened through a shop's address: only that shop's (and its branches') staff.
+        . (!empty($shop['slug']) && (isset($_SESSION['shop_slug']) || isset($_COOKIE['shop_slug']))
+            ? ' AND (t.id = ' . (int) $shop['id'] . ' OR t.parent_tenant_id = ' . (int) $shop['id'] . ')' : '')
     );
     $stmt->execute();
     $user = null;

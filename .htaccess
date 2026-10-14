@@ -1,0 +1,17 @@
+# Root .htaccess — the site runs from this folder: every request goes to
+# index.php (the front controller), which serves pages and files from public/
+# without /public in the URL and never exposes app/, config, samples or dumps.
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+# Everything → index.php (REDIRECT_STATUS stops the rewrite looping on itself)
+RewriteCond %{ENV:REDIRECT_STATUS} ^$
+RewriteRule ^ index.php [L,QSA]
+</IfModule>
+
+# Belt and braces: even if rewriting is off, never hand out these files.
+<FilesMatch "\.(sql|env|ini|log|lock|md|bak|sqlite)$|^(composer\.(json|lock)|\.git.*)$">
+    Require all denied
+</FilesMatch>

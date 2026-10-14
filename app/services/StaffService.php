@@ -34,6 +34,11 @@ class StaffService
         if (!$errors && $this->pinTaken($tenantId, $pin)) {
             $errors['pin'] = 'That PIN is already used by another staff member. Choose a different one.';
         }
+        if (!$errors && \Features::isBasic($tenantId)
+            && $this->accountStaffCount($tenantId) >= \Features::BASIC_STAFF_LIMIT) {
+            $errors['_'] = 'Your Basic package allows up to ' . \Features::BASIC_STAFF_LIMIT
+                . ' staff. Remove one, or upgrade to Pro POS for unlimited staff.';
+        }
         if ($errors) {
             return ['ok' => false, 'user_id' => null, 'errors' => $errors];
         }
@@ -258,5 +263,17 @@ class StaffService
             if ($this->db->inTransaction()) { $this->db->rollBack(); }
             throw $e;
         }
+    }
+
+    /** Staff accounts across the whole account (main shop + branches). */
+    public function accountStaffCount(int $tenantId): int
+    {
+        $account = \Features::accountId($tenantId);
+        $st = $this->db->prepare(
+            "SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id JOIN tenants t ON t.id = u.tenant_id
+              WHERE r.role_name = 'staff' AND (t.id = ? OR t.parent_tenant_id = ?)"
+        );
+        $st->execute([$account, $account]);
+        return (int) $st->fetchColumn();
     }
 }

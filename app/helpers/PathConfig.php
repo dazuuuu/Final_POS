@@ -88,6 +88,9 @@ if (!function_exists('public_url')) {
         $base = defined('BASE_URL') ? (string) BASE_URL : '/public';
         $base = rtrim($base, '/');
         $path = ltrim($path, '/');
+        if (class_exists('ShopUrl')) {
+            $path = ShopUrl::prefix($path); // keep the shop in super/staff links
+        }
         return $base === '' ? '/' . ($path !== '' ? $path : '') : $base . '/' . $path;
     }
 }

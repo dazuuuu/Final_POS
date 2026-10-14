@@ -61,3 +61,14 @@ function support_status_badge(string $status): string
     $cls = ['active' => 'bg-success', 'suspended' => 'bg-warning text-dark', 'cancelled' => 'bg-secondary'][$status] ?? 'bg-secondary';
     return '<span class="badge ' . $cls . '">' . htmlspecialchars(ucfirst($status)) . '</span>';
 }
+
+function support_license_badge(int $accountId): string
+{
+    $st = License::state($accountId);
+    if ($st['status'] === 'active') {
+        return $st['activated_at'] ? '<span class="badge bg-success-subtle text-success">Activated</span>' : '';
+    }
+    return $st['status'] === 'locked'
+        ? '<span class="badge bg-danger">Locked — not activated</span>'
+        : '<span class="badge bg-warning text-dark">Awaiting key · ' . (int) ceil($st['seconds_left'] / 60) . ' min</span>';
+}

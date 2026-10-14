@@ -324,8 +324,10 @@ $isCart = strpos($_SERVER['REQUEST_URI'], '/store/cart') !== false;
     <?php if (isset($extra_css)): ?>
         <?php echo $extra_css; ?>
     <?php endif; ?>
+<?php include __DIR__ . '/../../components/password_toggle.php'; ?>
 </head>
 <body>
+<?php include __DIR__ . '/../../components/preview_banner.php'; ?>
 
 <!-- Desktop Sidebar -->
 <div class="desktop-sidebar">

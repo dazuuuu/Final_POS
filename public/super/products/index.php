@@ -87,11 +87,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'product_type'        => 'book',
         'name'                => trim($_POST['name'] ?? ''),
         'category_id'         => (int) $C->findOrCreate($_POST['category'] ?? '', 'subject'),
-        'grade_id'            => 0,
-        'publisher_id'        => 0,
-        'author_id'           => 0,
-        'edition_id'          => 0,
-        'brand_id'            => 0,
         // Colours: edited here for electronics shops; otherwise keep what the product already has.
         'colors'              => $EL ? Models\ElectronicsModel::parseColors((string) ($_POST['colors'] ?? ''))
                                      : ($editRow['colors'] ? (json_decode($editRow['colors'], true) ?: []) : []),
@@ -112,7 +107,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // of silently reactivating it just because its price was edited.
         'status'              => ($_POST['action'] ?? '') === 'draft' ? 'draft' : ($editRow['status'] === 'archived' ? 'archived' : 'active'),
     ];
+    // Extra fields (brand, grade…) this account uses; the rest keep their stored value.
+    $in += ProductFields::resolve($_POST['fx'] ?? [], $in['category_id'], $editRow);
     $old = $in;
+    $old['fx'] = $_POST['fx'] ?? [];
     $old['category'] = $_POST['category'] ?? '';
     $old['supplier'] = $supplierName;
 
@@ -227,6 +225,21 @@ $actionBadge = function (string $a): string {
               </div>
             </div>
           </div>
+
+          <?php if ($__fx = ProductFields::enabled()): ?>
+          <div class="row g-2">
+            <?php foreach ($__fx as $k): [$label, , , $example] = ProductFields::FIELDS[$k]; ?>
+            <div class="col-6 mb-3">
+              <label class="form-label"><?php echo htmlspecialchars($label); ?> <span class="text-muted">(optional)</span></label>
+              <div class="ta-wrap">
+                <input type="text" name="fx[<?php echo $k; ?>]" class="form-control ta-input" data-field="<?php echo $k; ?>" value="<?php echo htmlspecialchars(!empty($old) ? ($old['fx'][$k] ?? '') : ($editRow[$k . '_name'] ?? '')); ?>" placeholder="<?php echo htmlspecialchars($example); ?>" autocomplete="off">
+                <div class="ta-menu"></div>
+              </div>
+              <?php if (!empty($errors[$k . '_id'])): ?><small class="text-danger"><?php echo htmlspecialchars($errors[$k . '_id']); ?></small><?php endif; ?>
+            </div>
+            <?php endforeach; ?>
+          </div>
+          <?php endif; ?>
 
           <div class="mb-3">
             <label class="form-label"><i class="fas fa-barcode me-1"></i>Barcode <span class="text-muted">(optional — scan it, or generate one)</span></label>

@@ -63,6 +63,17 @@ class TenantModel extends Model
      */
     public function primary(): ?array
     {
+        // A shop opened through its own address (domain/<slug>) brands the pre-login pages.
+        $slug = $_SESSION['shop_slug'] ?? ($_COOKIE['shop_slug'] ?? '');
+        if (is_string($slug) && $slug !== '' && preg_match('/^[a-z0-9-]+$/', $slug)) {
+            try {
+                $stmt = $this->db->prepare("SELECT * FROM tenants WHERE slug = ? AND status = 'active' LIMIT 1");
+                $stmt->execute([$slug]);
+                if ($row = $stmt->fetch()) {
+                    return $row;
+                }
+            } catch (\PDOException $e) { /* fall through to the default lookup */ }
+        }
         try {
             $row = $this->primaryQuery();
         } catch (\PDOException $e) {
