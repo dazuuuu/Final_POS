@@ -37,8 +37,8 @@ ob_start();
               ['rawbt',     'fas fa-mobile-screen',    'Bluetooth via RawBT (Android)', 'Older Bluetooth printers paired in Android settings.'],
               ['off',       'fas fa-ban',              'No printer', 'Print button opens the normal print dialog.'],
           ] as [$val, $icon, $label, $hint]):
-              // Basic (20k): USB / device printing only — Bluetooth and Wi-Fi are Pro.
-              $locked = Features::isBasic() && !in_array($val, ['system', 'off'], true); ?>
+              // Basic (20k): Bluetooth and USB / device printing — Wi-Fi is Pro.
+              $locked = Features::isBasic() && $val === 'network'; ?>
           <div class="col-12 col-md-6">
             <?php if ($locked): ?>
             <a class="pmode text-decoration-none text-reset" style="opacity:.6" href="<?php echo public_url('super/upgrade.php?f=' . urlencode($label)); ?>">

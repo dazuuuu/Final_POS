@@ -73,6 +73,7 @@ $shopName = $__tenant['name'] ?? 'My Shop';
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?php echo public_url('assets/css/track.css'); ?>?v=3">
+    <?php echo ShopTheme::style(TenantContext::tenantId()); // the account's own colours (Settings → Shop details) ?>
     <?php echo $extra_css ?? ''; ?>
 </head>
 <body>

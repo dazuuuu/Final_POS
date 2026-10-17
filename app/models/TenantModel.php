@@ -64,7 +64,8 @@ class TenantModel extends Model
     public function primary(): ?array
     {
         // A shop opened through its own address (domain/<slug>) brands the pre-login pages.
-        $slug = $_SESSION['shop_slug'] ?? ($_COOKIE['shop_slug'] ?? '');
+        // Only the URL counts — never a remembered cookie — so the shared pages stay generic.
+        $slug = class_exists('ShopUrl', false) ? (string) \ShopUrl::requestSlug() : '';
         if (is_string($slug) && $slug !== '' && preg_match('/^[a-z0-9-]+$/', $slug)) {
             try {
                 $stmt = $this->db->prepare("SELECT * FROM tenants WHERE slug = ? AND status = 'active' LIMIT 1");

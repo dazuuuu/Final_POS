@@ -118,19 +118,18 @@ ob_start();
     </div>
   </div>
 <?php else: ?>
-  <?php foreach ($grouped as $groupName => $items): ?>
-  <div class="card border-0 shadow-sm mb-4" style="border-radius:14px;overflow:hidden;">
-    <div class="px-4 py-3 d-flex align-items-center justify-content-between" style="background:linear-gradient(135deg,#f8fafc,#f1f5f9);border-bottom:1px solid #e2e8f0;">
-      <?php $groupIcon = ['category' => 'tags', 'supplier' => 'truck-field', 'archived' => 'box-archive'][$groupBy] ?? 'tags'; ?>
-      <div>
-        <h2 class="h6 fw-bold mb-0"><i class="fas fa-<?php echo $groupIcon; ?> me-2 text-primary"></i><?php echo htmlspecialchars($groupName); ?></h2>
-        <span class="text-muted small"><?php echo count($items); ?> item<?php echo count($items) !== 1 ? 's' : ''; ?></span>
-      </div>
-    </div>
-    <div class="table-responsive">
-      <table class="table align-middle mb-0">
+  <?php include __DIR__ . '/../../components/xsheet.php'; ?>
+  <div class="card border-0 shadow-sm" style="border-radius:14px;">
+    <div class="card-body p-3">
+      <?php xsheet_search('#invTable', 'Search products: name, barcode, category, supplier…  e.g. sugar  supplier:bidco  balance:<5', [
+          'In stock' => 'balance:>0', 'Low stock' => 'low-stock', 'Out of stock' => 'balance:<=0',
+          'Active' => 'status:active', 'Draft' => 'status:draft', 'On offer' => 'offer',
+      ]); ?>
+      <div class="table-responsive">
+      <table class="xsheet" id="invTable" data-page-size="20">
         <thead>
-          <tr class="text-muted small text-uppercase">
+          <tr>
+            <th class="xsheet-n">#</th>
             <th style="width:48px;"></th>
             <th>Item</th>
             <th>Category</th>
@@ -141,10 +140,17 @@ ob_start();
             <th class="text-end">Wholesale</th>
             <th class="text-end">Retail</th>
             <th>Status</th>
-            <?php if ($canEdit): ?><th></th><?php endif; ?>
+            <?php if ($canEdit): ?><th>Actions</th><?php endif; ?>
           </tr>
         </thead>
         <tbody>
+          <?php $groupIcon = ['category' => 'tags', 'supplier' => 'truck-field', 'archived' => 'box-archive'][$groupBy] ?? 'tags';
+                $rowNo = 0;
+                foreach ($grouped as $groupName => $items): ?>
+          <tr class="xsheet-group">
+            <td colspan="<?php echo $canEdit ? 12 : 11; ?>"><i class="fas fa-<?php echo $groupIcon; ?> me-2 text-primary"></i><?php echo htmlspecialchars($groupName); ?>
+              <span class="text-muted fw-normal small ms-1"><?php echo count($items); ?> item<?php echo count($items) !== 1 ? 's' : ''; ?></span></td>
+          </tr>
           <?php foreach ($items as $p):
               $buy = (float)$p['buying_price'];
               $qty = (float)$p['quantity'];
@@ -154,13 +160,17 @@ ob_start();
               $low = $qty <= (int)$p['low_stock_threshold'];
               $subline = array_filter([$p['barcode'] ?? null]);
               $eff = Models\ProductModel::effectivePrice($p);
+              $rowNo++;
+              $search = implode(' ', array_filter([$p['name'], $p['barcode'] ?? '', $p['category_name'] ?? '', $p['supplier_name'] ?? '',
+                  $groupName, $p['status'], $low ? 'low-stock' : '', $qty <= 0 ? 'out-of-stock' : '', $eff['on_offer'] ? 'offer' : '']));
           ?>
-          <tr>
+          <tr data-search="<?php echo htmlspecialchars(strtolower($search)); ?>">
+            <td class="xsheet-n"><?php echo $rowNo; ?></td>
             <td>
               <?php if (!empty($p['image_path'])): ?>
-                <img src="<?php echo htmlspecialchars($p['image_path']); ?>" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0;">
+                <img src="<?php echo htmlspecialchars($p['image_path']); ?>" alt="" style="width:34px;height:34px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0;">
               <?php else: ?>
-                <span class="d-inline-flex align-items-center justify-content-center text-muted" style="width:40px;height:40px;border-radius:8px;background:#f1f5f9;"><i class="fas fa-box"></i></span>
+                <span class="d-inline-flex align-items-center justify-content-center text-muted" style="width:34px;height:34px;border-radius:6px;background:#f1f5f9;"><i class="fas fa-box"></i></span>
               <?php endif; ?>
             </td>
             <td>
@@ -218,11 +228,12 @@ ob_start();
             <?php endif; ?>
           </tr>
           <?php endforeach; ?>
+          <?php endforeach; ?>
         </tbody>
       </table>
+      </div>
     </div>
   </div>
-  <?php endforeach; ?>
 <?php endif; ?>
 <?php
 $content = ob_get_clean();

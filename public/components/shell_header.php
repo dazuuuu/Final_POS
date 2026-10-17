@@ -3,14 +3,15 @@
 // Top bar shared by the owner and staff layouts: green brand block (shop logo
 // + name) on the left, menu toggle, then date / user / logout on the right.
 // Expects $__tenant (array|null) and $shopName from the including layout.
-$__shellLogo = Branding::tenantLogo($__tenant ?? null);
+$__shellLogo = Branding::shopLogo($__tenant ?? null); // the shop's (or its main shop's) logo, never the system's
 $__shellUser = $_SESSION['username'] ?? 'User';
 $__shellHome = public_url(TenantContext::role() === 'staff' ? 'staff/dashboard/' : 'super/dashboard/');
 $__shellShops = TenantContext::role() === 'tenant_owner' ? ShopContext::shops(true) : [];
 ?>
 <header class="tk-header">
     <a class="tk-brand" href="<?php echo $__shellHome; ?>">
-        <img src="<?php echo htmlspecialchars($__shellLogo); ?>" alt="">
+        <?php if ($__shellLogo): ?><img src="<?php echo htmlspecialchars($__shellLogo); ?>" alt="">
+        <?php else: ?><i class="fas fa-store" style="font-size:1.2rem;"></i><?php endif; ?>
         <span><?php echo htmlspecialchars($shopName ?? 'My Shop'); ?></span>
     </a>
     <div class="tk-bar">

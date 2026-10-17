@@ -117,7 +117,7 @@ ob_start();
   <div class="col-md-5">
     <div class="s-card mb-3">
       <h2 class="h6 mb-1">Login screen branding</h2>
-      <p class="small text-muted">Shown on the login, signup and password pages for every shop. Shops' own logos stay on their receipts and dashboards.</p>
+      <p class="small text-muted">Shown on this support console and on the shared login, signup and password pages. Each shop's own logo stays on its own pages, receipts and dashboards.</p>
       <form method="post" enctype="multipart/form-data">
         <?php echo support_csrf_field(); ?><input type="hidden" name="action" value="brand">
         <div class="d-flex align-items-center gap-2 mb-2">

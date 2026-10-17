@@ -34,7 +34,7 @@ $shopName = $tenant['name'] ?? 'Our Shop';
 $shopPhone = $tenant['phone'] ?? '';
 $shopAddr = $tenant['address'] ?? '';
 $currency = $tenant['currency'] ?? 'KES';
-$logoUrl = Branding::tenantLogo($tenant);
+$logoUrl = Branding::shopLogo($tenant);
 $categories = array_values(array_unique(array_filter(array_map(fn($p) => $p['category_name'] ?? '', $products))));
 sort($categories);
 

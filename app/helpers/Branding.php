@@ -29,6 +29,27 @@ class Branding
     }
 
     /**
+     * A shop's own logo for its public / per-shop pages (catalogue, its PIN
+     * screen and login at domain/<slug>/). A branch without one uses its main
+     * shop's. Never the system logo: '' when the shop has none, so the page
+     * shows the shop's name with a store icon instead.
+     */
+    public static function shopLogo(?array $tenant): string
+    {
+        if (!$tenant) {
+            return '';
+        }
+        if (empty($tenant['logo_path']) && !empty($tenant['parent_tenant_id'])) {
+            try {
+                $st = Database::pdo()->prepare('SELECT logo_path FROM tenants WHERE id = ?');
+                $st->execute([(int) $tenant['parent_tenant_id']]);
+                $tenant = ['logo_path' => $st->fetchColumn()];
+            } catch (Throwable $e) { /* no logo */ }
+        }
+        return !empty($tenant['logo_path']) ? public_url(self::normalizeStoredPath($tenant['logo_path'])) : '';
+    }
+
+    /**
      * The platform's own brand (set in Support → Settings, saved to
      * app/config/platform.php). The login / signup screens are shared by every
      * shop, so they show this — never one client's logo.

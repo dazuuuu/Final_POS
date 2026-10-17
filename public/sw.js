@@ -1,12 +1,11 @@
 /* Dazu Modern POS service worker — makes the app installable + fast.
    Pages are always network-first (so live data + auth stay correct);
    only static assets and the login shell are cached. */
-const CACHE = 'dazu-pos-v4';
+const CACHE = 'dazu-pos-v5';
 // Derived from this script's own URL, not hard-coded — works whatever
 // folder the app is deployed under.
 const BASE  = new URL('.', self.location).pathname.replace(/\/$/, '');
 const SHELL = [
-  BASE + '/',
   BASE + '/manifest.webmanifest',
   BASE + '/assets/icons/icon-192.png',
   BASE + '/assets/icons/icon-512.png',
@@ -60,13 +59,16 @@ self.addEventListener('fetch', (event) => {
       .catch(() =>
         caches.match(request).then((hit) => {
           if (hit) return hit;
-          return caches.match(BASE + '/').then((shellHit) => shellHit || fallbackResponse());
+          return fallbackResponse();
         })
       );
 
-  // Page navigations: network-first, fall back to the cached login shell offline.
+  // Page navigations: always the network, whatever its status (a login error,
+  // a 403 or a redirect must reach the user as-is). Pages are never cached —
+  // a cached page is one shop's screen and must not stand in for another.
+  // Only when the device is truly offline: a plain offline notice.
   if (req.mode === 'navigate') {
-    event.respondWith(networkThenCache(req));
+    event.respondWith(fetch(req).catch(fallbackResponse));
     return;
   }
 

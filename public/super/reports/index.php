@@ -19,6 +19,7 @@ $canGoNext = $nextDate <= date('Y-m-d');
 
 $page_title = 'Reports';
 ob_start();
+include __DIR__ . '/../../components/xsheet.php';
 ?>
 <style>
 @media print {
@@ -60,6 +61,9 @@ ob_start();
       </div>
     </div>
 
+    <?php xsheet_search('table.rep-sheet', 'Search this report: receipt, staff, customer, product…  e.g. staff:jane  total:>1000', [
+        'Cash' => 'pay:cash', 'M-Pesa' => 'pay:m-pesa', 'Credit' => 'pay:credit', 'Late' => 'status:late',
+    ]); ?>
     <div class="row g-3 mb-4">
       <?php foreach ([['Sales',$sum['count']],['Revenue',$money($sum['revenue'])],['Cash',$money($sum['cash'])],['M-Pesa',$money($sum['mpesa'])]] as $b): ?>
       <div class="col-6 col-md-3">
@@ -77,9 +81,9 @@ ob_start();
       <p class="text-muted">No sales recorded on this day.</p>
     <?php else: ?>
     <div class="table-responsive mb-4">
-      <table class="table table-sm align-middle mb-0">
+      <table class="xsheet rep-sheet" data-page-size="20">
         <?php $hasDevices = (bool) array_filter(array_column($data['sales'], 'devices')); ?>
-        <thead><tr class="text-muted small text-uppercase"><th>#</th><th>Receipt</th><th>Date &amp; time</th><th>Staff</th><th>Customer</th><th>Items</th><?php if ($hasDevices): ?><th>Serial / IMEI</th><?php endif; ?><th>Pay</th><th class="text-end">Total</th></tr></thead>
+        <thead><tr><th>#</th><th>Receipt</th><th>Date &amp; time</th><th>Staff</th><th>Customer</th><th>Items</th><?php if ($hasDevices): ?><th>Serial / IMEI</th><?php endif; ?><th>Pay</th><th class="text-end">Total</th></tr></thead>
         <tbody>
           <?php foreach ($data['sales'] as $n => $s): ?>
           <tr>
@@ -104,8 +108,8 @@ ob_start();
     <h2 class="h6 fw-bold mb-2">Services <span class="text-muted">(<?php echo count($data['services']); ?>)</span>
       <span class="badge bg-success ms-1">Earnings <?php echo $money(array_sum(array_column($data['services'], 'total'))); ?></span></h2>
     <div class="table-responsive mb-4">
-      <table class="table table-sm align-middle mb-0">
-        <thead><tr class="text-muted small text-uppercase"><th>Visit</th><th>Time</th><th>Client</th><th>Services (staff)</th><th>Pay</th><th class="text-end">Total</th></tr></thead>
+      <table class="xsheet rep-sheet" data-page-size="20">
+        <thead><tr><th>Visit</th><th>Time</th><th>Client</th><th>Services (staff)</th><th>Pay</th><th class="text-end">Total</th></tr></thead>
         <tbody>
           <?php foreach ($data['services'] as $v): ?>
           <tr class="small">
@@ -127,8 +131,8 @@ ob_start();
     <h2 class="h6 fw-bold mb-2">Repairs collected <span class="text-muted">(<?php echo count($data['repairs']); ?>)</span>
       <span class="badge bg-success ms-1">Earnings <?php echo $money($repairTotal); ?></span></h2>
     <div class="table-responsive mb-4">
-      <table class="table table-sm align-middle mb-0">
-        <thead><tr class="text-muted small text-uppercase"><th>Device</th><th>Customer</th><th>Issue</th><th>Cover</th><th class="text-end">Charged</th></tr></thead>
+      <table class="xsheet rep-sheet" data-page-size="20">
+        <thead><tr><th>Device</th><th>Customer</th><th>Issue</th><th>Cover</th><th class="text-end">Charged</th></tr></thead>
         <tbody>
           <?php foreach ($data['repairs'] as $r): ?>
           <tr class="small">
@@ -147,8 +151,8 @@ ob_start();
     <?php if (in_array($type, ['general', 'products'], true) && $data['products']): ?>
     <h2 class="h6 fw-bold mb-2">Products sold</h2>
     <div class="table-responsive mb-4">
-      <table class="table table-sm align-middle mb-0">
-        <thead><tr class="text-muted small text-uppercase"><th>Product</th><th>First sold</th><th>Last sold</th><th class="text-end">Qty</th><th class="text-end">Revenue</th></tr></thead>
+      <table class="xsheet rep-sheet" data-page-size="20">
+        <thead><tr><th>Product</th><th>First sold</th><th>Last sold</th><th class="text-end">Qty</th><th class="text-end">Revenue</th></tr></thead>
         <tbody>
           <?php foreach ($data['products'] as $p): ?>
           <tr>
@@ -167,8 +171,8 @@ ob_start();
     <?php if (in_array($type, ['general', 'inventory'], true)): ?>
     <h2 class="h6 fw-bold mb-2">Inventory</h2>
     <div class="table-responsive mb-4">
-      <table class="table table-sm align-middle mb-0">
-        <thead><tr class="text-muted small text-uppercase"><th>Product</th><th class="text-end">Qty</th><th class="text-end">Cost</th><th class="text-end">Retail</th><th>Status</th></tr></thead>
+      <table class="xsheet rep-sheet" data-page-size="20">
+        <thead><tr><th>Product</th><th class="text-end">Qty</th><th class="text-end">Cost</th><th class="text-end">Retail</th><th>Status</th></tr></thead>
         <tbody>
           <?php foreach ($data['inventory'] as $p): ?>
           <tr><td class="small"><?php echo htmlspecialchars($p['name']); ?></td><td class="text-end small"><?php echo rtrim(rtrim(number_format((float)$p['quantity'],2),'0'),'.'); ?></td><td class="text-end small"><?php echo $money($p['buying_price']); ?></td><td class="text-end small"><?php echo $money($p['retail_price']); ?></td><td class="small"><?php echo htmlspecialchars($p['status']); ?></td></tr>
@@ -182,8 +186,8 @@ ob_start();
     <h2 class="h6 fw-bold mb-2">Attendance</h2>
     <?php if (!$data['attendance']): ?><p class="text-muted">No attendance recorded on this day.</p><?php else: ?>
     <div class="table-responsive mb-4">
-      <table class="table table-sm align-middle mb-0">
-        <thead><tr class="text-muted small text-uppercase"><th>Staff</th><th>Clock in</th><th>Clock out</th><th>Status</th></tr></thead>
+      <table class="xsheet rep-sheet" data-page-size="20">
+        <thead><tr><th>Staff</th><th>Clock in</th><th>Clock out</th><th>Status</th></tr></thead>
         <tbody>
           <?php foreach ($data['attendance'] as $a): ?>
           <tr><td class="small"><?php echo htmlspecialchars($a['username']); ?></td><td class="small"><?php echo date('D j M Y, g:i:s a', strtotime($a['clock_in_at'])); ?></td><td class="small"><?php echo $a['clock_out_at'] ? date('D j M Y, g:i:s a', strtotime($a['clock_out_at'])) : 'Still in'; ?></td><td><?php echo !empty($a['late_clock_in']) ? '<span class="badge bg-danger">Late</span>' : (!empty($a['auto_closed']) ? '<span class="badge bg-warning text-dark">Auto closed</span>' : '<span class="badge bg-success">On time</span>'); ?></td></tr>
@@ -206,8 +210,8 @@ ob_start();
     <?php if (in_array($type, ['general', 'sales'], true) && $data['staff']): ?>
     <h2 class="h6 fw-bold mb-2">By staff member</h2>
     <div class="table-responsive">
-      <table class="table table-sm align-middle mb-0">
-        <thead><tr class="text-muted small text-uppercase"><th>Staff</th><th class="text-end">Sales</th><th class="text-end">Revenue</th></tr></thead>
+      <table class="xsheet rep-sheet" data-page-size="20">
+        <thead><tr><th>Staff</th><th class="text-end">Sales</th><th class="text-end">Revenue</th></tr></thead>
         <tbody>
           <?php foreach ($data['staff'] as $name => $d): ?>
           <tr><td class="small"><?php echo htmlspecialchars($name); ?></td><td class="text-end small"><?php echo $d['count']; ?></td><td class="text-end fw-semibold"><?php echo $money($d['revenue']); ?></td></tr>

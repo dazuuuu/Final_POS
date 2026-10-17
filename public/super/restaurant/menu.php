@@ -143,8 +143,21 @@ if ($dishes) {
 $ingJs = array_map(fn($i) => [
     'id' => (int) $i['id'], 'name' => $i['name'], 'unit' => $i['unit'], 'ppu' => (float) $i['pieces_per_unit'],
     'stock' => (float) $i['quantity'], 'charge' => $i['charge_price'] === null ? null : (float) $i['charge_price'],
+    'ucost' => rest_ingredient_unit_cost($i),
     'measures' => rest_measures($i),
 ], $ingredients);
+
+$dishCost = rest_dish_costs($pdo, $tid);
+/** "Cost 120 · Profit 230 (66%)" for a dish card, or '' when no recipe cost is known. */
+$costLine = function (array $d) use ($dishCost, $currency): string {
+    $c = $dishCost[(int) $d['id']] ?? null;
+    if (!$c || ($c['cost'] <= 0 && $c['missing'])) return '';
+    $profit = (float) $d['price'] - $c['cost'];
+    $pct = (float) $d['price'] > 0 ? round($profit / (float) $d['price'] * 100) : 0;
+    return '<div class="small text-muted" title="' . ($c['missing'] ? 'No cost yet for: ' . htmlspecialchars(implode(', ', $c['missing'])) : 'From the recipe') . '">Cost '
+        . number_format($c['cost'], 2) . ($c['missing'] ? '+' : '') . ' · <span class="' . ($profit < 0 ? 'text-danger' : 'text-success') . '">'
+        . ($profit < 0 ? 'Loss ' : 'Profit ') . number_format(abs($profit), 2) . ' (' . $pct . '%)</span></div>';
+};
 
 ob_start();
 ?>
@@ -201,6 +214,7 @@ ob_start();
             <div class="input-group"><span class="input-group-text"><?php echo $currency; ?></span>
               <input name="price" id="priceIn" type="number" step="0.01" min="0" class="form-control" value="<?php echo htmlspecialchars((string) $old['price']); ?>" required></div>
             <div class="form-text" id="suggest"></div>
+            <div class="small mt-1" id="recipeCost"></div>
           </div>
           <div>
             <button class="btn btn-primary"><?php echo $editId ? 'Save dish' : 'Add to menu'; ?></button>
@@ -232,6 +246,7 @@ ob_start();
                   <?php if (!$d['is_active']): ?><span class="badge bg-secondary">Off</span>
                   <?php elseif (!empty($short[(int) $d['id']])): ?><span class="badge bg-warning text-dark" title="Not enough <?php echo htmlspecialchars(implode(', ', $short[(int) $d['id']])); ?>">Low stock</span><?php endif; ?>
                 </div>
+                <?php echo $costLine($d); ?>
               </div>
             </div>
           </div>
@@ -336,7 +351,7 @@ ob_start();
   var box = document.getElementById('ingLines');
   var priceIn = document.getElementById('priceIn');
   var priceTouched = priceIn.value !== '';
-  priceIn.addEventListener('input', function () { priceTouched = true; });
+  priceIn.addEventListener('input', function () { priceTouched = true; if (box) recalc(); });
   if (!box) return;
   var ings = <?php echo json_encode($ingJs); ?>, byId = {};
   ings.forEach(function (i) { byId[i.id] = i; });
@@ -350,13 +365,25 @@ ob_start();
   function money(n) { return CUR + ' ' + n.toFixed(2); }
 
   function recalc() {
-    var total = 0, any = false;
+    var total = 0, any = false, cost = 0, costed = false, uncosted = [];
     box.querySelectorAll('.ing-line').forEach(function (l) {
       var v = l.querySelector('.lp').value;
       if (v !== '') { total += parseFloat(v) || 0; any = true; }
+      if (l._cost === null) { if (l._name) uncosted.push(l._name); } else if (l._cost !== undefined) { cost += l._cost; costed = true; }
     });
     var s = document.getElementById('suggest');
     s.textContent = any ? 'Suggested from ingredient prices: ' + money(total) + (priceTouched ? ' — you can keep your own price.' : '') : 'Set any price you like.';
+    // What the recipe costs to make, and what's left at the price set.
+    var c = document.getElementById('recipeCost');
+    if (c) {
+      var price = parseFloat(priceIn.value) || 0, profit = price - cost;
+      c.innerHTML = costed
+        ? '<i class="fas fa-calculator me-1"></i>Ingredients cost <strong>' + money(cost) + '</strong>'
+          + (price > 0 ? ' · <span class="' + (profit < 0 ? 'text-danger' : 'text-success') + '">' + (profit < 0 ? 'loss ' : 'profit ') + money(Math.abs(profit))
+          + ' (' + Math.round(profit / price * 100) + '%)</span>' : '')
+          + (uncosted.length ? '<br><span class="text-muted">No cost yet for ' + uncosted.join(', ') + ' — move it from the store to the kitchen, or set "Bought for" on Ingredients.</span>' : '')
+        : (uncosted.length ? '<span class="text-muted">Ingredient costs unknown — move them from the store to the kitchen to cost this dish.</span>' : '');
+    }
     if (any && !priceTouched) priceIn.value = total.toFixed(2);
   }
 
@@ -398,6 +425,9 @@ ob_start();
           + (base > 0 ? ' · enough for ' + Math.floor(left / base) + ' dishes' : '');
       }
       if (!lpTouched && ing.charge !== null) lp.value = (ing.charge * base).toFixed(2);
+      el._name = ing.name;
+      el._cost = ing.ucost === null ? null : ing.ucost * base;
+      if (el._cost !== null) info.textContent += ' · costs ' + money(el._cost);
       recalc();
     }
     sel.onchange = function () { measures(); lpTouched = false; update(); };

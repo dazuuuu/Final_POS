@@ -38,6 +38,8 @@ ob_start();
         </div>
         <label class="form-label small mb-1">Staff commission <span class="text-muted">(default %, optional)</span></label>
         <div class="input-group mb-1"><input type="number" step="0.5" min="0" max="100" name="commission_pct" class="form-control" placeholder="e.g. 30" value="<?php echo svc_h($edit['commission_pct'] ?? ''); ?>"><span class="input-group-text">%</span></div>
+        <div class="input-group mb-1"><span class="input-group-text">or KES</span><input type="number" step="1" min="0" name="commission_fixed" class="form-control" placeholder="fixed amount per job" value="<?php echo svc_h($edit['commission_fixed'] ?? ''); ?>"></div>
+        <div class="form-text mb-1">A fixed amount is paid per job instead of the %.</div>
         <?php if ($isOwner): ?><div class="form-text mb-2">Day- or staff-specific rates (e.g. weekends 50%) go under <a href="<?php echo public_url('super/services/commissions.php'); ?>">Commissions</a>.</div><?php endif; ?>
         <input name="description" class="form-control mb-2" maxlength="255" placeholder="Short description (optional)" value="<?php echo svc_h($edit['description'] ?? ''); ?>">
         <?php if ($multi): ?>
@@ -74,7 +76,7 @@ ob_start();
               <td class="fw-semibold"><?php echo svc_h($s['name']); ?><?php echo (int) $s['active'] ? '' : ' <span class="badge bg-secondary">hidden</span>'; ?><?php if ($s['description']): ?><div class="text-muted fw-normal"><?php echo svc_h($s['description']); ?></div><?php endif; ?></td>
               <td class="text-end"><?php echo svc_money($s['price']); ?></td>
               <td class="text-center"><?php echo $s['duration_min'] ?: '—'; ?></td>
-              <td class="text-center"><?php echo $s['commission_pct'] !== null ? rtrim(rtrim((string) $s['commission_pct'], '0'), '.') . '%' : '—'; ?></td>
+              <td class="text-center"><?php echo ($s['commission_fixed'] ?? null) !== null ? svc_money($s['commission_fixed']) : ($s['commission_pct'] !== null ? rtrim(rtrim((string) $s['commission_pct'], '0'), '.') . '%' : '—'); ?></td>
               <?php if ($multi): ?><td><?php echo svc_h(implode(', ', array_map(fn($t) => $shopName[$t] ?? '?', $s['shop_ids']))); ?></td><?php endif; ?>
               <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="<?php echo $selfUrl . '?edit=' . (int) $s['id']; ?>">Edit</a></td>
             </tr>

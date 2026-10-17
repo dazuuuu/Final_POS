@@ -28,13 +28,13 @@
     '0000fee7-0000-1000-8000-00805f9b34fb'
   ];
 
-  // Basic (20k) package: USB / device printing only — Bluetooth and Wi-Fi fall back to it.
+  // Basic (20k) package: Bluetooth and USB / device printing only — Wi-Fi falls back to the device printer.
   var BASIC = !!document.querySelector('meta[name="taso-print-basic"]');
   function load() {
     var cfg;
     try { cfg = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(KEY) || '{}')); }
     catch (e) { cfg = Object.assign({}, DEFAULTS); }
-    if (BASIC && cfg.mode !== 'off') cfg.mode = 'system';
+    if (BASIC && cfg.mode === 'network') cfg.mode = 'system';
     return cfg;
   }
   function save(cfg) {

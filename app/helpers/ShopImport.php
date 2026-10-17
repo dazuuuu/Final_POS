@@ -55,11 +55,47 @@ class ShopImport
         'svc_tickets'                  => ['customer_id' => 'customers', 'created_by' => 'users', 'paid_by' => 'users'],
         'svc_ticket_items'             => ['ticket_id' => 'svc_tickets', 'service_id' => 'svc_services', 'product_id' => 'products',
                                            'staff_id' => 'users', 'payout_id' => 'svc_payouts'],
+        // Electronics package.
+        'device_serials'               => ['product_id' => 'products', 'warehouse_item_id' => 'warehouse_items',
+                                           'order_id' => 'orders', 'order_item_id' => 'order_items', 'created_by' => 'users'],
+        'warranty_claims'              => ['serial_id' => 'device_serials', 'received_by' => 'users', 'collected_by' => 'users'],
+        // Restaurant package (ref_id / kind links are in POLY).
+        'rest_settings'                => [],
+        'rest_categories'              => [],
+        'rest_stock'                   => ['supplier_id' => 'suppliers'],
+        'rest_stock_receipts'          => ['stock_id' => 'rest_stock', 'supplier_id' => 'suppliers', 'user_id' => 'users'],
+        'rest_ingredients'             => ['stock_id' => 'rest_stock'],
+        'rest_outlet_items'            => ['stock_id' => 'rest_stock'],
+        'rest_transfers'               => ['stock_id' => 'rest_stock', 'user_id' => 'users'],
+        'rest_dishes'                  => ['category_id' => 'rest_categories'],
+        'rest_dish_ingredients'        => ['dish_id' => 'rest_dishes', 'ingredient_id' => 'rest_ingredients'],
+        'rest_platters'                => [],
+        'rest_platter_items'           => ['platter_id' => 'rest_platters', 'dish_id' => 'rest_dishes'],
+        'rest_orders'                  => ['user_id' => 'users', 'paid_by' => 'users'],
+        'rest_order_items'             => ['order_id' => 'rest_orders'],
+        'rest_payments'                => ['order_id' => 'rest_orders', 'user_id' => 'users'],
+        'rest_table_bookings'          => ['created_by' => 'users'],
+        'rest_table_booking_items'     => ['booking_id' => 'rest_table_bookings'],
+        'rest_table_booking_payments'  => ['booking_id' => 'rest_table_bookings', 'user_id' => 'users'],
+        // Rooms & accommodation.
+        'room_settings'                => [],
+        'room_rooms'                   => [],
+        'room_stays'                   => ['room_id' => 'room_rooms', 'created_by' => 'users', 'checked_out_by' => 'users'],
+        'room_stay_charges'            => ['stay_id' => 'room_stays', 'user_id' => 'users'],
+        'room_stay_payments'           => ['stay_id' => 'room_stays', 'user_id' => 'users'],
+    ];
+
+    /** Links whose target table depends on another column: table => [column, type column, [type => table]]. */
+    const POLY = [
+        'rest_order_items'         => ['ref_id', 'item_type', ['dish' => 'rest_dishes', 'counter' => 'rest_outlet_items']],
+        'rest_table_booking_items' => ['ref_id', 'kind', ['dish' => 'rest_dishes', 'platter' => 'rest_platters']],
     ];
 
     /** Parent links a row can't exist without (row is skipped when the parent is missing). */
     const REQUIRED = ['category_id@subcategories', 'sale_id', 'order_id', 'stock_intake_id', 'held_order_id',
-                      'return_id', 'credit_id', 'purchase_id', 'ticket_id'];
+                      'return_id', 'credit_id', 'purchase_id', 'ticket_id',
+                      'serial_id', 'dish_id', 'platter_id', 'booking_id', 'stay_id', 'stock_id@rest_stock_receipts',
+                      'stock_id@rest_ingredients', 'stock_id@rest_outlet_items', 'stock_id@rest_transfers'];
 
     // ------------------------------------------------------------------ parse
 
@@ -112,6 +148,7 @@ class ShopImport
         foreach (array_keys($tables['users']['rows'] ?? []) as $i) {
             $u = &$tables['users']['rows'][$i];
             if (empty($u['pin_hash']) && !empty($u['login_pin_hash'])) $u['pin_hash'] = $u['login_pin_hash'];
+            if (empty($u['position']) && !empty($u['staff_category']) && $u['staff_category'] !== 'general') $u['position'] = ucfirst($u['staff_category']);
             unset($u);
         }
         foreach (array_keys($tables['products']['rows'] ?? []) as $i) {
@@ -122,9 +159,16 @@ class ShopImport
 
         if (!isset($tables['svc_services'])) {
             foreach ($rows('tenant_services') as $r) {
+                $fixed = ($r['commission_type'] ?? 'percent') === 'fixed';
+                $desc = trim((string) ($r['description'] ?? ''));
+                if (($r['charge_amount_kid'] ?? null) !== null && $r['charge_amount_kid'] !== '') { // we have one price: keep the kids' price in the description
+                    $desc = trim($desc . ' (Kids: ' . number_format((float) $r['charge_amount_kid']) . ')');
+                }
                 $add('svc_services', [
-                    'id' => $r['id'], 'tenant_id' => $r['tenant_id'] ?? null, 'name' => $r['name'], 'description' => $r['description'] ?? null,
-                    'price' => $r['charge_amount'] ?? 0, 'commission_pct' => ($r['commission_type'] ?? 'percent') === 'percent' ? ($r['commission_value'] ?? null) : null,
+                    'id' => $r['id'], 'tenant_id' => $r['tenant_id'] ?? null, 'name' => $r['name'], 'description' => $desc !== '' ? mb_substr($desc, 0, 255) : null,
+                    'price' => $r['charge_amount'] ?? 0,
+                    'commission_pct' => $fixed ? null : ($r['commission_value'] ?? null),
+                    'commission_fixed' => $fixed ? ($r['commission_value'] ?? null) : null,
                     'active' => ($r['status'] ?? 'active') === 'active' ? 1 : 0, 'created_at' => $r['created_at'] ?? null,
                 ]);
             }
@@ -141,48 +185,76 @@ class ShopImport
         if (!isset($tables['svc_tickets'])) {
             $svcByName = [];
             foreach ($rows('tenant_services') as $r) $svcByName[($r['tenant_id'] ?? '') . '|' . mb_strtolower(trim($r['name']))] = $r['id'];
+            $method = fn($m) => in_array($m ?? '', ['cash', 'mpesa'], true) ? $m : 'cash';
+            $ticket = function (array $r, ?string $number = null, bool $paid = false, ?string $m = null, float $amount = 0.0) use ($add) {
+                $add('svc_tickets', [
+                    'id' => $r['id'], 'tenant_id' => $r['tenant_id'] ?? null, 'number' => $number,
+                    'customer_id' => $r['customer_id'] ?? null, 'customer_name' => ($r['customer_name'] ?? '') ?: 'Walk-in', 'customer_phone' => $r['customer_phone'] ?? null,
+                    'status' => $paid ? 'paid' : 'open', 'notes' => isset($r['notes']) ? mb_substr((string) $r['notes'], 0, 255) : null,
+                    'subtotal' => $amount, 'discount_amount' => 0, 'total' => $amount,
+                    'payment_method' => $paid ? $m : null, 'cash_amount' => $paid && $m === 'cash' ? $amount : null,
+                    'mpesa_amount' => $paid && $m === 'mpesa' ? $amount : null,
+                    'created_by' => $r['created_by'] ?? null, 'paid_by' => $paid ? ($r['paid_by'] ?? $r['created_by'] ?? null) : null,
+                    'paid_at' => $paid ? (($r['paid_at'] ?? null) ?: ($r['created_at'] ?? null)) : null, 'created_at' => $r['created_at'] ?? null, 'source' => 'desk',
+                ]);
+            };
+            // A visit (commission_visits) is one client's ticket; its jobs are the commission_sales rows that point at it.
+            $visits = [];
+            foreach ($rows('commission_visits') as $v) {
+                $id = 2000000000 + (int) $v['id']; // keep clear of commission_sales ids
+                $visits[(int) $v['id']] = $id;
+                $paid = ($v['payment_status'] ?? 'paid') === 'paid';
+                $ticket(['id' => $id, 'created_by' => $v['reception_user_id'] ?? null, 'paid_by' => $v['paid_by_user_id'] ?? null] + $v,
+                    $v['receipt_number'] ?? null, $paid, $method($v['payment_method'] ?? null), (float) ($v['total_charged'] ?? 0));
+            }
             foreach ($rows('commission_sales') as $r) {
                 if (empty($r['service_id']) && ($r['item_type'] ?? 'service') === 'service') { // link the job to its service by name
                     $r['service_id'] = $svcByName[($r['tenant_id'] ?? '') . '|' . mb_strtolower(trim((string) $r['item_name']))] ?? null;
                 }
-                $paid = ($r['payment_status'] ?? 'paid') === 'paid';
                 $amount = (float) ($r['charged_amount'] ?? 0);
                 $qty = max(1.0, (float) ($r['quantity'] ?? 1));
-                $method = in_array($r['payment_method'] ?? '', ['cash', 'mpesa'], true) ? $r['payment_method'] : 'cash';
-                $add('svc_tickets', [
-                    'id' => $r['id'], 'tenant_id' => $r['tenant_id'] ?? null, 'number' => $r['receipt_number'] ?? null,
-                    'customer_id' => $r['customer_id'] ?? null, 'customer_name' => $r['customer_name'] ?: 'Walk-in', 'customer_phone' => $r['customer_phone'] ?? null,
-                    'status' => $paid ? 'paid' : 'open', 'notes' => $r['notes'] ?? null,
-                    'subtotal' => $amount, 'discount_amount' => 0, 'total' => $amount,
-                    'payment_method' => $paid ? $method : null, 'cash_amount' => $paid && $method === 'cash' ? $amount : null,
-                    'mpesa_amount' => $paid && $method === 'mpesa' ? $amount : null,
-                    'created_by' => $r['recorded_by_user_id'] ?? null, 'paid_by' => $paid ? ($r['recorded_by_user_id'] ?? null) : null,
-                    'paid_at' => $paid ? ($r['paid_at'] ?: $r['created_at']) : null, 'created_at' => $r['created_at'] ?? null, 'source' => 'desk',
-                ]);
+                $ticketId = $visits[(int) ($r['visit_id'] ?? 0)] ?? null;
+                if ($ticketId === null) { // a job without a visit: its own ticket
+                    $ticketId = (int) $r['id'];
+                    $ticket(['created_by' => $r['recorded_by_user_id'] ?? null] + $r, $r['receipt_number'] ?? null,
+                        ($r['payment_status'] ?? 'paid') === 'paid', $method($r['payment_method'] ?? null), $amount);
+                }
                 $add('svc_ticket_items', [
-                    'id' => $r['id'], 'tenant_id' => $r['tenant_id'] ?? null, 'ticket_id' => $r['id'],
-                    'service_id' => $r['service_id'] ?? null, 'service_name' => $r['item_name'] ?: 'Service',
+                    'id' => $r['id'], 'tenant_id' => $r['tenant_id'] ?? null, 'ticket_id' => $ticketId,
+                    'service_id' => $r['service_id'] ?? null, 'service_name' => ($r['item_name'] ?? '') ?: 'Service',
                     'kind' => ($r['item_type'] ?? 'service') === 'product' ? 'product' : 'service', 'product_id' => $r['product_id'] ?? null,
                     'quantity' => $qty, 'price' => round($amount / $qty, 2), 'staff_id' => $r['agent_user_id'] ?? null,
                     'status' => 'done', 'done_at' => $r['created_at'] ?? null,
-                    'commission_pct' => $amount > 0 ? round((float) ($r['total_commission'] ?? 0) / $amount * 100, 2) : null,
+                    'commission_pct' => $amount > 0 ? min(999.99, round((float) ($r['total_commission'] ?? 0) / $amount * 100, 2)) : null,
                     'commission_amount' => $r['total_commission'] ?? 0, 'payout_id' => $r['payout_id'] ?? null,
                 ]);
             }
+            // Bookings. A checked-in one already became a visit above, so it isn't added twice.
+            $apptSvc = [];
+            foreach ($rows('appointment_services') as $s) $apptSvc[(int) $s['appointment_id']][] = $s;
             foreach ($rows('appointments') as $r) {
-                $id = 1000000000 + (int) $r['id']; // keep clear of commission_sales ids
+                if (($r['status'] ?? '') === 'checked_in' && !empty($r['visit_id']) && isset($visits[(int) $r['visit_id']])) continue;
+                $id = 1000000000 + (int) $r['id'];
+                $staff = $r['assigned_user_id'] ?? $r['agent_user_id'] ?? null;
+                $lines = $apptSvc[(int) $r['id']] ?? [['id' => $r['id'], 'service_id' => $r['service_id'] ?? null,
+                    'item_name' => $r['service_name'] ?? 'Service', 'charged_amount' => $r['total_estimate'] ?? 0]];
+                $total = array_sum(array_map(fn($l) => (float) ($l['charged_amount'] ?? 0), $lines));
                 $add('svc_tickets', [
-                    'id' => $id, 'tenant_id' => $r['tenant_id'] ?? null, 'customer_id' => $r['customer_id'] ?? null,
-                    'customer_name' => $r['customer_name'] ?: 'Client', 'customer_phone' => $r['customer_phone'] ?? null,
-                    'status' => ($r['status'] ?? '') === 'cancelled' || ($r['status'] ?? '') === 'no_show' ? 'cancelled' : 'booked',
-                    'scheduled_at' => $r['scheduled_at'] ?? null, 'notes' => $r['notes'] ?? null,
-                    'created_by' => $r['created_by'] ?? null, 'created_at' => $r['created_at'] ?? null, 'source' => 'desk',
+                    'id' => $id, 'tenant_id' => $r['tenant_id'] ?? null, 'number' => $r['receipt_number'] ?? null, 'customer_id' => $r['customer_id'] ?? null,
+                    'customer_name' => ($r['customer_name'] ?? '') ?: 'Client', 'customer_phone' => $r['customer_phone'] ?? null,
+                    'customer_email' => $r['customer_email'] ?? null,
+                    'status' => in_array($r['status'] ?? '', ['cancelled', 'no_show'], true) ? 'cancelled' : 'booked',
+                    'scheduled_at' => $r['scheduled_at'] ?? null, 'notes' => isset($r['notes']) ? mb_substr((string) $r['notes'], 0, 255) : null,
+                    'subtotal' => $total, 'total' => $total,
+                    'created_by' => $r['booked_by_user_id'] ?? $r['created_by'] ?? null, 'created_at' => $r['created_at'] ?? null, 'source' => 'desk',
                 ]);
-                $add('svc_ticket_items', [
-                    'id' => $id, 'tenant_id' => $r['tenant_id'] ?? null, 'ticket_id' => $id, 'service_id' => $r['service_id'] ?? null,
-                    'service_name' => $r['service_name'] ?: 'Service', 'kind' => 'service', 'quantity' => 1, 'price' => 0,
-                    'staff_id' => $r['agent_user_id'] ?? null, 'status' => 'pending',
-                ]);
+                foreach ($lines as $l) {
+                    $add('svc_ticket_items', [
+                        'id' => $id + 500000000 + (int) $l['id'], 'tenant_id' => $r['tenant_id'] ?? null, 'ticket_id' => $id, 'service_id' => $l['service_id'] ?? null,
+                        'service_name' => ($l['item_name'] ?? '') ?: 'Service', 'kind' => 'service', 'quantity' => 1, 'price' => $l['charged_amount'] ?? 0,
+                        'staff_id' => $staff, 'status' => 'pending',
+                    ]);
+                }
             }
         }
         if (!isset($tables['staff_time_logs'])) {
@@ -353,7 +425,7 @@ class ShopImport
         if (isset($tables['svc_tickets']) || isset($tables['svc_services'])) {
             try { new Models\ServiceDeskModel($pdo); } catch (Throwable $e) { /* creates the svc_* tables when missing */ }
         }
-        $live = self::liveTables();
+        $live = self::liveTables(true); // fresh: the lines above may have just added tables / columns
         $owner = (int) $pdo->query('SELECT owner_user_id FROM tenants WHERE id = ' . (int) $accountId)->fetchColumn();
         $srcOwnerRow = self::sourceOwner($tables, $srcTenant);
         $srcOwner = (int) ($srcOwnerRow['id'] ?? 0);
@@ -435,6 +507,13 @@ class ShopImport
                         }
                         $data[$col] = $mapped;
                     }
+                    if (!$drop && isset(self::POLY[$t])) {
+                        [$col, $typeCol, $targets] = self::POLY[$t];
+                        $target = $targets[$data[$typeCol] ?? ''] ?? null;
+                        if ($target !== null && isset($data[$col])) {
+                            $data[$col] = $map[$target][(int) $data[$col]] ?? 0; // 0: the dish / item wasn't in the file
+                        }
+                    }
                     if ($t === 'user_profiles' && ($data['user_id'] ?? null) === $owner) $drop = true;
                     if ($drop) { $skipped++; continue; }
 
@@ -451,8 +530,22 @@ class ShopImport
                 }
                 $counts[$t] = $n;
             }
+            if (!empty($map['svc_services'])) {
+                // Imported services are offered in this shop (the desk only lists linked services).
+                $link = $pdo->prepare('INSERT IGNORE INTO svc_service_shops (service_id, tenant_id) VALUES (?, ?)');
+                foreach ($map['svc_services'] as $sid) $link->execute([$sid, $accountId]);
+            }
             $pdo->prepare('UPDATE tenants SET imported_at = NOW() WHERE id = ?')->execute([$accountId]);
             $pdo->commit();
+            if (!empty($map['svc_services']) || !empty($counts['svc_tickets'])) {
+                // Service data came in: switch the Services package on, at the account's tier.
+                $state = Features::forAccount($accountId);
+                if (empty($state[Features::SERVICES]) && empty($state[Features::SERVICES_BASIC])) {
+                    $basic = Features::isBasic($accountId);
+                    Features::set($accountId, $basic ? Features::SERVICES_BASIC : Features::SERVICES, true);
+                    $notes[] = 'The ' . ($basic ? 'Services Basic (20k)' : 'Services (30k)') . ' package was switched on for the imported services, bookings and commissions.';
+                }
+            }
             // The old POS's extra product fields (brands, grades…) get their menus and inputs here.
             $fields = ProductFields::detect($tables, $srcTenant);
             if ($fields) ProductFields::add($accountId, $fields);
@@ -558,6 +651,7 @@ class ShopImport
             if ((int) $r['id'] === (int) ($u['role_id'] ?? 0)) $roleName = $r['role_name'];
         }
         if (in_array($roleName, ['superadmin', 'platform_admin'], true)) return $owner;
+        if (empty($u['position']) && in_array($roleName, ['reception', 'sales_agent'], true)) $u['position'] = $roleName === 'reception' ? 'Reception' : 'Stylist';
         if (!in_array($roleName, ['tenant_owner', 'staff'], true)) $roleName = $roleName === 'admin' ? 'tenant_owner' : 'staff';
         $roleId = (int) $pdo->query("SELECT id FROM roles WHERE role_name = " . $pdo->quote($roleName))->fetchColumn();
 
@@ -569,9 +663,14 @@ class ShopImport
         $chk->execute([$email]);
         if ($hit = $chk->fetch(PDO::FETCH_ASSOC)) {
             if ((int) $hit['tenant_id'] === $accountId) return (int) $hit['id']; // already imported
-            $notes[] = "User {$u['username']} ($email) already exists on another account — their records are linked to the owner.";
-            return $owner;
+            // The email is held by another account (often an earlier import of this
+            // same file). Still bring the staff member in — with their own jobs and
+            // commission — under a stand-in email; they sign in with their username.
+            $notes[] = "{$u['username']}: $email is already used by another account, so they were imported without it — they sign in with their username "
+                . '(or tick "Take over the old logins" to move the email here).';
+            $email = 'pin.' . bin2hex(random_bytes(8)) . '@staff.local';
         }
+        if ($email === '') $email = 'pin.' . bin2hex(random_bytes(8)) . '@staff.local';
         $username = (string) $u['username'];
         $base = $username;
         for ($k = 2; ; $k++) {
@@ -594,10 +693,10 @@ class ShopImport
     }
 
     /** [table => [column => ['auto' => bool]]] for this database. */
-    private static function liveTables(): array
+    private static function liveTables(bool $fresh = false): array
     {
         static $cache = null;
-        if ($cache !== null) return $cache;
+        if ($cache !== null && !$fresh) return $cache;
         $rows = Database::pdo()->query(
             'SELECT table_name AS t, column_name AS c, extra AS x, is_nullable AS n, column_default AS d, data_type AS ty
                FROM information_schema.columns WHERE table_schema = DATABASE()'

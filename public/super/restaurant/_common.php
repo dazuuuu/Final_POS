@@ -204,7 +204,66 @@ function rest_schema(PDO $pdo): void
     if (strpos((string) $enum, "'held'") === false) {
         $pdo->exec("ALTER TABLE rest_orders MODIFY status ENUM('held','open','paid','cancelled') NOT NULL DEFAULT 'open'");
     }
+    // Kitchen stock: moving store stock to the Kitchen tops up the matching
+    // ingredient (stock_id links them); unit_cost = cost of one unit, so a
+    // recipe line (e.g. 500 g of onions stocked in kg) has a cost.
+    rest_column($pdo, 'rest_ingredients', 'stock_id', 'INT NULL AFTER tenant_id');
+    rest_column($pdo, 'rest_ingredients', 'unit_cost', 'DECIMAL(12,4) NULL AFTER cost_price');
+    // Delivery orders: new → preparing → packed → out (with rider) → delivered.
+    rest_column($pdo, 'rest_orders', 'delivery_status', "ENUM('new','preparing','packed','out','delivered') NULL AFTER delivery_address");
+    rest_column($pdo, 'rest_orders', 'rider', 'VARCHAR(80) NULL AFTER delivery_status');
+    rest_column($pdo, 'rest_orders', 'delivered_at', 'DATETIME NULL AFTER rider');
     $done = true;
+}
+
+const REST_DELIVERY_STEPS = [
+    'new'       => ['New', 'bg-secondary', 'fa-inbox'],
+    'preparing' => ['Preparing', 'bg-info text-dark', 'fa-fire-burner'],
+    'packed'    => ['Packed', 'bg-primary', 'fa-box'],
+    'out'       => ['Out for delivery', 'bg-warning text-dark', 'fa-motorcycle'],
+    'delivered' => ['Delivered', 'bg-success', 'fa-circle-check'],
+];
+
+/** Cost of one store unit (e.g. per kg): what was paid ÷ quantity received, over every priced delivery. */
+function rest_stock_unit_cost(PDO $pdo, int $tid, int $stockId): ?float
+{
+    $st = $pdo->prepare('SELECT SUM(cost_price), SUM(quantity) FROM rest_stock_receipts
+                          WHERE tenant_id = ? AND stock_id = ? AND cost_price IS NOT NULL AND quantity > 0');
+    $st->execute([$tid, $stockId]);
+    [$cost, $qty] = $st->fetch(PDO::FETCH_NUM);
+    return $qty > 0 && $cost !== null ? round((float) $cost / (float) $qty, 4) : null;
+}
+
+/** Cost of one unit of an ingredient: unit_cost, else bought-for ÷ quantity. */
+function rest_ingredient_unit_cost(array $i): ?float
+{
+    if ($i['unit_cost'] !== null && $i['unit_cost'] !== '') {
+        return (float) $i['unit_cost'];
+    }
+    return $i['cost_price'] !== null && (float) $i['quantity'] > 0 ? (float) $i['cost_price'] / (float) $i['quantity'] : null;
+}
+
+/**
+ * Cost of each dish from its recipe: [dish_id => ['cost' => float, 'missing' => [names without a cost]]].
+ */
+function rest_dish_costs(PDO $pdo, int $tid): array
+{
+    $st = $pdo->prepare('SELECT di.dish_id, COALESCE(di.base_quantity, di.quantity) AS base, i.*
+                           FROM rest_dish_ingredients di JOIN rest_ingredients i ON i.id = di.ingredient_id
+                           JOIN rest_dishes d ON d.id = di.dish_id WHERE d.tenant_id = ?');
+    $st->execute([$tid]);
+    $out = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $d = (int) $r['dish_id'];
+        $out[$d] ??= ['cost' => 0.0, 'missing' => []];
+        $uc = rest_ingredient_unit_cost($r);
+        if ($uc === null) {
+            $out[$d]['missing'][] = $r['name'];
+        } else {
+            $out[$d]['cost'] += $uc * (float) $r['base'];
+        }
+    }
+    return $out;
 }
 
 function rest_column(PDO $pdo, string $table, string $column, string $ddl): void

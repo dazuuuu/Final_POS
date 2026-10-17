@@ -125,6 +125,9 @@ class ServiceDeskModel
         if (!$col('svc_tickets', 'source')) {
             $db->exec("ALTER TABLE svc_tickets ADD COLUMN source ENUM('desk','staff') NOT NULL DEFAULT 'desk'");
         }
+        if (!$col('svc_services', 'commission_fixed')) { // a set amount per job instead of a % (e.g. KES 1,200 per braid)
+            $db->exec('ALTER TABLE svc_services ADD COLUMN commission_fixed DECIMAL(12,2) NULL AFTER commission_pct');
+        }
         $db->exec("CREATE TABLE IF NOT EXISTS svc_payouts (
             id INT AUTO_INCREMENT PRIMARY KEY,
             account_id INT NOT NULL,
@@ -185,6 +188,7 @@ class ServiceDeskModel
         $price = (float) ($in['price'] ?? -1);
         if (!is_numeric($in['price'] ?? null) || $price < 0) { return ['ok' => false, 'error' => 'Enter the price (0 or more).']; }
         $pct = ($in['commission_pct'] ?? '') === '' ? null : max(0, min(100, (float) $in['commission_pct']));
+        $fixed = ($in['commission_fixed'] ?? '') === '' ? null : max(0, round((float) $in['commission_fixed'], 2));
         $dur = (int) ($in['duration_min'] ?? 0) ?: null;
         $shopIds = array_values(array_filter(array_map('intval', (array) ($in['shops'] ?? [])), fn($t) => \ShopContext::canAccess($t)));
         if (!$shopIds) { $shopIds = [$this->tid()]; } // single shop: it's offered here
@@ -194,11 +198,11 @@ class ServiceDeskModel
             $own = $this->db->prepare('SELECT 1 FROM svc_services WHERE id = ? AND account_id = ?');
             $own->execute([$id, $this->account()]);
             if (!$own->fetchColumn()) { return ['ok' => false, 'error' => 'Service not found.']; }
-            $this->db->prepare('UPDATE svc_services SET name = ?, description = ?, price = ?, duration_min = ?, commission_pct = ?, active = ? WHERE id = ?')
-                ->execute([$name, $desc, round($price, 2), $dur, $pct, empty($in['inactive']) ? 1 : 0, $id]);
+            $this->db->prepare('UPDATE svc_services SET name = ?, description = ?, price = ?, duration_min = ?, commission_pct = ?, commission_fixed = ?, active = ? WHERE id = ?')
+                ->execute([$name, $desc, round($price, 2), $dur, $pct, $fixed, empty($in['inactive']) ? 1 : 0, $id]);
         } else {
-            $this->db->prepare('INSERT INTO svc_services (account_id, name, description, price, duration_min, commission_pct) VALUES (?,?,?,?,?,?)')
-                ->execute([$this->account(), $name, $desc, round($price, 2), $dur, $pct]);
+            $this->db->prepare('INSERT INTO svc_services (account_id, name, description, price, duration_min, commission_pct, commission_fixed) VALUES (?,?,?,?,?,?,?)')
+                ->execute([$this->account(), $name, $desc, round($price, 2), $dur, $pct, $fixed]);
             $id = (int) $this->db->lastInsertId();
         }
         $this->db->prepare('DELETE FROM svc_service_shops WHERE service_id = ?')->execute([$id]);
@@ -570,7 +574,8 @@ class ServiceDeskModel
     /**
      * Commission on each staffed line of a paid visit: the line's share of the
      * (discounted) total × the % from the most specific matching rule, else
-     * the service's default %. The day is the day the service was booked for
+     * the service's default % — or, when the service has a fixed commission
+     * and no rule matches, that amount per job (× quantity). The day is the day the service was booked for
      * (or the visit day for a walk-in).
      */
     private function computeCommissions(int $ticketId): void
@@ -584,13 +589,20 @@ class ServiceDeskModel
         $account = $this->account((int) $ticket['tenant_id']);
         $rules = $this->rules($account);
         $upd = $this->db->prepare('UPDATE svc_ticket_items SET commission_pct = ?, commission_amount = ? WHERE id = ?');
-        $svcDefault = $this->db->prepare('SELECT commission_pct FROM svc_services WHERE id = ?');
+        $svcDefault = $this->db->prepare('SELECT commission_pct, commission_fixed FROM svc_services WHERE id = ?');
         foreach ($this->items($ticketId) as $it) {
             if (!$it['staff_id'] || $it['kind'] !== 'service') { $upd->execute([null, null, $it['id']]); continue; }
             if (!empty($it['staff_keeps_all'])) { $upd->execute([100, round((float) $it['price'] * $ratio, 2), $it['id']]); continue; }
             $svcDefault->execute([$it['service_id']]);
-            $default = $svcDefault->fetchColumn();
-            $pct = self::pctFor($rules, (int) $it['service_id'], $weekday, (int) $it['staff_id'], $default === false || $default === null ? null : (float) $default);
+            $svc = $svcDefault->fetch() ?: [];
+            $default = $svc['commission_pct'] ?? null;
+            if (($svc['commission_fixed'] ?? null) !== null && self::pctFor($rules, (int) $it['service_id'], $weekday, (int) $it['staff_id'], null) === null) {
+                $amount = round((float) $svc['commission_fixed'] * max(1, (float) $it['quantity']) * $ratio, 2);
+                $base = (float) $it['price'] * max(1, (float) $it['quantity']);
+                $upd->execute([$base > 0 ? min(999.99, round($amount / $base * 100, 2)) : null, $amount, $it['id']]);
+                continue;
+            }
+            $pct = self::pctFor($rules, (int) $it['service_id'], $weekday, (int) $it['staff_id'], $default === null ? null : (float) $default);
             $amount = $pct === null ? null : round((float) $it['price'] * $ratio * $pct / 100, 2);
             $upd->execute([$pct, $amount, $it['id']]);
         }

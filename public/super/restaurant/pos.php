@@ -143,25 +143,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $subtotal = round(array_sum(array_map(fn($l) => $l['price'] * $l['qty'], $lines)), 2);
     $discount = min($subtotal, max(0, round((float) ($in['discount'] ?? 0), 2)));
     $total = round($subtotal - $discount, 2);
-    $type = ($in['order_type'] ?? '') === 'takeaway' ? 'takeaway' : 'dine_in';
-    $table = mb_substr(trim((string) ($in['table'] ?? '')), 0, 40) ?: null;
+    $type = in_array($in['order_type'] ?? '', ['takeaway', 'delivery'], true) ? $in['order_type'] : 'dine_in';
+    $table = $type === 'dine_in' ? (mb_substr(trim((string) ($in['table'] ?? '')), 0, 40) ?: null) : null;
     $customer = mb_substr(trim((string) ($in['customer'] ?? '')), 0, 120) ?: null;
+    // Delivery orders (phone-in): phone + address, then tracked on the Deliveries page.
+    $phone = $type === 'delivery' ? (mb_substr(trim((string) ($in['phone'] ?? '')), 0, 30) ?: null) : null;
+    $address = $type === 'delivery' ? (mb_substr(trim((string) ($in['address'] ?? '')), 0, 255) ?: null) : null;
+    if ($type === 'delivery' && $action === 'place' && (!$phone || !$address)) {
+        echo json_encode(['ok' => false, 'error' => 'Delivery orders need the customer\'s phone and delivery address.']);
+        exit;
+    }
     // Once placed, an order stays placed even if it's edited and held again.
     $status = $action === 'place' || ($existing['status'] ?? '') === 'open' ? 'open' : 'held';
 
     $pdo->beginTransaction();
     try {
         if ($existing) {
-            $pdo->prepare('UPDATE rest_orders SET order_type=?, table_label=?, customer_name=?, subtotal=?, discount=?, total=?, status=? WHERE id=?')
-                ->execute([$type, $table, $customer, $subtotal, $discount, $total, $status, $orderId]);
+            $pdo->prepare('UPDATE rest_orders SET order_type=?, table_label=?, customer_name=?, customer_phone=?, delivery_address=?,
+                                  delivery_status = IF(? = \'delivery\', COALESCE(delivery_status, \'new\'), NULL), subtotal=?, discount=?, total=?, status=? WHERE id=?')
+                ->execute([$type, $table, $customer, $phone, $address, $type, $subtotal, $discount, $total, $status, $orderId]);
             $pdo->prepare('DELETE FROM rest_order_items WHERE order_id = ?')->execute([$orderId]);
             $orderNo = $existing['order_no'];
         } else {
             $cnt = $pdo->prepare('SELECT COUNT(*) FROM rest_orders WHERE tenant_id = ? AND DATE(created_at) = CURDATE()');
             $cnt->execute([$tid]);
             $orderNo = date('ymd') . '-' . str_pad((string) ($cnt->fetchColumn() + 1), 3, '0', STR_PAD_LEFT);
-            $pdo->prepare('INSERT INTO rest_orders (tenant_id, order_no, order_type, table_label, customer_name, status, subtotal, discount, total, user_id) VALUES (?,?,?,?,?,?,?,?,?,?)')
-                ->execute([$tid, $orderNo, $type, $table, $customer, $status, $subtotal, $discount, $total, TenantContext::userId()]);
+            $pdo->prepare('INSERT INTO rest_orders (tenant_id, order_no, order_type, table_label, customer_name, customer_phone, delivery_address, delivery_status, status, subtotal, discount, total, user_id)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+                ->execute([$tid, $orderNo, $type, $table, $customer, $phone, $address, $type === 'delivery' ? 'new' : null, $status, $subtotal, $discount, $total, TenantContext::userId()]);
             $orderId = (int) $pdo->lastInsertId();
         }
         $ins = $pdo->prepare('INSERT INTO rest_order_items (order_id, item_type, ref_id, name, unit_price, quantity, removed, note, line_total) VALUES (?,?,?,?,?,?,?,?,?)');
@@ -202,6 +211,7 @@ if ($rid = (int) ($_GET['order'] ?? 0)) {
         $resume = [
             'id' => (int) $o['id'], 'no' => $o['order_no'], 'status' => $o['status'], 'type' => $o['order_type'], 'table' => $o['table_label'] ?? '',
             'customer' => $o['customer_name'] ?? '', 'discount' => (float) $o['discount'],
+            'phone' => $o['customer_phone'] ?? '', 'address' => $o['delivery_address'] ?? '',
             'items' => array_values(array_filter(array_map(fn($i) => [
                 'type' => $i['item_type'], 'ref' => (int) $i['ref_id'], 'qty' => (float) $i['quantity'],
                 'removed' => json_decode($i['removed'] ?? '[]', true) ?: [], 'note' => $i['note'] ?? '',
@@ -267,6 +277,11 @@ ob_start();
         <div class="btn-group w-100 mb-2" role="group">
           <input type="radio" class="btn-check" name="otype" id="ot_dine" value="dine_in" checked><label class="btn btn-sm btn-outline-primary" for="ot_dine"><i class="fas fa-chair me-1"></i>Dine in</label>
           <input type="radio" class="btn-check" name="otype" id="ot_take" value="takeaway"><label class="btn btn-sm btn-outline-primary" for="ot_take"><i class="fas fa-bag-shopping me-1"></i>Takeaway</label>
+          <input type="radio" class="btn-check" name="otype" id="ot_del" value="delivery"><label class="btn btn-sm btn-outline-primary" for="ot_del"><i class="fas fa-motorcycle me-1"></i>Delivery</label>
+        </div>
+        <div class="mb-2" id="delFields" style="display:none;">
+          <input class="form-control form-control-sm mb-1" id="phone" placeholder="Customer phone" inputmode="tel">
+          <input class="form-control form-control-sm" id="address" placeholder="Delivery address / location">
         </div>
         <div class="d-flex gap-2 mb-3">
           <input class="form-control form-control-sm" id="table" placeholder="Table" style="max-width:90px;">
@@ -499,6 +514,7 @@ ob_start();
   function payload(action, extra) {
     var o = {action: action, csrf: CSRF, order_id: orderId, order_type: document.querySelector('input[name=otype]:checked').value,
              table: $('table').value, customer: $('customer').value, discount: $('discount').value,
+             phone: $('phone').value, address: $('address').value,
              items: cart.map(function (l) { return {type: l.type, ref: l.ref, qty: l.qty, removed: l.removed, note: l.note}; })};
     for (var k in extra) o[k] = extra[k];
     return o;
@@ -542,10 +558,19 @@ ob_start();
   if (resume) {
     orderId = resume.id; orderNo = resume.no; orderStatus = resume.status;
     $('table').value = resume.table; $('customer').value = resume.customer;
+    $('phone').value = resume.phone || ''; $('address').value = resume.address || '';
     $('discount').value = resume.discount || '';
     document.querySelector('input[name=otype][value=' + resume.type + ']').checked = true;
     cart = resume.items.map(function (i) { i.key = ++seq; i.removed = i.removed.map(Number).sort(); return i; });
   }
+  // Delivery: phone + address instead of a table.
+  function syncType() {
+    var del = document.querySelector('input[name=otype]:checked').value === 'delivery';
+    $('delFields').style.display = del ? '' : 'none';
+    $('table').style.display = document.querySelector('input[name=otype]:checked').value === 'dine_in' ? '' : 'none';
+  }
+  document.querySelectorAll('input[name=otype]').forEach(function (r) { r.addEventListener('change', syncType); });
+  syncType();
   drawCart();
 })();
 </script>

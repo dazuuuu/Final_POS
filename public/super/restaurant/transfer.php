@@ -8,6 +8,37 @@ require_once __DIR__ . '/_common.php';
 $self = public_url('super/restaurant/transfer.php');
 $error = '';
 
+/**
+ * Store → kitchen: each moved type tops up its recipe ingredient (created and
+ * linked to the store item the first time), carrying the store's cost per
+ * unit so dishes using it can be costed. Units: the store unit when it is
+ * pcs/kg/g/l/ml, pieces when the store unit holds pieces (crate, packet…).
+ */
+function rest_kitchen_to_ingredients(PDO $pdo, int $tid, array $item, array $rows): void
+{
+    $ppu = (float) $item['pieces_per_unit'];
+    $unit = $ppu > 0 ? 'pcs' : (isset(REST_UNITS[$item['unit']]) ? $item['unit'] : 'pcs');
+    $uc = rest_stock_unit_cost($pdo, $tid, (int) $item['id']);
+    if ($uc !== null && $ppu > 0) $uc = $uc / $ppu;
+    $find = $pdo->prepare('SELECT * FROM rest_ingredients WHERE tenant_id = ? AND (stock_id = ? OR (stock_id IS NULL AND LOWER(name) = LOWER(?)))
+                           ORDER BY stock_id IS NULL, id LIMIT 1');
+    foreach ($rows as $r) {
+        $name = $r['type'] !== '' ? $r['type'] : $item['name'];
+        $find->execute([$tid, $r['type'] !== '' ? -1 : (int) $item['id'], $name]);
+        $ing = $find->fetch(PDO::FETCH_ASSOC);
+        if ($ing) {
+            // Same family (kg↔g, l↔ml): convert into the ingredient's own unit.
+            $qty = rest_to_base((float) $r['qty'], $unit === 'pcs' ? 'pc' : $unit, $ing);
+            $ucIng = $uc !== null ? rest_to_base(1, $ing['unit'] === 'pcs' ? 'pc' : $ing['unit'], ['unit' => $unit, 'pieces_per_unit' => null]) * $uc : null;
+            $pdo->prepare('UPDATE rest_ingredients SET quantity = quantity + ?, stock_id = COALESCE(stock_id, ?), unit_cost = COALESCE(?, unit_cost) WHERE id = ?')
+                ->execute([$qty, (int) $item['id'], $ucIng, $ing['id']]);
+        } else {
+            $pdo->prepare('INSERT INTO rest_ingredients (tenant_id, stock_id, name, quantity, unit, unit_cost) VALUES (?,?,?,?,?,?)')
+                ->execute([$tid, (int) $item['id'], $name, (float) $r['qty'], $unit, $uc]);
+        }
+    }
+}
+
 $stmt = $pdo->prepare('SELECT * FROM rest_stock WHERE tenant_id = ? ORDER BY name');
 $stmt->execute([$tid]);
 $stockList = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -40,6 +71,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify($_POST['csrf_token'] ??
         ];
     }
 
+    // Kitchen moves need no breakdown: the whole amount becomes kitchen stock
+    // (pieces when the store unit holds pieces, e.g. a crate of 24 eggs).
+    if ($outlet === 'kitchen' && !$rows && $item && $storeQty > 0) {
+        $rows[] = ['type' => '', 'qty' => (float) $item['pieces_per_unit'] > 0 ? $storeQty * (float) $item['pieces_per_unit'] : $storeQty, 'price' => null];
+    }
     if (!$item) {
         $error = 'Choose the stock item to move.';
     } elseif (!$outlet) {
@@ -69,6 +105,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify($_POST['csrf_token'] ??
             }
             $pdo->prepare('INSERT INTO rest_transfers (tenant_id, stock_id, outlet, store_quantity, breakdown, user_id) VALUES (?,?,?,?,?,?)')
                 ->execute([$tid, $stockId, $outlet, $storeQty, json_encode($rows), TenantContext::userId()]);
+            if ($outlet === 'kitchen') {
+                rest_kitchen_to_ingredients($pdo, $tid, $item, $rows);
+            }
             $pdo->commit();
             rest_flash('Moved ' . rest_qty($storeQty) . ' ' . $item['unit'] . ' of ' . $item['name'] . ' to the ' . ($outlet === 'counter' ? 'counter' : 'kitchen') . '.');
             header('Location: ' . $self);
@@ -105,7 +144,8 @@ ob_start();
     <div class="card border-0 shadow-sm" style="border-radius:12px;">
       <div class="card-body p-4">
         <h2 class="h5 mb-1">Move stock out of the store</h2>
-        <p class="text-muted small mb-3">E.g. take 1 crate of soda to the counter and list the types inside it with their selling prices.</p>
+        <p class="text-muted small mb-3">E.g. take 1 crate of soda to the counter and list the types inside it with their selling prices.
+          Moving to the <strong>Kitchen</strong> (e.g. 30 kg onions) tops up that ingredient, with its cost per kg, ready for recipes — no types needed.</p>
         <?php if ($error): ?><div class="alert alert-danger py-2"><?php echo htmlspecialchars($error); ?></div><?php endif; ?>
         <?php if (!$stockList): ?>
           <div class="text-muted">Nothing in the store yet. <a href="<?php echo public_url('super/restaurant/stock.php'); ?>">Receive stock first.</a></div>

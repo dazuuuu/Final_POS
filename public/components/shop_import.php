@@ -22,6 +22,15 @@ $__labels = [
     'staff_reclock_authorizations' => 'Re-clock approvals', 'audit_log' => 'Audit log',
     'svc_services' => 'Services & prices', 'svc_tickets' => 'Service jobs / bookings', 'svc_ticket_items' => 'Services done (with staff & commission)',
     'svc_payouts' => 'Commission payouts',
+    'device_serials' => 'Devices & serials / IMEI', 'warranty_claims' => 'Warranty & repairs',
+    'rest_settings' => 'Restaurant settings', 'rest_categories' => 'Menu categories', 'rest_stock' => 'Store stock',
+    'rest_stock_receipts' => 'Store stock received', 'rest_ingredients' => 'Ingredients', 'rest_outlet_items' => 'Counter & kitchen items',
+    'rest_transfers' => 'Stock transfers', 'rest_dishes' => 'Menu dishes', 'rest_dish_ingredients' => 'Dish recipes',
+    'rest_platters' => 'Family platters', 'rest_platter_items' => 'Platter items', 'rest_orders' => 'Restaurant orders',
+    'rest_order_items' => 'Restaurant order items', 'rest_payments' => 'Restaurant payments', 'rest_table_bookings' => 'Table bookings',
+    'rest_table_booking_items' => 'Table booking items', 'rest_table_booking_payments' => 'Table booking payments',
+    'room_settings' => 'Rooms settings', 'room_rooms' => 'Rooms', 'room_stays' => 'Guest stays',
+    'room_stay_charges' => 'Room service & extras', 'room_stay_payments' => 'Guest payments',
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && hash_equals($__impCsrf, $_POST['csrf'] ?? '')) {

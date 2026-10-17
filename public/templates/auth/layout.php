@@ -3,9 +3,16 @@
 // Centered card used by register / login / otp-verify / activate / forgot-password.
 // Multi-tenant: these screens are shared by every shop, so they always show
 // the platform's brand (Support → Settings), never one client's logo.
+// Opened at a shop's own address (domain/<slug>/admin/) → that shop's brand.
 $__authBrand = Branding::platform();
 $__authShop  = $__authBrand['name'];
 $__authLogo  = $__authBrand['logo'];
+if (class_exists('ShopUrl', false) && ShopUrl::requestSlug() !== null
+    && ($__authTenant = (new Models\TenantModel(Database::pdo()))->primary())) {
+    $__authShop = $__authTenant['name'];
+    $__authLogo = Branding::shopLogo($__authTenant);
+    $__authIcon = 'fa-store';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -83,7 +90,7 @@ $__authLogo  = $__authBrand['logo'];
         <div class="auth-head">
             <div class="logo-icon">
                 <?php if ($__authLogo): ?><img src="<?php echo htmlspecialchars($__authLogo); ?>" alt="">
-                <?php else: ?><i class="fas fa-layer-group"></i><?php endif; ?>
+                <?php else: ?><i class="fas <?php echo $__authIcon ?? 'fa-layer-group'; ?>"></i><?php endif; ?>
             </div>
             <span class="logo-name"><?php echo htmlspecialchars($__authShop); ?></span>
             <span class="logo-role">Admin</span>

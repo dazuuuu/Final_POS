@@ -17,7 +17,7 @@
 //                         assigning staff, invoices/receipts and commissions.
 //                         Like electronics it includes the shop template.
 //   shop_basic_20k /    — Basic tier of the shop / services POS: one shop
-//   services_basic_20k    only, up to 3 staff, no admins, USB printing only.
+//   services_basic_20k    only, up to 3 staff, no admins, Bluetooth + USB printing only.
 //                         Pro pages (PRO_PAGES) stay in the menu badged "Pro"
 //                         and open super/upgrade.php. Any 30k shop package
 //                         on the same account lifts these limits.
@@ -34,7 +34,7 @@ class Features
     const SERVICES       = 'services_30k';
     const RESTAURANT_ROOMS = 'restaurant_rooms_40k';
     // Basic tier (20k): one shop, up to BASIC_STAFF_LIMIT staff, no admins,
-    // USB / device printing only. Pro features show in the menu with a "Pro"
+    // Bluetooth + USB / device printing only. Pro features show in the menu with a "Pro"
     // badge and open the upgrade page (super/upgrade.php).
     const SHOP_BASIC     = 'shop_basic_20k';
     const SERVICES_BASIC = 'services_basic_20k';
@@ -53,8 +53,8 @@ class Features
     public static function catalog(): array
     {
         return [
-            self::SHOP_BASIC => ['Shop POS Basic', 20000, 'One shop: sales, credit, held sales, payments, returns, inventory, stock, suppliers, expenses, finances, customers, reports and settings. Up to 3 staff, USB printing. (Basic.)', 'fa-store'],
-            self::SERVICES_BASIC => ['Services Basic', 20000, 'Shop POS Basic plus services: a price list, walk-ins and bookings, assigning staff, invoices, receipts and commissions. One shop, up to 3 staff, USB printing. (Basic.)', 'fa-user-gear'],
+            self::SHOP_BASIC => ['Shop POS Basic', 20000, 'One shop: sales, credit, held sales, payments, returns, inventory, stock, suppliers, expenses, finances, customers, reports and settings. Up to 3 staff, Bluetooth + USB printing. (Basic.)', 'fa-store'],
+            self::SERVICES_BASIC => ['Services Basic', 20000, 'Shop POS Basic plus services: a price list, walk-ins and bookings, assigning staff, invoices, receipts and commissions. One shop, up to 3 staff, Bluetooth + USB printing. (Basic.)', 'fa-user-gear'],
             self::SHOP_POS => ['Shop POS', 30000, 'Full retail POS: sales, credit, held sales, payments, returns, inventory, stock, suppliers, staff, expenses, finances, customers, reports and settings.', 'fa-cash-register'],
             self::RESTAURANT_POS => ['Restaurant POS', 30000, 'Restaurant POS: tables, menu, kitchen orders and bills. (In development.)', 'fa-utensils'],
             self::RESTAURANT_ROOMS => ['Restaurant + Rooms', 40000, 'Everything in the Restaurant POS, plus Rooms & Accommodation (rooms, guest bookings, invoices, check-out with late fees, receipts) and table bookings with pre-set group menus and family platters.', 'fa-hotel'],
@@ -76,10 +76,31 @@ class Features
     const ALWAYS_ALLOWED = [
         '/super/dashboard/', '/staff/dashboard/', '/super/profile/',
         '/staff/reset-password.php', '/staff/change-pin.php',
-        '/super/guide/', '/staff/guide/', '/super/help/',
+        '/super/guide/', '/staff/guide/', '/super/help/', '/super/settings/menu.php',
+    ];
+
+    /**
+     * Pages every package includes, whatever else is on: staff (Basic keeps
+     * its 3-staff limit), sales / orders, credit and held sales, reports,
+     * printer setup and inventory / stock entry.
+     */
+    const COMMON_PAGES = [
+        '/super/staff/', '/super/reports/', '/super/sales/', '/staff/sales/',
+        '/super/orders/', '/staff/orders/', '/super/credits/', '/staff/credits/',
+        '/super/printer/', '/staff/printer/', '/super/inventory/', '/staff/inventory/',
+        '/super/stock/', '/staff/stock/',
+        '/super/settings/', '/super/backup/', // shop details, navigation menu, export & import
     ];
 
     private static array $cache = [];
+
+    /** Does the account have any package on (so the common pages apply)? */
+    public static function anyPackage(?int $tenantId = null): bool
+    {
+        $tenantId ??= TenantContext::tenantId();
+        if ($tenantId === null) { return false; }
+        return (bool) array_filter(self::forAccount(self::accountId($tenantId)));
+    }
 
     /** Is $key on for the signed-in user's account (or for $tenantId's account)? */
     public static function enabled(string $key, ?int $tenantId = null): bool
@@ -279,6 +300,13 @@ class Features
             }
         } elseif (self::enabled(self::SHOP_POS, $account)) {
             return;
+        }
+        if (self::anyPackage($account)) {
+            foreach (self::COMMON_PAGES as $ok) {
+                if (strpos($script, $ok) !== false) {
+                    return;
+                }
+            }
         }
         foreach (self::ALWAYS_ALLOWED as $ok) {
             if (strpos($script, $ok) !== false) {

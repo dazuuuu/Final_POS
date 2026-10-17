@@ -100,10 +100,6 @@ class ShopUrl
                 header('Location: ' . $base . '/' . $own . $tail);
                 exit;
             }
-            if ($own === null) {
-                $_SESSION['shop_slug'] = self::$slug;
-                setcookie('shop_slug', self::$slug, ['expires' => time() + 31536000, 'path' => '/', 'samesite' => 'Lax']);
-            }
             return;
         }
 
@@ -119,6 +115,12 @@ class ShopUrl
                 exit;
             }
         }
+    }
+
+    /** Slug in this request's URL (domain/<slug>/…), or null on the shared pages. */
+    public static function requestSlug(): ?string
+    {
+        return self::$slug;
     }
 
     /** Slug to put in links: this request's, else the signed-in user's shop. */

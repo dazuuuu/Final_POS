@@ -159,6 +159,7 @@ $netProfit    = round(($sum['revenue'] ?? 0) - $cogs, 2);
 
 $page_title = 'Sales';
 ob_start();
+include __DIR__ . '/../../components/xsheet.php';
 ?>
 <!-- ===== Period tabs ===== -->
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
@@ -293,12 +294,6 @@ ob_start();
   <div class="card-body p-4">
     <div class="d-flex align-items-center justify-content-between mb-1 flex-wrap gap-2">
       <h2 class="h6 fw-bold mb-0"><i class="fas fa-coins me-2 text-warning"></i>Profit by product — <?php echo htmlspecialchars($periodLabel); ?></h2>
-      <?php if ($profitAvailable && $productProfit): ?>
-      <div class="position-relative" style="max-width:220px;width:100%;">
-        <i class="fas fa-search position-absolute" style="left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:.8rem;pointer-events:none;"></i>
-        <input type="text" id="prodSearch" class="form-control form-control-sm" placeholder="Filter products…" style="padding-left:30px;">
-      </div>
-      <?php endif; ?>
     </div>
     <p class="text-muted small mb-3">
       Revenue and profit here are <strong>before</strong> order-level discounts
@@ -334,9 +329,11 @@ ob_start();
         No products sold in this period yet.
       </div>
     <?php else: ?>
+      <?php xsheet_search('#prodTable', 'Search products…  e.g. sugar  profit:<0  margin:<15', ['Loss-making' => 'profit:<0', 'Low margin' => 'margin:<15']); ?>
       <div class="table-responsive">
-        <table class="table align-middle mb-0" id="prodTable">
-          <thead><tr class="text-muted small text-uppercase">
+        <table class="xsheet" id="prodTable" data-page-size="20">
+          <thead><tr>
+            <th class="xsheet-n">#</th>
             <th>Product</th>
             <th class="text-end">Sold</th>
             <th class="text-end">Revenue</th>
@@ -345,10 +342,11 @@ ob_start();
             <th class="text-end">Margin</th>
           </tr></thead>
           <tbody>
-            <?php foreach ($productProfit as $pp):
+            <?php foreach ($productProfit as $ppNo => $pp):
               $qtyLabel = rtrim(rtrim(number_format($pp['qty'],2),'0'),'.');
             ?>
-            <tr data-search="<?php echo strtolower(htmlspecialchars($pp['product_name'])); ?>">
+            <tr>
+              <td class="xsheet-n"><?php echo $ppNo + 1; ?></td>
               <td class="fw-semibold small"><?php echo htmlspecialchars($pp['product_name']); ?></td>
               <td class="text-end small text-nowrap"><?php echo $qtyLabel; ?><?php echo $pp['unit'] ? ' '.htmlspecialchars($pp['unit']) : ''; ?></td>
               <td class="text-end small">KES <?php echo number_format($pp['revenue'],0); ?></td>
@@ -366,6 +364,7 @@ ob_start();
           </tbody>
           <tfoot>
             <tr class="fw-bold border-top">
+              <td></td>
               <td>Total (gross)</td>
               <td></td>
               <td class="text-end">KES <?php echo number_format($grossRevenue,0); ?></td>
@@ -388,10 +387,6 @@ ob_start();
         Sales — <?php echo htmlspecialchars($periodLabel); ?>
         <span class="badge bg-light text-dark ms-1"><?php echo count($sales); ?></span>
       </h2>
-      <div class="position-relative" style="max-width:220px;width:100%;">
-        <i class="fas fa-search position-absolute" style="left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:.8rem;pointer-events:none;"></i>
-        <input type="text" id="saleSearch" class="form-control form-control-sm" placeholder="Filter table…" style="padding-left:30px;">
-      </div>
     </div>
     <?php if (!$sales): ?>
       <div class="text-muted py-4 text-center">
@@ -399,17 +394,22 @@ ob_start();
         No sales recorded for this period yet.
       </div>
     <?php else: ?>
+      <?php xsheet_search('#saleTable', 'Search sales: receipt, staff, customer, product, serial…  e.g. staff:jane  total:>1000', [
+          'Cash' => 'pay:cash', 'M-Pesa' => 'pay:m-pesa', 'Split' => 'pay:split', 'Tabs' => 'type:tab',
+      ]); ?>
       <div class="table-responsive">
-        <table class="table table-bordered align-middle mb-0 sales-sheet" id="saleTable">
-          <thead><tr class="text-muted small text-uppercase">
+        <table class="xsheet" id="saleTable" data-page-size="20">
+          <thead><tr>
+            <th class="xsheet-n">#</th>
             <th>Receipt</th><th>Date &amp; time</th><th>Type</th><th>Staff</th><th>Customer</th><th>Products</th><th>Pay</th><th class="text-end">Total</th><th></th>
           </tr></thead>
           <tbody>
-            <?php foreach ($salesByDay as $day => $daySales):
+            <?php $saleNo = 0;
+            foreach ($salesByDay as $day => $daySales):
               $daySum = Models\SaleModel::summarize($daySales);
             ?>
-            <tr class="sheet-day-row" data-search="<?php echo strtolower(htmlspecialchars(date('l j/m/Y', strtotime($day)))); ?>">
-              <td colspan="9">
+            <tr class="xsheet-group">
+              <td colspan="10">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                   <strong><?php echo date('l, j/m/Y', strtotime($day)); ?></strong>
                   <span><?php echo $daySum['count']; ?> sale<?php echo $daySum['count'] !== 1 ? 's' : ''; ?> · KES <?php echo number_format($daySum['revenue'], 0); ?></span>
@@ -419,7 +419,8 @@ ob_start();
             <?php foreach ($daySales as $s):
                 $itemNames = implode(' ', array_column($s['items'], 'name')) . ' ' . Models\ElectronicsModel::serialsText($s['devices']);
             ?>
-            <tr data-search="<?php echo strtolower(htmlspecialchars($s['receipt_number'].' '.$s['staff_name'].' '.($s['customer_name']??'').' '.$itemNames)); ?>">
+            <tr data-search="<?php echo strtolower(htmlspecialchars($s['receipt_number'].' '.$s['staff_name'].' '.($s['customer_name']??'').' '.$itemNames.' '.date('l j/m/Y D j M Y', strtotime($s['created_at'])).' '.Models\SaleModel::paymentLabel($s).' '.$s['payment_method'].' '.(($s['source'] ?? 'sale') === 'order' ? 'tab' : 'sale').' '.number_format((float)$s['total'], 0, '.', ''))); ?>">
+              <td class="xsheet-n"><?php echo ++$saleNo; ?></td>
               <td class="fw-semibold small"><?php echo htmlspecialchars($s['receipt_number']); ?></td>
               <td class="small text-nowrap"><?php echo date('D j M Y', strtotime($s['created_at'])); ?><div class="fw-semibold"><?php echo date('g:i:s a', strtotime($s['created_at'])); ?></div><?php if (!empty($s['edited_at'])): ?><div class="text-warning" style="font-size:.7rem;">edited <?php echo date('j M, g:i a', strtotime($s['edited_at'])); ?></div><?php endif; ?></td>
               <td><?php echo ($s['source'] ?? 'sale') === 'order' ? '<span class="badge bg-warning text-dark">Tab</span>' : Models\SaleModel::saleTypeBadge($s); ?></td>
@@ -476,29 +477,6 @@ ob_start();
   </div>
 </div>
 
-<script>
-(function(){
-  function wireFilter(inputId, tableId){
-    var inp = document.getElementById(inputId);
-    if (!inp) return;
-    inp.addEventListener('input', function(){
-      var q = this.value.toLowerCase().trim();
-      document.querySelectorAll('#' + tableId + ' tbody tr').forEach(function(tr){
-        tr.style.display = !q || tr.dataset.search.indexOf(q) !== -1 ? '' : 'none';
-      });
-    });
-  }
-  wireFilter('saleSearch', 'saleTable');
-  wireFilter('prodSearch', 'prodTable');
-})();
-</script>
-<style>
-.sales-sheet{background:#fff;border-color:#cbd5e1;font-size:.88rem;}
-.sales-sheet th{background:#f8fafc;border-color:#cbd5e1;font-weight:700;white-space:nowrap;}
-.sales-sheet td{border-color:#dbe3ef;vertical-align:middle;}
-.sales-sheet tbody tr:not(.sheet-day-row):hover td{background:#f9fbff;}
-.sheet-day-row td{background:#eaf2ff!important;color:#0f172a;border-color:#b6c8e3!important;font-size:.9rem;}
-</style>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../templates/tenants/layout.php';

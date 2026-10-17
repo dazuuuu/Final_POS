@@ -166,15 +166,18 @@ ob_start();
         <?php echo $period === 'today' ? 'No sales recorded today yet.' : 'No sales in this period.'; ?>
       </div>
     <?php else: ?>
+      <?php include __DIR__ . '/../../components/xsheet.php';
+      xsheet_search('#mySales', 'Search my sales: receipt, customer, product…  e.g. total:>500', ['Cash' => 'pay:cash', 'M-Pesa' => 'pay:m-pesa', 'Split' => 'pay:split']); ?>
       <div class="table-responsive">
-        <table class="table table-bordered align-middle mb-0 sales-sheet">
-          <thead><tr class="text-muted small text-uppercase"><th>Receipt</th><th>Date &amp; time</th><th>Customer</th><th>Products</th><th>Pay</th><th class="text-end">Total</th><th></th></tr></thead>
+        <table class="xsheet" id="mySales" data-page-size="20">
+          <thead><tr><th class="xsheet-n">#</th><th>Receipt</th><th>Date &amp; time</th><th>Customer</th><th>Products</th><th>Pay</th><th class="text-end">Total</th><th></th></tr></thead>
           <tbody>
-            <?php foreach ($salesByDay as $day => $daySales):
+            <?php $saleNo = 0;
+            foreach ($salesByDay as $day => $daySales):
               $daySum = Models\SaleModel::summarize($daySales);
             ?>
-            <tr class="sheet-day-row">
-              <td colspan="7">
+            <tr class="xsheet-group">
+              <td colspan="8">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                   <strong><?php echo date('l, j/m/Y', strtotime($day)); ?></strong>
                   <span><?php echo $daySum['count']; ?> sale<?php echo $daySum['count'] !== 1 ? 's' : ''; ?> · KES <?php echo number_format($daySum['revenue'], 0); ?></span>
@@ -183,6 +186,7 @@ ob_start();
             </tr>
             <?php foreach ($daySales as $s): ?>
             <tr>
+              <td class="xsheet-n"><?php echo ++$saleNo; ?></td>
               <td class="fw-semibold small"><?php echo htmlspecialchars($s['receipt_number']); ?></td>
               <td class="small text-nowrap"><?php echo date('D j M Y', strtotime($s['created_at'])); ?><div class="fw-semibold"><?php echo date('g:i:s a', strtotime($s['created_at'])); ?></div><?php if (!empty($s['edited_at'])): ?><div class="text-warning" style="font-size:.7rem;">edited <?php echo date('j M, g:i a', strtotime($s['edited_at'])); ?></div><?php endif; ?></td>
               <td class="small">

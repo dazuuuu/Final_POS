@@ -1,6 +1,6 @@
 <?php /* PWA head tags + service-worker registration. Include inside <head>. */ ?>
 <?php require_once __DIR__ . '/../../app/helpers/PathConfig.php'; ?>
-<?php $__shopSlug = $_SESSION['shop_slug'] ?? ($_COOKIE['shop_slug'] ?? ''); ?>
+<?php $__shopSlug = class_exists('ShopUrl', false) ? (string) ShopUrl::current() : ''; ?>
 <link rel="manifest" href="<?php echo $__shopSlug !== '' && preg_match('/^[a-z0-9-]+$/', $__shopSlug) ? public_url('manifest.php?s=' . $__shopSlug) : public_url('manifest.webmanifest'); ?>">
 <meta name="theme-color" content="#0f766e">
 <meta name="mobile-web-app-capable" content="yes">

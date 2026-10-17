@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['ok' => false, 'error' => 'POST only.'], 405);
 }
 if (Features::isBasic()) {
-    json_response(['ok' => false, 'error' => 'Wi-Fi printing is a Pro feature. Your Basic package prints over USB.'], 403);
+    json_response(['ok' => false, 'error' => 'Wi-Fi printing is a Pro feature. Your Basic package prints over Bluetooth or USB.'], 403);
 }
 $body = read_json_body();
 if (!csrf_verify($body['csrf_token'] ?? null)) {

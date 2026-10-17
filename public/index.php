@@ -22,15 +22,28 @@ $notice = '';
 // Single-tenant deployment: there's only ever one shop, so its branding can
 // be shown before anyone logs in. No database / no tables yet (fresh install
 // or just reset) → send them to the setup wizard instead of an error page.
+// Opened at domain/<slug>/ → that shop's terminal (its name, logo and staff
+// only). Opened at the plain domain → the shared terminal with the platform
+// brand, open to every shop's staff.
+$shopSlug = ShopUrl::requestSlug();
 try {
     $pdo = Database::pdo();
-    $shop = (new Models\TenantModel($pdo))->primary();
+    $shop = $shopSlug !== null ? (new Models\TenantModel($pdo))->primary() : null;
+    if ($shopSlug === null) {
+        $pdo->query('SELECT 1 FROM tenants LIMIT 1'); // no tables yet → setup wizard
+    }
 } catch (Throwable $e) {
     header('Location: ' . public_url('setup/'));
     exit;
 }
-$shopName = $shop['name'] ?? 'Dazu Modern POS';
-$shopLogo = Branding::tenantLogo($shop);
+if ($shop) {
+    $shopName = $shop['name'];
+    $shopLogo = Branding::shopLogo($shop);
+} else {
+    $__brand = Branding::platform();
+    $shopName = $__brand['name'] ?: 'Dazu Modern POS';
+    $shopLogo = $__brand['logo'];
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $pin    = trim($_POST['pin'] ?? '');
@@ -41,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
            JOIN tenants t ON t.id = u.tenant_id
           WHERE r.role_name = 'staff' AND u.is_active = 1 AND u.pin_hash IS NOT NULL AND t.status = 'active'"
         // Opened through a shop's address: only that shop's (and its branches') staff.
-        . (!empty($shop['slug']) && (isset($_SESSION['shop_slug']) || isset($_COOKIE['shop_slug']))
+        . (!empty($shop['id'])
             ? ' AND (t.id = ' . (int) $shop['id'] . ' OR t.parent_tenant_id = ' . (int) $shop['id'] . ')' : '')
     );
     $stmt->execute();
@@ -167,7 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="brand">
         <div class="brand-icon">
           <?php if ($shopLogo): ?><img src="<?php echo htmlspecialchars($shopLogo); ?>" alt="">
-          <?php else: ?><i class="fas fa-book-open"></i><?php endif; ?>
+          <?php else: ?><i class="fas fa-store"></i><?php endif; ?>
         </div>
         <h1><?php echo htmlspecialchars($shopName); ?></h1>
         <p>Staff terminal</p>
@@ -179,7 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <button type="submit" class="act act-login" data-action="login"><i class="fas fa-right-to-bracket me-1"></i> Login</button>
           <button type="submit" class="act act-in" data-action="clock_in"><i class="fas fa-clock me-1"></i> Clock In</button>
           <button type="submit" class="act act-out" data-action="clock_out"><i class="fas fa-clock me-1"></i> Clock Out</button>
-          <a class="act act-owner" href="<?php echo public_url('admin/'); ?>"><i class="fas fa-user-tie me-1"></i> Owner login</a>
+          <a class="act act-owner" href="<?php echo $shop ? rtrim((string) BASE_URL, '/') . '/' . $shopSlug . '/admin/' : public_url('admin/'); ?>"><i class="fas fa-user-tie me-1"></i> Owner login</a>
         </div>
       </form>
     </div>

@@ -13,17 +13,18 @@ $__activeGroup = PosMenu::activeGroup($__groups, $__activePath);
 
 // The two group tabs: the first available of each preference list.
 $__tabKeys = [];
-foreach ([['shop', 'restaurant', 'services'], ['stock', 'restaurant', 'services', 'money']] as $__prefs) {
+foreach ([['pinned', 'shop', 'restaurant', 'services'], ['stock', 'restaurant', 'services', 'money']] as $__prefs) {
     foreach ($__prefs as $__k) {
         if (isset($__byKey[$__k]) && !in_array($__k, $__tabKeys, true)) { $__tabKeys[] = $__k; break; }
     }
 }
 // Centre action.
 $__fab = null;
-foreach ([['shop', 0], ['restaurant', 0], ['services', 1]] as [$__k, $__i]) {
-    if (isset($__byKey[$__k]['links'][$__i]) && in_array($__byKey[$__k]['links'][$__i][0], ['New sale', 'New order', 'New client'], true)) {
-        $__fab = $__byKey[$__k]['links'][$__i];
-        break;
+foreach (['New sale', 'New order', 'New client'] as $__want) { // wherever the owner arranged it
+    foreach ($__groups as $__g) {
+        foreach ($__g['links'] as $__l) {
+            if ($__l[0] === $__want) { $__fab = $__l; break 3; }
+        }
     }
 }
 $__home = $__byKey['home']['links'][0];

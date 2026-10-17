@@ -14,16 +14,22 @@
 //   people      Customers, staff, permissions, attendance
 //   business    Shops, admins, settings, updates…
 //   help        Help centre, support tickets
+//
+// Owners can arrange their own menu (super/settings/menu.php): the order of
+// groups and of links inside each group, links pinned to a "Quick access"
+// group under Home, and links hidden. Saved per owner in menu_prefs and
+// applied last, so it only reorders what the owner may already see.
 
 class PosMenu
 {
     /** @return array<int, array{key:string,label:string,icon:string,links:array<int,array{0:string,1:string,2:string,3?:?string}>}> */
-    public static function groups(): array
+    public static function groups(bool $arranged = true): array
     {
         $staff = TenantContext::role() === 'staff';
         $owner = TenantContext::role() === 'tenant_owner';
         $can = fn(string $c) => TenantContext::can($c);
         $shop = Features::enabled(Features::SHOP_POS);
+        $common = Features::anyPackage(); // staff, sales, credit/held, reports, printer, inventory: every package
         $main = $owner && ShopContext::isMainShop();
         $primary = $owner && self::isPrimaryOwner();
         $a = $staff ? 'staff' : 'super';
@@ -39,15 +45,15 @@ class PosMenu
             ['Dashboard', 'fa-gauge-high', $staff ? 'staff/dashboard/' : 'super/dashboard/', true],
         ]];
 
-        $g[] = ['shop', 'Shop', 'fa-cash-register', !$shop ? [] : [
-            ['New sale', 'fa-cash-register', $staff ? 'staff/dashboard/' : 'super/pos/', $can(Capabilities::SALES_RECORD)],
+        $g[] = ['shop', 'Shop', 'fa-cash-register', !$common ? [] : [
+            ['New sale', 'fa-cash-register', $staff ? 'staff/dashboard/' : 'super/pos/', $shop && $can(Capabilities::SALES_RECORD)],
             ['Credit sale', 'fa-hand-holding-dollar', "$a/orders/", $credit],
             ['Held sales', 'fa-pause', "$a/orders/held.php", $can(Capabilities::SALES_RECORD)],
             ['Credit book', 'fa-book', "$a/credits/", $staff ? ($credit || $pay) : $credit],
-            ['Payments', 'fa-money-check-dollar', "$a/payments/", $pay],
-            ['Returns', 'fa-rotate-left', "$a/orders/return.php", $pay],
-            ['Documents', 'fa-file-invoice', 'super/documents/', !$staff],
-            ['Share catalogue', 'fa-store', 'super/catalogue/', !$staff && $can(Capabilities::CATALOGUE_SEND)],
+            ['Payments', 'fa-money-check-dollar', "$a/payments/", $shop && $pay],
+            ['Returns', 'fa-rotate-left', "$a/orders/return.php", $shop && $pay],
+            ['Documents', 'fa-file-invoice', 'super/documents/', $shop && !$staff],
+            ['Share catalogue', 'fa-store', 'super/catalogue/', $shop && !$staff && $can(Capabilities::CATALOGUE_SEND)],
         ]];
 
         if (Features::enabled(Features::RESTAURANT_POS)) {
@@ -89,8 +95,8 @@ class PosMenu
 
         $elec = Features::enabled(Features::ELECTRONICS);
         $g[] = ['stock', 'Stock', 'fa-boxes-stacked', [
-            ['Inventory', 'fa-warehouse', "$a/inventory/", $shop && ($can(Capabilities::INVENTORY_VIEW) || $invEdit)],
-            ['Record stock', 'fa-truck-ramp-box', "$a/stock/new.php", $shop && ($staff ? $can(Capabilities::STOCK_ENTER) : $invEdit)],
+            ['Inventory', 'fa-warehouse', "$a/inventory/", $common && ($can(Capabilities::INVENTORY_VIEW) || $invEdit)],
+            ['Record stock', 'fa-truck-ramp-box', "$a/stock/new.php", $common && ($staff ? $can(Capabilities::STOCK_ENTER) : $invEdit)],
             ['Products', 'fa-box', 'super/products/', $shop && !$staff && $invEdit],
             ['Categories', 'fa-tags', 'super/categories/', $shop && !$staff && $invEdit],
             ['Suppliers', 'fa-truck-field', "$a/suppliers/", $shop && $invEdit],
@@ -102,15 +108,15 @@ class PosMenu
             ['Warranty & repairs', 'fa-screwdriver-wrench', 'super/electronics/repairs.php', $elec && $can(Capabilities::SALES_RECORD)],
         ]];
 
-        $g[] = ['money', 'Money', 'fa-wallet', !$shop ? [] : [
-            ['Expenses', 'fa-file-invoice-dollar', "$a/expenses/", $can(Capabilities::EXPENSES_RECORD)],
-            ['Finances', 'fa-scale-balanced', 'super/finances/', !$staff],
+        $g[] = ['money', 'Money', 'fa-wallet', !$common ? [] : [
+            ['Expenses', 'fa-file-invoice-dollar', "$a/expenses/", $shop && $can(Capabilities::EXPENSES_RECORD)],
+            ['Finances', 'fa-scale-balanced', 'super/finances/', $shop && !$staff],
             [$staff ? 'My sales' : 'Sales', 'fa-receipt', "$a/sales/", $staff ? $can(Capabilities::SALES_VIEW) : $owner],
             ['Reports', 'fa-chart-line', 'super/reports/', !$staff && $can(Capabilities::REPORTS_VIEW)],
         ]];
 
-        $g[] = ['people', 'People', 'fa-users', !$shop || $staff ? [] : [
-            ['Customers', 'fa-address-book', 'super/customers/', $can(Capabilities::CUSTOMERS_MANAGE)],
+        $g[] = ['people', 'People', 'fa-users', !$common || $staff ? [] : [
+            ['Customers', 'fa-address-book', 'super/customers/', $shop && $can(Capabilities::CUSTOMERS_MANAGE)],
             ['Staff', 'fa-user-gear', 'super/staff/', $can(Capabilities::STAFF_MANAGE)],
             ['Permissions', 'fa-key', 'super/staff/permissions.php', $can(Capabilities::STAFF_MANAGE)],
             ['Attendance', 'fa-clock', 'super/staff/attendance.php', $can(Capabilities::STAFF_MANAGE)],
@@ -120,12 +126,18 @@ class PosMenu
         $g[] = ['business', $staff ? 'Account' : 'Business', 'fa-briefcase', [
             [ShopContext::isMainShop() ? 'My shops' : 'Shops', 'fa-shop', 'super/shops/', $shop && $owner, $pro],
             ['Admins', 'fa-user-shield', 'super/admins/', $shop && $primary, $pro],
-            ['Settings', 'fa-gear', 'super/settings/', $shop && !$staff && $can(Capabilities::SETTINGS_MANAGE)],
-            ['Printer setup', 'fa-print', ($staff ? 'staff' : 'super') . '/printer/', $shop],
             ['Updates', 'fa-download', 'super/updates/', $shop && $main, $updates ? $updates . ' new' : null],
-            ['Import shop', 'fa-file-import', 'super/import/', $shop && $primary],
             ['Cleanup', 'fa-broom', 'super/cleanup/', $shop && $primary],
+            ['Printer setup', 'fa-print', 'staff/printer/', $staff && $common],
             ['Change PIN', 'fa-key', 'staff/change-pin.php', $staff],
+        ]];
+
+        // Settings: every package, owner side.
+        $g[] = ['settings', 'Settings', 'fa-gear', $staff ? [] : [
+            ['Shop details', 'fa-store', 'super/settings/', $common && $can(Capabilities::SETTINGS_MANAGE)],
+            ['Printer setup', 'fa-print', 'super/printer/', $common],
+            ['Navigation menu', 'fa-arrow-down-up-across-line', 'super/settings/menu.php', $owner],
+            ['Export & import', 'fa-right-left', 'super/backup/', $common && $primary],
         ]];
 
         $replies = self::ticketReplies();
@@ -144,7 +156,89 @@ class PosMenu
                 $out[] = ['key' => $key, 'label' => $label, 'icon' => $icon, 'links' => $links];
             }
         }
-        return $out;
+        return $arranged && $owner ? self::arrange($out, self::prefs()) : $out;
+    }
+
+    /** This owner's saved arrangement: [groups => keys[], links => [group => paths[]], pinned => paths[], hidden => paths[]]. */
+    public static function prefs(): array
+    {
+        $empty = ['groups' => [], 'links' => [], 'pinned' => [], 'hidden' => []];
+        try {
+            self::ensurePrefsTable();
+            $st = Database::pdo()->prepare('SELECT prefs FROM menu_prefs WHERE user_id = ?');
+            $st->execute([(int) TenantContext::userId()]);
+            $p = json_decode((string) $st->fetchColumn(), true);
+            return is_array($p) ? array_merge($empty, array_intersect_key($p, $empty)) : $empty;
+        } catch (\Throwable $e) {
+            return $empty;
+        }
+    }
+
+    public static function savePrefs(array $prefs): void
+    {
+        self::ensurePrefsTable();
+        $clean = [
+            'groups' => array_values(array_filter((array) ($prefs['groups'] ?? []), 'is_string')),
+            'links'  => array_map(fn($l) => array_values(array_filter((array) $l, 'is_string')), array_filter((array) ($prefs['links'] ?? []), 'is_array')),
+            'pinned' => array_values(array_filter((array) ($prefs['pinned'] ?? []), 'is_string')),
+            'hidden' => array_values(array_filter((array) ($prefs['hidden'] ?? []), 'is_string')),
+        ];
+        Database::pdo()->prepare('INSERT INTO menu_prefs (user_id, prefs) VALUES (?, ?) ON DUPLICATE KEY UPDATE prefs = VALUES(prefs)')
+            ->execute([(int) TenantContext::userId(), json_encode($clean)]);
+    }
+
+    public static function resetPrefs(): void
+    {
+        self::ensurePrefsTable();
+        Database::pdo()->prepare('DELETE FROM menu_prefs WHERE user_id = ?')->execute([(int) TenantContext::userId()]);
+    }
+
+    /** Apply an arrangement to groups(false). Home stays first; the Dashboard and "Arrange menu" can't be hidden. */
+    public static function arrange(array $groups, array $prefs): array
+    {
+        $keep = ['super/dashboard/', 'super/settings/menu.php'];
+        $hidden = array_diff($prefs['hidden'], $keep);
+        $pinned = [];
+        foreach ($groups as &$g) {
+            $order = array_flip($prefs['links'][$g['key']] ?? []);
+            $links = [];
+            foreach ($g['links'] as $i => $l) {
+                if (in_array($l[2], $hidden, true)) { continue; }
+                if ($g['key'] !== 'home' && in_array($l[2], $prefs['pinned'], true)) { $pinned[$l[2]] = $l; continue; }
+                $links[] = [$order[$l[2]] ?? 1000 + $i, $l];
+            }
+            usort($links, fn($a, $b) => $a[0] <=> $b[0]);
+            $g['links'] = array_column($links, 1);
+        }
+        unset($g);
+        $groups = array_values(array_filter($groups, fn($g) => $g['links']));
+
+        $gOrder = array_flip($prefs['groups']);
+        $home = array_values(array_filter($groups, fn($g) => $g['key'] === 'home'));
+        $rest = array_values(array_filter($groups, fn($g) => $g['key'] !== 'home'));
+        $idx = array_flip(array_column($rest, 'key'));
+        usort($rest, fn($a, $b) => ($gOrder[$a['key']] ?? 1000 + $idx[$a['key']]) <=> ($gOrder[$b['key']] ?? 1000 + $idx[$b['key']]));
+
+        if ($pinned) {
+            $pOrder = array_flip($prefs['pinned']);
+            uksort($pinned, fn($a, $b) => $pOrder[$a] <=> $pOrder[$b]);
+            array_unshift($rest, ['key' => 'pinned', 'label' => 'Quick access', 'icon' => 'fa-star', 'links' => array_values($pinned)]);
+        }
+        return array_merge($home, $rest);
+    }
+
+    private static function ensurePrefsTable(): void
+    {
+        static $done = false;
+        if ($done) { return; }
+        Database::pdo()->exec(
+            'CREATE TABLE IF NOT EXISTS menu_prefs (
+                user_id INT NOT NULL PRIMARY KEY,
+                prefs TEXT NOT NULL,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+        );
+        $done = true;
     }
 
     /**
