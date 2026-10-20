@@ -40,4 +40,6 @@ ob_start();
 </form>
 <?php
 $content = ob_get_clean();
+$__authMono = true;   // support login: black and white
+$__authRole = 'Support';
 include ROOT_PATH . '/public/templates/auth/layout.php';

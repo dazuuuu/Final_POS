@@ -88,6 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else { // login
         session_regenerate_id(true);
         TenantContext::establish($pdo, $user);
+        UserSessions::start();
         $_SESSION['username']     = $user['username'];
         $_SESSION['logged_in']    = true;
         $_SESSION['otp_verified'] = true;
@@ -110,8 +111,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   body{min-height:100svh;margin:0;display:flex;align-items:center;justify-content:center;
        background:#f7f7fb;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
        padding:24px;padding-top:max(24px,env(safe-area-inset-top));padding-bottom:max(24px,env(safe-area-inset-bottom));}
-  .panel{width:100%;max-width:640px;background:#fff;border-radius:22px;box-shadow:0 12px 40px rgba(16,24,40,.1);
-         border:1px solid #eef0f4;display:flex;overflow:hidden;}
+  .panel{width:100%;max-width:640px;background:#fff;border-radius:14px;
+         border:1px solid #e4e4e7;display:flex;overflow:hidden;}
   .msg{width:100%;max-width:640px;margin:0 auto 14px;border-radius:10px;padding:10px 16px;font-size:.88rem;text-align:center;}
   .msg.err{background:#fee2e2;color:#991b1b;}
   .msg.ok{background:#dcfce7;color:#166534;}
@@ -168,6 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </style>
 </head>
 <body>
+<?php include __DIR__ . '/components/boot_splash.php'; ?>
 <div class="wrap">
   <?php if ($error): ?><div class="msg err"><?php echo htmlspecialchars($error); ?></div><?php endif; ?>
   <?php if ($notice): ?><div class="msg ok"><?php echo $notice; ?></div><?php endif; ?>

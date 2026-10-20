@@ -62,6 +62,7 @@ $verdict = AccountGuard::evaluate($user);
             session_regenerate_id(true);
             TenantContext::establish($pdo, $user);
             SingleSession::claim($pdo, $user); // any other device signed in as this owner is signed out
+            UserSessions::start();
             if (!empty($user['tenant_id'])) { // remember the owner's shop address for install/branding
                 $slugStmt = $pdo->prepare('SELECT slug FROM tenants WHERE id = ?');
                 $slugStmt->execute([Features::accountId((int) $user['tenant_id'])]);

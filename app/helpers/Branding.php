@@ -67,6 +67,9 @@ class Branding
             'phone' => (string) ($cfg['phone'] ?? ''),
             'whatsapp' => (string) ($cfg['whatsapp'] ?? ''),
             'email' => (string) ($cfg['email'] ?? ''),
+            // Start-up sound on the sign-in pages (Support → Settings): on by default with the built-in chime.
+            'boot_on' => !array_key_exists('boot_on', $cfg) || !empty($cfg['boot_on']),
+            'boot_sound' => !empty($cfg['boot_sound']) ? public_url(self::normalizeStoredPath($cfg['boot_sound'])) : '',
         ];
     }
 

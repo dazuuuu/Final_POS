@@ -72,6 +72,7 @@ if ($posted) {
                 session_regenerate_id(true);
                 TenantContext::establish(Database::pdo(), $user);
                 SingleSession::claim(Database::pdo(), $user);
+                UserSessions::start();
                 $_SESSION['username']     = $user['username'];
                 $_SESSION['logged_in']    = true;
                 $_SESSION['otp_verified'] = true;

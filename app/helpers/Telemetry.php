@@ -76,7 +76,13 @@ class Telemetry
                 $pdo->prepare('INSERT INTO sys_errors (account_id, method, path, status, message) VALUES (?, ?, ?, ?, ?)')
                     ->execute([$account, substr($_SERVER['REQUEST_METHOD'] ?? 'GET', 0, 8), mb_substr($path, 0, 255), $status, self::$error ?? "HTTP $status"]);
             }
+            // Server load history (one sample a minute) for the support console's CPU chart.
+            if (function_exists('sys_getloadavg') && ($la = @sys_getloadavg())) {
+                $pdo->prepare('INSERT IGNORE INTO sys_load (minute, load1, cores) VALUES (?, ?, ?)')
+                    ->execute([date('Y-m-d H:i:00'), round((float) $la[0], 2), self::cores()]);
+            }
             if (mt_rand(1, 500) === 1) { // occasional clean-up
+                $pdo->exec('DELETE FROM sys_load WHERE minute < NOW() - INTERVAL 7 DAY');
                 $pdo->exec('DELETE FROM sys_traffic WHERE hour < NOW() - INTERVAL 30 DAY');
                 $pdo->exec('DELETE FROM sys_errors WHERE created_at < NOW() - INTERVAL 30 DAY');
             }
@@ -89,7 +95,7 @@ class Telemetry
     {
         static $done = false;
         if ($done) { return; }
-        $flag = Database::marker('telemetry_v1');
+        $flag = Database::marker('telemetry_v2');
         if (!is_file($flag)) {
             $pdo->exec("CREATE TABLE IF NOT EXISTS sys_traffic (
                 hour DATETIME NOT NULL, account_id INT NOT NULL,
@@ -102,21 +108,45 @@ class Telemetry
                 account_id INT NOT NULL DEFAULT 0, method VARCHAR(8) NOT NULL, path VARCHAR(255) NOT NULL,
                 status SMALLINT NOT NULL, message VARCHAR(500) NOT NULL, KEY idx_err_time (created_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            $pdo->exec("CREATE TABLE IF NOT EXISTS sys_load (
+                minute DATETIME NOT NULL PRIMARY KEY, load1 DECIMAL(6,2) NOT NULL, cores SMALLINT NOT NULL DEFAULT 1
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             @file_put_contents($flag, date('c'));
         }
         $done = true;
     }
 
+    /** CPU cores on this server (cached). */
+    public static function cores(): int
+    {
+        static $n = null;
+        if ($n !== null) { return $n; }
+        $n = 1;
+        if (@is_readable('/proc/cpuinfo')) {
+            $n = max(1, substr_count((string) @file_get_contents('/proc/cpuinfo'), 'processor'));
+        } elseif (PHP_OS_FAMILY === 'Darwin' && function_exists('shell_exec')) {
+            $n = max(1, (int) @shell_exec('sysctl -n hw.ncpu'));
+        }
+        return $n;
+    }
+
+    /** CPU % per hour for the last $hours hours (average of the minute samples). */
+    public static function loadHistory(PDO $pdo, int $hours = 24): array
+    {
+        self::ensure($pdo);
+        $out = [];
+        for ($i = $hours - 1; $i >= 0; $i--) { $out[date('Y-m-d H:00:00', strtotime("-$i hours"))] = null; }
+        $st = $pdo->prepare("SELECT DATE_FORMAT(minute, '%Y-%m-%d %H:00:00') h, AVG(load1 / cores) * 100 pct FROM sys_load WHERE minute >= ? GROUP BY h");
+        $st->execute([array_key_first($out)]);
+        foreach ($st->fetchAll(PDO::FETCH_KEY_PAIR) as $h => $p) { if (array_key_exists($h, $out)) $out[$h] = min(100, round((float) $p, 1)); }
+        return $out;
+    }
+
     /** Live server figures: load average, CPU cores, memory and disk. */
     public static function server(): array
     {
-        $load = function_exists('sys_getloadavg') ? (sys_getloadavg() ?: [0, 0, 0]) : [0, 0, 0];
-        $cores = 1;
-        if (@is_readable('/proc/cpuinfo')) {
-            $cores = max(1, substr_count((string) @file_get_contents('/proc/cpuinfo'), 'processor'));
-        } elseif (PHP_OS_FAMILY === 'Darwin' && function_exists('shell_exec')) {
-            $cores = max(1, (int) @shell_exec('sysctl -n hw.ncpu'));
-        }
+        $load = function_exists('sys_getloadavg') ? (@sys_getloadavg() ?: [0, 0, 0]) : [0, 0, 0];
+        $cores = self::cores();
         $mem = null;
         if (@is_readable('/proc/meminfo') && preg_match_all('/^(MemTotal|MemAvailable):\s+(\d+)/m', (string) @file_get_contents('/proc/meminfo'), $m)) {
             $kv = array_combine($m[1], $m[2]);

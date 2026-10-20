@@ -83,6 +83,7 @@ class SingleSession
         if (hash_equals((string) $current, (string) ($_SESSION['session_token'] ?? ''))) { return; }
 
         // Signed in on another device: end this session.
+        UserSessions::end('replaced');
         $_SESSION = [];
         session_regenerate_id(true);
         TenantContext::reset();

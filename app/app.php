@@ -123,6 +123,9 @@ SingleSession::enforce();
 // Landing-page demo shops: time limit, closed pages.
 Demo::enforce();
 
+// Online / offline and sign-in history for the support console.
+UserSessions::touch();
+
 // Per-shop addresses (domain/<slug>/super/…): validate the shop and keep
 // signed-in users on their own shop's address.
 ShopUrl::enforce();

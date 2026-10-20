@@ -12,6 +12,7 @@ if (Demo::active()) {
     header('Location: ' . public_url('?demo=done#demo'));
     exit;
 }
+UserSessions::end('logout');
 SingleSession::release(Database::pdo());
 $_SESSION = [];
 if (ini_get('session.use_cookies')) {
