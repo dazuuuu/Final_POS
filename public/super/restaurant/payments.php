@@ -192,6 +192,10 @@ ob_start();
         $('dnTitle').textContent = 'Order #' + cur.no + ' paid';
         $('dnChange').textContent = r.change > 0 ? 'Change: ' + money(r.change) : '';
         $('dnReceipt').href = r.receipt;
+        // Print the receipt straight away: load it (it prints itself) in a hidden frame.
+        var pf = document.getElementById('autoPrintFrame') || document.body.appendChild(Object.assign(document.createElement('iframe'),
+          { id: 'autoPrintFrame', style: 'position:fixed;width:0;height:0;border:0;visibility:hidden' }));
+        pf.src = r.receipt;
         new bootstrap.Modal($('doneModal'), {backdrop: 'static'}).show();
       });
   };

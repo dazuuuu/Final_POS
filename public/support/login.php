@@ -11,9 +11,8 @@ $error = '';
 $email = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
-    if (SupportAccount::verify($email, (string) ($_POST['password'] ?? ''))) {
-        session_regenerate_id(true);
-        $_SESSION['support_auth'] = true;
+    if ($who = SupportAccount::authenticate($email, (string) ($_POST['password'] ?? ''))) {
+        SupportAccount::signIn($who);
         header('Location: ' . public_url('support/'));
         exit;
     }

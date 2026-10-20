@@ -37,6 +37,9 @@ class MailService
     public function send(string $to, string $subject, string $html, string $altBody = '', array $attachments = []): bool
     {
         self::$lastError = '';
+        if (!empty($_SESSION['demo']['account'])) { // landing-page demo: never email real addresses typed into forms
+            return true;
+        }
         if (!class_exists(PHPMailer::class)) {
             self::$lastError = 'PHPMailer is not loaded (no vendor/autoload.php, or it is not required in app.php).';
             error_log('MailService: ' . self::$lastError);

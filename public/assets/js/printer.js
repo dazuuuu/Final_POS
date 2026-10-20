@@ -262,9 +262,11 @@
   /** Called on a receipt page right after a sale is completed. */
   async function autoPrint() {
     var cfg = load();
-    if (!cfg.autoPrint || cfg.mode === 'off') return;
+    if (!cfg.autoPrint) return; // switched off in Printer settings on this device
     try {
-      if (cfg.mode === 'system') { setTimeout(function () { window.print(); }, 300); return; }
+      // No printer set up on this device yet: open the device's print dialog,
+      // so the receipt still prints right after checkout without a tap.
+      if (cfg.mode === 'system' || cfg.mode === 'off') { setTimeout(function () { window.print(); }, 300); return; }
       await print();
       if (cfg.mode !== 'rawbt') toast('Receipt printed.', true);
     } catch (e) {

@@ -187,8 +187,6 @@ $packages = Features::forAccount($id);
 $shops = $pdo->prepare('SELECT name, status, created_at FROM tenants WHERE id = ? OR parent_tenant_id = ? ORDER BY parent_tenant_id IS NOT NULL, created_at');
 $shops->execute([$id, $id]);
 $shops = $shops->fetchAll(PDO::FETCH_ASSOC);
-$monthly = 0;
-foreach ($packages as $k => $on) { if ($on) $monthly += $catalog[$k][1]; }
 
 $page_title = $acct['name'];
 $__css = '<style>.sw{width:52px;height:30px;border-radius:99px;border:0;background:#cbd5e1;position:relative;transition:background .2s;padding:0;}
@@ -207,12 +205,11 @@ echo $__css;
 <div class="row g-3">
   <div class="col-lg-7">
     <div class="s-card mb-3">
-      <div class="d-flex justify-content-between mb-3"><h2 class="h6 mb-0">Packages</h2><span class="small text-muted">Licensed: <strong>KES <?php echo number_format($monthly); ?></strong></span></div>
+      <div class="d-flex justify-content-between mb-3"><h2 class="h6 mb-0">Packages</h2></div>
       <?php foreach ($catalog as $k => [$label, $price, $desc, $icon]): $on = $packages[$k]; ?>
         <div class="d-flex justify-content-between align-items-start gap-3 border-bottom py-3">
           <div>
             <strong><i class="fas <?php echo $icon; ?> fa-fw me-1 text-primary"></i><?php echo $label; ?></strong>
-            <small class="text-muted">· KES <?php echo number_format($price / 1000); ?>K</small>
             <div class="small text-muted mt-1"><?php echo htmlspecialchars($desc); ?></div>
           </div>
           <form method="post" class="flex-shrink-0" <?php if ($on): ?>onsubmit="return confirm('Turn off <?php echo $label; ?> for this account? Its pages disappear for the owner and staff.');"<?php endif; ?>>
@@ -284,9 +281,13 @@ echo $__css;
       $pvUsers = $pvUsers->fetchAll(PDO::FETCH_ASSOC);
     ?>
     <div class="s-card mb-3">
-      <h2 class="h6 mb-1"><i class="fas fa-user-secret me-1 text-primary"></i>Preview their POS</h2>
+      <h2 class="h6 mb-1"><i class="fas fa-user-secret me-1 text-primary"></i><?php echo SupportAccount::isOwner() ? 'Preview their POS' : 'Logins'; ?></h2>
+      <?php if (!SupportAccount::isOwner()): ?>
+      <p class="small text-muted mb-2">Everyone who can sign in to this account. Opening their POS is limited to the main support admin.</p>
+      <?php else: ?>
       <p class="small text-muted mb-2">Open the shop's real POS as the owner or a staff member — no password or PIN needed — to check the import
         (inventory, sales, staff…). Exit from the purple bar to come back here.</p>
+      <?php endif; ?>
       <?php if (!$pvUsers): ?>
         <p class="small text-muted mb-0">No users yet — import their data or create the owner login first.</p>
       <?php else: ?>
@@ -301,10 +302,12 @@ echo $__css;
           <form method="post" class="m-0"><?php echo support_csrf_field(); ?><input type="hidden" name="action" value="activate_user"><input type="hidden" name="user" value="<?php echo (int) $u['id']; ?>">
             <button class="btn btn-sm btn-outline-success">Activate</button></form>
           <?php endif; ?>
+          <?php if (SupportAccount::isOwner()): ?>
           <form method="post" action="<?php echo public_url('support/accounts/preview.php?id=' . $id); ?>" class="m-0">
             <?php echo support_csrf_field(); ?><input type="hidden" name="user" value="<?php echo (int) $u['id']; ?>">
             <button class="btn btn-sm btn-outline-primary"><i class="fas fa-arrow-up-right-from-square me-1"></i>Open as</button>
           </form>
+          <?php endif; ?>
         </div>
         <?php endforeach; ?>
       </div>

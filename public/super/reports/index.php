@@ -1,7 +1,7 @@
 <?php
 // public/super/reports/index.php — daily sales report (view / print / PDF)
 require_once __DIR__ . '/../../../app/app.php';
-PageGuard::auth();
+PageGuard::money(); // owners/admins only — staff never see finances, profit or day totals
 
 $pdo  = Database::pdo();
 $date = preg_replace('/[^0-9-]/', '', $_GET['date'] ?? '') ?: date('Y-m-d');

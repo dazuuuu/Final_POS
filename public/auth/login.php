@@ -35,6 +35,8 @@ if (($_GET['reset'] ?? '') === '1') {
     $notice = 'Your password has been set. Please sign in with your new password.';
 } elseif (($_GET['denied'] ?? '') === '1') {
     $error = 'You don\'t have access to that page. Please sign in with the right account.';
+} elseif (($_GET['elsewhere'] ?? '') === '1') {
+    $error = 'You were signed out because your account was signed in on another device.';
 } elseif (($_GET['locked'] ?? '') === '1') {
     $error = 'Your account needs attention before you can sign in.';
 }
@@ -59,6 +61,7 @@ $verdict = AccountGuard::evaluate($user);
             // can use $user directly.
             session_regenerate_id(true);
             TenantContext::establish($pdo, $user);
+            SingleSession::claim($pdo, $user); // any other device signed in as this owner is signed out
             if (!empty($user['tenant_id'])) { // remember the owner's shop address for install/branding
                 $slugStmt = $pdo->prepare('SELECT slug FROM tenants WHERE id = ?');
                 $slugStmt->execute([Features::accountId((int) $user['tenant_id'])]);
@@ -109,7 +112,7 @@ ob_start();
 <div class="auth-foot">
     <a href="<?php echo public_url('auth/forgot-password.php'); ?>">Forgot password?</a>
     <br>
-    <a href="<?php echo public_url(''); ?>">Staff? Go to the PIN screen</a>
+    <a href="<?php echo public_url('terminal/'); ?>">Staff? Go to the PIN screen</a>
 </div>
 <?php
 $content = ob_get_clean();

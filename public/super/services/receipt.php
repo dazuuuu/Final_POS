@@ -39,10 +39,11 @@ unset($_SESSION['flash']['success']);
   .ok{max-width:380px;margin:0 auto 12px;background:#dcfce7;color:#166534;padding:10px 14px;border-radius:8px;font-size:14px;}
   @media print{ body{background:#fff;padding:0;} .slip{box-shadow:none;} .actions,.ok{display:none;} }
 </style>
+<?php $autoPrint = !empty($_GET['new']) && $paid; include __DIR__ . '/../../components/printer_script.php'; ?>
 </head>
 <body>
 <?php if ($flash): ?><div class="ok"><?php echo svc_h($flash); ?></div><?php endif; ?>
-<div class="slip">
+<div class="slip sheet">
   <div class="c">
     <?php if ($logo): ?><img src="<?php echo svc_h($logo); ?>" alt="" style="max-height:56px;max-width:140px;"><?php endif; ?>
     <h1><?php echo svc_h($shop['name'] ?? ''); ?></h1>
@@ -80,7 +81,7 @@ unset($_SESSION['flash']['success']);
 </div>
 <div class="actions">
   <a href="<?php echo public_url('super/services/view.php?id=' . (int) $t['id']); ?>">Back</a>
-  <button class="p" onclick="window.print()">Print</button>
+  <button class="p" onclick="TasoPrinter.printClick()">Print</button>
   <a href="<?php echo public_url('super/services/new.php'); ?>">Next client</a>
 </div>
 </body>

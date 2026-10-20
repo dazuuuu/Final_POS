@@ -88,7 +88,11 @@ if (strtolower(pathinfo($file, PATHINFO_EXTENSION)) !== 'php') {
     $mtime = filemtime($file);
     $etag = '"' . dechex($mtime) . '-' . dechex(filesize($file)) . '"';
     header('Content-Type: ' . $types[$ext]);
-    header('Cache-Control: public, max-age=604800');
+    header('X-Content-Type-Options: nosniff');
+    // The service worker and app manifest must always be re-checked, or a fixed
+    // version would take up to a week to reach installed apps.
+    $isSw = in_array(basename($file), ['sw.js', 'manifest.webmanifest'], true);
+    header('Cache-Control: ' . ($isSw ? 'no-cache' : 'public, max-age=604800'));
     header('ETag: ' . $etag);
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $mtime) . ' GMT');
     if (trim($_SERVER['HTTP_IF_NONE_MATCH'] ?? '') === $etag) {
@@ -100,7 +104,12 @@ if (strtolower(pathinfo($file, PATHINFO_EXTENSION)) !== 'php') {
     exit;
 }
 
-// PHP page: run it as if it had been requested directly.
+// PHP page: run it as if it had been requested directly. Pages are HTML and
+// never stored by the browser, so a reopened app always loads a fresh login /
+// dashboard (a page that sends a file or JSON overrides these headers itself).
+header('Content-Type: text/html; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('X-Content-Type-Options: nosniff');
 $script = $base . '/' . ltrim(substr($file, strlen($public)), '/');
 $_SERVER['SCRIPT_NAME'] = $_SERVER['PHP_SELF'] = $script;
 $_SERVER['SCRIPT_FILENAME'] = $file;

@@ -41,6 +41,7 @@ $editBase = public_url('super/products/');
 $stockUrl = public_url('super/stock/new.php');
 $groupUrl = fn(string $g) => public_url('super/inventory/') . '?group=' . $g;
 
+$seesMoney = PageGuard::seesMoney();
 $totals = ['products' => 0, 'stock_value' => 0.0, 'retail_value' => 0.0];
 foreach ($grouped as $items) {
     foreach ($items as $p) {
@@ -79,6 +80,7 @@ ob_start();
       </div>
     </div>
   </div>
+  <?php if ($seesMoney): // stock value is the owner's figure — staff never see it ?>
   <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm" style="border-radius:12px;">
       <div class="card-body p-3">
@@ -96,6 +98,7 @@ ob_start();
       </div>
     </div>
   </div>
+  <?php endif; ?>
   <div class="col-6 col-md-3">
     <div class="card border-0 shadow-sm" style="border-radius:12px;">
       <div class="card-body p-3">
@@ -135,8 +138,8 @@ ob_start();
             <th>Category</th>
             <th>Supplier</th>
             <th class="text-end">Balance</th>
-            <th class="text-end">Cost</th>
-            <th class="text-end">Stock value</th>
+            <?php if ($seesMoney): ?><th class="text-end">Cost</th>
+            <th class="text-end">Stock value</th><?php endif; ?>
             <th class="text-end">Wholesale</th>
             <th class="text-end">Retail</th>
             <th>Status</th>
@@ -148,7 +151,7 @@ ob_start();
                 $rowNo = 0;
                 foreach ($grouped as $groupName => $items): ?>
           <tr class="xsheet-group">
-            <td colspan="<?php echo $canEdit ? 12 : 11; ?>"><i class="fas fa-<?php echo $groupIcon; ?> me-2 text-primary"></i><?php echo htmlspecialchars($groupName); ?>
+            <td colspan="<?php echo ($canEdit ? 12 : 11) - ($seesMoney ? 0 : 2); ?>"><i class="fas fa-<?php echo $groupIcon; ?> me-2 text-primary"></i><?php echo htmlspecialchars($groupName); ?>
               <span class="text-muted fw-normal small ms-1"><?php echo count($items); ?> item<?php echo count($items) !== 1 ? 's' : ''; ?></span></td>
           </tr>
           <?php foreach ($items as $p):
@@ -182,8 +185,8 @@ ob_start();
             <td class="text-end <?php echo $low ? 'text-danger fw-semibold' : ''; ?>">
               <?php echo rtrim(rtrim(number_format($qty, 2), '0'), '.'); ?>
             </td>
-            <td class="text-end text-muted">KES <?php echo number_format($buy, 0); ?></td>
-            <td class="text-end fw-semibold">KES <?php echo number_format($stockVal, 0); ?></td>
+            <?php if ($seesMoney): ?><td class="text-end text-muted">KES <?php echo number_format($buy, 0); ?></td>
+            <td class="text-end fw-semibold">KES <?php echo number_format($stockVal, 0); ?></td><?php endif; ?>
             <td class="text-end">KES <?php echo number_format($wholesale, 0); ?></td>
             <td class="text-end">
               <?php if ($eff['on_offer']): ?>

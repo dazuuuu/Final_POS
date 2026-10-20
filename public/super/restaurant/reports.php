@@ -7,6 +7,7 @@
 require_once __DIR__ . '/../../../app/app.php';
 define('REST_CAP', Capabilities::REPORTS_VIEW);
 require_once __DIR__ . '/_common.php';
+PageGuard::money(); // restaurant takings and profit: owners/admins only
 
 $self = public_url('super/restaurant/reports.php');
 $d = fn($v) => preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $v) ? $v : null;

@@ -26,6 +26,13 @@ $notice = '';
 // only). Opened at the plain domain → the shared terminal with the platform
 // brand, open to every shop's staff.
 $shopSlug = ShopUrl::requestSlug();
+
+// The plain domain is the public landing page (product, packages, demo, quote).
+// Staff terminals: domain/terminal/ (shared) and domain/<slug>/ (a shop's own).
+if ($shopSlug === null && !defined('DAZU_TERMINAL')) {
+    require __DIR__ . '/components/landing/page.php';
+    exit;
+}
 try {
     $pdo = Database::pdo();
     $shop = $shopSlug !== null ? (new Models\TenantModel($pdo))->primary() : null;

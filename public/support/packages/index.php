@@ -64,13 +64,10 @@ ob_start();
 </style>
 
 <?php
-$value = 0;
-foreach (Features::catalog() as $k => [, $price]) { $value += $price * count($holders[$k]); }
 ?>
 <div class="pk-sum">
   <div class="s-card s-stat"><div class="l">Packages</div><div class="n"><?php echo count(Features::catalog()); ?></div></div>
   <div class="s-card s-stat"><div class="l">Licences issued</div><div class="n"><?php echo array_sum(array_map('count', $holders)); ?></div></div>
-  <div class="s-card s-stat"><div class="l">Licensed value</div><div class="n">KES <?php echo number_format($value); ?></div></div>
 </div>
 
 <div class="row g-3">
@@ -97,7 +94,6 @@ foreach (Features::catalog() as $k => [, $price]) { $value += $price * count($ho
           <span class="pk-tier"><?php echo $tier; ?></span>
         </div>
         <div class="pk-name"><?php echo htmlspecialchars($label); ?></div>
-        <div class="pk-price"><b>KES <?php echo number_format($price); ?></b><span>/ licence</span></div>
       </div>
       <div class="pk-body">
         <ul class="pk-feat">

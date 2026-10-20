@@ -1,7 +1,7 @@
 <?php
 // public/super/sales/index.php — enhanced owner view of all sales + profit
 require_once __DIR__ . '/../../../app/app.php';
-PageGuard::auth();
+PageGuard::money(); // owners/admins only — staff never see finances, profit or day totals
 
 $pdo  = Database::pdo();
 $SA   = new Models\SaleModel($pdo);

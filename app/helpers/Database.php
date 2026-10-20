@@ -25,6 +25,19 @@ class Database
         return self::$pdo;
     }
 
+    /**
+     * Path of a "this schema change is done" marker file for THIS database.
+     * The database name is part of the file name, so a marker copied from
+     * another install (e.g. app/storage uploaded from a laptop) never makes
+     * the live database skip a change it hasn't had.
+     */
+    public static function marker(string $name): string
+    {
+        static $db = null;
+        $db ??= preg_replace('/\W/', '_', (string) self::pdo()->query('SELECT DATABASE()')->fetchColumn());
+        return ROOT_PATH . '/app/storage/' . $name . '_' . $db . '.ok';
+    }
+
     /** For tests: inject a pre-built PDO (e.g. a throwaway test database). */
     public static function setPdo(PDO $pdo): void
     {
@@ -73,18 +86,33 @@ class Database
         if (empty($cfg['host']) || empty($cfg['dbname'])) {
             return ['state' => 'needs_setup', 'error' => 'No database is configured yet.'];
         }
-        try {
-            $pdo = self::pdo();
-        } catch (\PDOException $e) {
-            // 2002 no socket / refused, 2003 can't connect, 2005 unknown host, 2006 gone away
-            $code = preg_match('/\[(\d{4})\]/', $e->getMessage(), $m) ? (int) $m[1] : 0;
-            $state = in_array($code, [2002, 2003, 2005, 2006], true) ? 'server_down' : 'needs_setup';
-            return ['state' => $state, 'error' => $e->getMessage()];
+        // Only a database that is truly not set up goes to the setup wizard: wrong
+        // login (1045), no such database (1049) or no tables. Anything else —
+        // too many connections (1040 / 1203 on shared hosting), server gone away,
+        // a timeout — is a passing hiccup: the user gets a calm "reconnecting"
+        // page that retries by itself, never the wizard (which shows SQL).
+        $attempt = function () {
+            $n = (int) self::pdo()->query(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('roles', 'users', 'tenants')"
+            )->fetchColumn();
+            return $n === 3 ? ['state' => 'ok', 'error' => ''] : ['state' => 'needs_setup', 'error' => 'The database has no tables yet.'];
+        };
+        for ($try = 1; ; $try++) {
+            try {
+                return $attempt();
+            } catch (\Throwable $e) {
+                self::$pdo = null; // drop a half-open connection before retrying
+                $code = preg_match('/\[(\d{4})\]/', $e->getMessage(), $m) ? (int) $m[1] : (int) $e->getCode();
+                if (in_array($code, [1045, 1049], true)) {
+                    return ['state' => 'needs_setup', 'error' => $e->getMessage()];
+                }
+                if ($try >= 3) {
+                    error_log('Database::status: ' . $e->getMessage());
+                    return ['state' => 'server_down', 'error' => $e->getMessage()];
+                }
+                usleep(300000 * $try); // brief wait: connection limits usually clear in well under a second
+            }
         }
-        $n = (int) $pdo->query(
-            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('roles', 'users', 'tenants')"
-        )->fetchColumn();
-        return $n === 3 ? ['state' => 'ok', 'error' => ''] : ['state' => 'needs_setup', 'error' => 'The database has no tables yet.'];
     }
 
     /**

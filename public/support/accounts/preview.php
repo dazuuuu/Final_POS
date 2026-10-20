@@ -23,6 +23,7 @@ if (isset($_GET['exit'])) {
 }
 
 $id = (int) ($_GET['id'] ?? 0);
+support_require_owner(); // only the main admin may open a client's POS (exiting a preview stays open to all)
 if (!support_posted()) {
     header('Location: ' . public_url('support/accounts/view.php?id=' . $id));
     exit;

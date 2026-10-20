@@ -19,7 +19,7 @@ class Signup
     /** Paths that are real folders/pages, so a shop can't take them as its URL. */
     const RESERVED = ['admin', 'api', 'assets', 'auth', 'components', 'm', 'profile', 'setup', 'staff', 'super',
                       'support', 'templates', 'uploads', 'verification', 'public', 'signup', 'shop', 'index',
-                      'manifest', 'sw', 'catalogue', 'login', 'app'];
+                      'manifest', 'sw', 'catalogue', 'login', 'app', 'terminal', 'demo', 'pricing'];
 
     /** Create an invited account (business name + packages, no owner). Returns the account id. */
     public static function invite(string $businessName, array $packages, string $phone = ''): int

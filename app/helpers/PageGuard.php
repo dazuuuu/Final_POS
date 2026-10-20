@@ -48,6 +48,26 @@ class PageGuard
         }
     }
 
+    /**
+     * Can the signed-in user see the shop's money: stock value and cost
+     * prices, profit, finance records, expenses of others and the day's sales
+     * totals? Only the shop's owners/admins (tenant_owner role). Staff never
+     * do — not even with inventory, stock or report rights delegated to them.
+     */
+    public static function seesMoney(): bool
+    {
+        return TenantContext::role() === 'tenant_owner' || TenantContext::isPlatformAdmin();
+    }
+
+    /** Pages that are all about money (finances, reports, profit): owners/admins only. */
+    public static function money(): void
+    {
+        self::requireFullAuth();
+        if (!self::seesMoney()) {
+            self::deny();
+        }
+    }
+
     /** Require a fully-authenticated STAFF member. */
     public static function staff(): void
     {

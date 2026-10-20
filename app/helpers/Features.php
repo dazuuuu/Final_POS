@@ -7,7 +7,7 @@
 //
 //   shop_pos_30k        — the full shop POS (sales, credit, inventory, staff,
 //                         finance, reports, settings…). Dashboard stays.
-//   restaurant_pos_30k  — the restaurant POS (coming next).
+//   restaurant_pos_30k  — the restaurant & bar POS (store → kitchen / counter, menu, orders, outlets).
 //   electronics_30k     — an electronics shop: the full shop POS (the template
 //                         every shop account starts from) plus serial/IMEI per
 //                         unit, warranties and repair returns. It includes the
@@ -56,7 +56,7 @@ class Features
             self::SHOP_BASIC => ['Shop POS Basic', 20000, 'One shop: sales, credit, held sales, payments, returns, inventory, stock, suppliers, expenses, finances, customers, reports and settings. Up to 3 staff, Bluetooth + USB printing. (Basic.)', 'fa-store'],
             self::SERVICES_BASIC => ['Services Basic', 20000, 'Shop POS Basic plus services: a price list, walk-ins and bookings, assigning staff, invoices, receipts and commissions. One shop, up to 3 staff, Bluetooth + USB printing. (Basic.)', 'fa-user-gear'],
             self::SHOP_POS => ['Shop POS', 30000, 'Full retail POS: sales, credit, held sales, payments, returns, inventory, stock, suppliers, staff, expenses, finances, customers, reports and settings.', 'fa-cash-register'],
-            self::RESTAURANT_POS => ['Restaurant POS', 30000, 'Restaurant POS: tables, menu, kitchen orders and bills. (In development.)', 'fa-utensils'],
+            self::RESTAURANT_POS => ['Restaurant POS', 30000, 'Restaurant & bar POS: store stock, stock moved to the kitchen and to the counter or bar, menu with recipes, table and takeaway orders, bills and payments, online menu and deliveries, and several restaurants or bars each with its own prices. (Pro.)', 'fa-utensils'],
             self::RESTAURANT_ROOMS => ['Restaurant + Rooms', 40000, 'Everything in the Restaurant POS, plus Rooms & Accommodation (rooms, guest bookings, invoices, check-out with late fees, receipts) and table bookings with pre-set group menus and family platters.', 'fa-hotel'],
             self::SERVICES => ['Services', 30000, 'Everything in the Shop POS, plus for service businesses: a price list of services, walk-in clients and bookings, assigning staff, invoices and receipts, and staff commissions.', 'fa-user-gear'],
             self::ELECTRONICS => ['Electronics', 30000, 'Everything in the Shop POS, plus for phone & electronics shops: serial number / IMEI for every unit, warranties that start at sale, and warranty / repair returns.', 'fa-mobile-screen'],

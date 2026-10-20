@@ -96,7 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'description'         => trim($_POST['description'] ?? ''),
         'quantity'            => $_POST['quantity'] ?? '',
         'unit'                => $_POST['unit'] ?? 'piece',
-        'buying_price'        => $_POST['buying_price'] ?? '',
+        // Staff never see or change the cost price — it stays as the owner set it.
+        'buying_price'        => PageGuard::seesMoney() ? ($_POST['buying_price'] ?? '') : ($editRow['buying_price'] ?? ''),
         'wholesale_price'     => $_POST['wholesale_price'] ?? '',
         'retail_price'        => $_POST['retail_price'] ?? '',
         'offer_price'         => $_POST['offer_price'] ?? '',
@@ -287,18 +288,21 @@ $actionBadge = function (string $a): string {
             </div>
           </div>
 
+          <?php $__money = PageGuard::seesMoney(); $__pc = $__money ? 'col-4' : 'col-6'; ?>
           <div class="row g-2">
+            <?php if ($__money): // cost price: owners/admins only ?>
             <div class="col-4 mb-3">
               <label class="form-label">Unit price — cost (KES) <span class="text-muted small">(optional)</span></label>
               <input name="buying_price" id="buyP" type="number" step="0.01" min="0" class="form-control" value="<?php echo htmlspecialchars($val('buying_price')); ?>" placeholder="0">
               <?php if (!empty($errors['buying_price'])): ?><small class="text-danger"><?php echo htmlspecialchars($errors['buying_price']); ?></small><?php endif; ?>
             </div>
-            <div class="col-4 mb-3">
+            <?php endif; ?>
+            <div class="<?php echo $__pc; ?> mb-3">
               <label class="form-label">Wholesale (KES) <span class="text-muted small">(optional)</span></label>
               <input name="wholesale_price" id="wholeP" type="number" step="0.01" min="0" class="form-control" value="<?php $wv = $val('wholesale_price'); echo htmlspecialchars((float) $wv > 0 ? $wv : ''); ?>" placeholder="Optional">
               <?php if (!empty($errors['wholesale_price'])): ?><small class="text-danger"><?php echo htmlspecialchars($errors['wholesale_price']); ?></small><?php endif; ?>
             </div>
-            <div class="col-4 mb-3">
+            <div class="<?php echo $__pc; ?> mb-3">
               <label class="form-label">Retail (KES) <span class="text-muted small">(optional)</span></label>
               <input name="retail_price" id="retailP" type="number" step="0.01" min="0" class="form-control" value="<?php $rv = $val('retail_price'); echo htmlspecialchars((float) $rv > 0 ? $rv : ''); ?>" placeholder="Optional">
               <?php if (!empty($errors['retail_price'])): ?><small class="text-danger"><?php echo htmlspecialchars($errors['retail_price']); ?></small><?php endif; ?>
@@ -330,8 +334,10 @@ $actionBadge = function (string $a): string {
             <small class="text-muted d-block mt-1">Leave the offer price empty to end/clear the offer. The price reverts on its own once "Ends" passes.</small>
           </div>
 
+          <?php if ($__money): // stock value and profit: owners/admins only ?>
           <div id="stockValueBox" class="alert alert-light border py-2 small mb-2" style="display:none;"></div>
           <div id="profitBox" class="alert alert-secondary py-2 small mb-3" style="display:none;"></div>
+          <?php endif; ?>
 
           <div class="mb-3">
             <label class="form-label">Restock alert when stock reaches</label>
@@ -460,6 +466,7 @@ $actionBadge = function (string $a): string {
       retailP = document.getElementById('retailP'), qtyP = document.getElementById('qtyP'),
       box = document.getElementById('profitBox'), stockBox = document.getElementById('stockValueBox');
   function calcProfit() {
+    if (!buyP || !box) return; // staff: no cost, no profit readout
     var b = parseFloat(buyP.value), w = parseFloat(wholeP.value), r = parseFloat(retailP.value), q = parseFloat(qtyP.value) || 0;
     if (isNaN(b)) { box.style.display = 'none'; stockBox.style.display = 'none'; return; }
     if (!isNaN(q) && q >= 0) {

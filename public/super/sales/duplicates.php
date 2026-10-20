@@ -7,7 +7,7 @@
 // returns the stock and takes the money out of sales and profit reports
 // (SaleModel / OrderModel::reverseDuplicate).
 require_once __DIR__ . '/../../../app/app.php';
-PageGuard::capability(Capabilities::SALES_VIEW);
+PageGuard::money(); // shop-wide sales and totals: owners/admins only
 if (TenantContext::role() !== 'tenant_owner') {
     header('Location: ' . public_url('super/sales/'));
     exit;

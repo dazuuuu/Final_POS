@@ -140,9 +140,8 @@ $rows = [];
 foreach ($accounts as $a) {
     $id = (int) $a['id'];
     $pk = [];
-    $monthly = 0;
     foreach (Features::forAccount($id) as $k => $on) {
-        if ($on) { $pk[] = $catalog[$k][0]; $monthly += $catalog[$k][1]; }
+        if ($on) { $pk[] = $catalog[$k][0]; }
     }
     $lic = License::state($id);
     $licLabel = !$a['owner_user_id'] ? 'Awaiting signup' : ($lic['status'] === 'locked' ? 'Locked'
@@ -150,7 +149,7 @@ foreach ($accounts as $a) {
     $rows[] = [
         'id' => $id, 'name' => $a['name'], 'owner' => $a['owner_username'] ?? '', 'email' => $a['owner_email'] ?? '',
         'phone' => $a['phone'] ?? '', 'shops' => 1 + (int) $a['branch_count'], 'packages' => implode(', ', $pk),
-        'monthly' => $monthly, 'license' => $licLabel, 'lic' => $lic['status'], 'status' => $a['status'],
+        'license' => $licLabel, 'lic' => $lic['status'], 'status' => $a['status'],
         'created' => date('Y-m-d', strtotime($a['created_at'])),
     ];
 }
@@ -165,7 +164,7 @@ $sheets = [
 $cols = [ // key => [header, align, width]
     'name' => ['Business', 'l', 190], 'owner' => ['Owner', 'l', 120], 'email' => ['Email', 'l', 210],
     'phone' => ['Phone', 'l', 120], 'shops' => ['Shops', 'r', 70], 'packages' => ['Packages', 'l', 220],
-    'monthly' => ['Licensed (KES)', 'r', 120], 'license' => ['Activation', 'l', 120],
+    'license' => ['Activation', 'l', 120],
     'status' => ['Status', 'l', 100], 'created' => ['Created', 'r', 105],
 ];
 
@@ -258,14 +257,13 @@ ob_start();
           <td><?php echo htmlspecialchars($r['phone']); ?></td>
           <td class="r"><?php echo $r['shops']; ?></td>
           <td><?php echo htmlspecialchars($r['packages'] ?: '—'); ?></td>
-          <td class="r" data-v="<?php echo $r['monthly']; ?>"><?php echo number_format($r['monthly']); ?></td>
           <td><span class="pill <?php echo $lp; ?>"><?php echo $r['license']; ?></span></td>
           <td><span class="pill <?php echo $sp; ?>"><?php echo ucfirst($r['status']); ?></span></td>
           <td class="r"><?php echo $r['created']; ?></td>
         </tr>
       <?php endforeach; ?>
       </tbody>
-      <tfoot><tr><td class="rn">Σ</td><td id="xlCount"></td><td></td><td></td><td></td><td class="r" id="xlShops"></td><td></td><td class="r" id="xlSum"></td><td></td><td></td><td></td></tr></tfoot>
+      <tfoot><tr><td class="rn">Σ</td><td id="xlCount"></td><td></td><td></td><td></td><td class="r" id="xlShops"></td><td></td><td></td><td></td><td></td></tr></tfoot>
     </table>
     <?php endif; ?>
   </div>
@@ -274,7 +272,7 @@ ob_start();
       <button class="xl-tab <?php echo $k === 'all' ? 'on' : ''; ?>" type="button" data-sheet="<?php echo $k; ?>"><?php echo $label; ?><b><?php echo $n; ?></b></button>
     <?php endforeach; ?>
   </div>
-  <div class="xl-status"><span id="xlStatCount"></span><span id="xlStatSum"></span><span class="hint">Double-tap a row to manage</span></div>
+  <div class="xl-status"><span id="xlStatCount"></span><span class="hint">Double-tap a row to manage</span></div>
 </div>
 
 <div class="modal fade sheet" id="newAccount" tabindex="-1" aria-hidden="true">
@@ -306,7 +304,7 @@ ob_start();
             <div class="col-6"><label class="pkg-chip">
               <input type="checkbox" name="packages[]" value="<?php echo $k; ?>" <?php echo $k === Features::SHOP_POS ? 'checked' : ''; ?>>
               <span class="ic"><i class="fas <?php echo $icon; ?>"></i></span>
-              <span><strong class="d-block small"><?php echo $label; ?></strong><small class="text-muted">KES <?php echo number_format($price); ?></small></span>
+              <span><strong class="d-block small"><?php echo $label; ?></strong></span>
             </label></div>
           <?php endforeach; ?>
           </div>
@@ -328,7 +326,7 @@ ob_start();
             <div class="col-6"><label class="pkg-chip">
               <input type="checkbox" name="packages[]" value="<?php echo $k; ?>" <?php echo $k === Features::SHOP_POS ? 'checked' : ''; ?>>
               <span class="ic"><i class="fas <?php echo $icon; ?>"></i></span>
-              <span><strong class="d-block small"><?php echo $label; ?></strong><small class="text-muted">KES <?php echo number_format($price); ?></small></span>
+              <span><strong class="d-block small"><?php echo $label; ?></strong></span>
             </label></div>
           <?php endforeach; ?>
           </div>
@@ -349,7 +347,7 @@ ob_start();
                 <div class="col-6"><label class="pkg-chip">
                   <input type="checkbox" name="packages[]" value="<?php echo $k; ?>" <?php echo in_array($k, $in['packages'], true) ? 'checked' : ''; ?>>
                   <span class="ic"><i class="fas <?php echo $icon; ?>"></i></span>
-                  <span><strong class="d-block small"><?php echo $label; ?></strong><small class="text-muted">KES <?php echo number_format($price); ?></small></span>
+                  <span><strong class="d-block small"><?php echo $label; ?></strong></span>
                 </label></div>
               <?php endforeach; ?>
               </div>
@@ -378,20 +376,18 @@ ob_start();
   function fmt(n) { return n.toLocaleString('en-KE'); }
   function apply() {
     var q = find.value === lastFx ? '' : find.value.toLowerCase();
-    var n = 0, shops = 0, sum = 0;
+    var n = 0, shops = 0;
     rows().forEach(function (r) {
       var inSheet = sheet === 'all' || (sheet === 'active' && r.dataset.status === 'active') || (sheet === 'grace' && r.dataset.lic === 'grace')
         || (sheet === 'locked' && r.dataset.lic === 'locked') || (sheet === 'stopped' && r.dataset.status !== 'active');
       var show = inSheet && (!q || r.textContent.toLowerCase().indexOf(q) !== -1);
       r.style.display = show ? '' : 'none';
-      if (show) { n++; shops += +r.cells[5].textContent; sum += +r.cells[7].dataset.v; }
+      if (show) { n++; shops += +r.cells[5].textContent; }
     });
     if (!t) return;
     document.getElementById('xlCount').textContent = 'COUNT ' + n;
     document.getElementById('xlShops').textContent = shops;
-    document.getElementById('xlSum').textContent = fmt(sum);
     document.getElementById('xlStatCount').textContent = 'Count: ' + n;
-    document.getElementById('xlStatSum').textContent = 'Sum: KES ' + fmt(sum);
   }
   find.addEventListener('input', function () { lastFx = ''; apply(); });
   document.querySelectorAll('.xl-tab').forEach(function (b) {

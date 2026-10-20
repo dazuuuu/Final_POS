@@ -44,8 +44,15 @@ if ($isStaffViewer) {
     $rows = array_values(array_filter($rows, fn($e) => (int) $e['created_by'] === (int) TenantContext::userId()));
 }
 $tid = (int) TenantContext::tenantId();
-$todayTotal = $F->expenseTotal($tid, $to, $to);
-$monthTotal = $F->expenseTotal($tid, date('Y-m-01'), $to);
+if (PageGuard::seesMoney()) {
+    $todayTotal = $F->expenseTotal($tid, $to, $to);
+    $monthTotal = $F->expenseTotal($tid, date('Y-m-01'), $to);
+} else { // staff: only what they recorded — never the shop's spending
+    $mine = array_values(array_filter($F->expensesBetween(date('Y-m-01'), $to), fn($e) => (int) $e['created_by'] === (int) TenantContext::userId()));
+    $sumOf = fn(array $rs) => array_sum(array_map(fn($e) => (float) ($e['amount'] ?? 0), $rs));
+    $todayTotal = $sumOf(array_filter($mine, fn($e) => substr((string) ($e['expense_date'] ?? $e['created_at'] ?? ''), 0, 10) === $to));
+    $monthTotal = $sumOf($mine);
+}
 $__tenant = (new Models\TenantModel($pdo))->find($tid);
 $currency = $__tenant['currency'] ?? 'KES';
 $money = fn($n) => htmlspecialchars($currency) . ' ' . number_format((float) $n, 0);

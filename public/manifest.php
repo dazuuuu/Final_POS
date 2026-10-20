@@ -5,7 +5,7 @@ require_once __DIR__ . '/../app/app.php';
 
 $slug = (string) ($_GET['s'] ?? ($_SESSION['shop_slug'] ?? ''));
 $acct = $slug !== '' ? Signup::findBySlug($slug) : null;
-$start = $acct ? parse_url(Signup::shopUrl($acct['slug']), PHP_URL_PATH) : public_url('');
+$start = $acct ? parse_url(Signup::shopUrl($acct['slug']), PHP_URL_PATH) : public_url('terminal/');
 $name = $acct['name'] ?? 'Dazu Modern POS';
 header('Content-Type: application/manifest+json; charset=utf-8');
 echo json_encode([

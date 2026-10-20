@@ -157,7 +157,7 @@ ob_start();
         <?php else: ?>
         <div class="table-responsive">
           <table class="table align-middle mb-0">
-            <thead><tr class="text-muted small text-uppercase"><th></th><th>Item</th><th>In store</th><th>Supplier</th><th>Bought for</th><th>Receive more</th><th></th></tr></thead>
+            <thead><tr class="text-muted small text-uppercase"><th></th><th>Item</th><th>In store</th><th>Supplier</th><?php if (PageGuard::seesMoney()): ?><th>Bought for</th><?php endif; ?><th>Receive more</th><th></th></tr></thead>
             <tbody>
             <?php foreach ($stock as $s): $img = settings_asset_url($s['image_path']); ?>
               <tr>
@@ -169,7 +169,7 @@ ob_start();
                 <td><span class="badge <?php echo (float) $s['quantity'] > 0 ? 'bg-success' : 'bg-secondary'; ?>"><?php echo rest_qty((float) $s['quantity']) . ' ' . htmlspecialchars($s['unit']); ?></span>
                   <?php if ((float) $s['pieces_per_unit'] > 0): ?><div class="small text-muted">= <?php echo rest_qty((float) $s['quantity'] * (float) $s['pieces_per_unit']); ?> pcs (<?php echo rest_qty((float) $s['pieces_per_unit']); ?> each)</div><?php endif; ?></td>
                 <td class="text-muted small"><?php echo htmlspecialchars($s['supplier_name'] ?? '—'); ?></td>
-                <td><?php echo rest_price($s['cost_price'] === null ? null : (float) $s['cost_price'], $currency); ?></td>
+                <?php if (PageGuard::seesMoney()): ?><td><?php echo rest_price($s['cost_price'] === null ? null : (float) $s['cost_price'], $currency); ?></td><?php endif; ?>
                 <td>
                   <form method="post" class="d-flex gap-1" style="min-width:170px;">
                     <?php echo csrf_field(); ?><input type="hidden" name="action" value="restock"><input type="hidden" name="id" value="<?php echo (int) $s['id']; ?>">

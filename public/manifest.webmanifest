@@ -3,7 +3,7 @@
   "short_name": "Dazu POS",
   "description": "Dazu Modern POS - sell, track stock, credit sales and print receipts.",
   "id": "./",
-  "start_url": "./",
+  "start_url": "./terminal/",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",

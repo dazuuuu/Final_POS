@@ -124,7 +124,7 @@ ob_start();
         <?php else: ?>
         <div class="table-responsive">
           <table class="table align-middle mb-0">
-            <thead><tr class="text-muted small text-uppercase"><th>Name</th><th>In stock</th><th>Bought for</th><th>Charge</th><th class="text-center">Dishes</th><th></th></tr></thead>
+            <thead><tr class="text-muted small text-uppercase"><th>Name</th><th>In stock</th><?php if (PageGuard::seesMoney()): ?><th>Bought for</th><?php endif; ?><th>Charge</th><th class="text-center">Dishes</th><th></th></tr></thead>
             <tbody>
             <?php foreach ($ingredients as $i): ?>
               <tr>
@@ -133,7 +133,7 @@ ob_start();
                   <span class="badge <?php echo (float) $i['quantity'] > 0 ? 'bg-success' : 'bg-danger'; ?>"><?php echo rest_qty((float) $i['quantity']) . ' ' . htmlspecialchars(REST_UNITS[$i['unit']] ?? $i['unit']); ?></span>
                   <?php if ((float) $i['pieces_per_unit'] > 0): ?><div class="small text-muted">≈ <?php echo rest_qty(round((float) $i['quantity'] * (float) $i['pieces_per_unit'], 1)); ?> pcs (<?php echo rest_qty((float) $i['pieces_per_unit']); ?>/<?php echo $i['unit']; ?>)</div><?php endif; ?>
                 </td>
-                <td><?php echo rest_price($i['cost_price'] === null ? null : (float) $i['cost_price'], $currency); ?></td>
+                <?php if (PageGuard::seesMoney()): ?><td><?php echo rest_price($i['cost_price'] === null ? null : (float) $i['cost_price'], $currency); ?></td><?php endif; ?>
                 <td><?php echo rest_price($i['charge_price'] === null ? null : (float) $i['charge_price'], $currency); ?><?php if ($i['charge_price'] !== null): ?><small class="text-muted">/<?php echo $i['unit']; ?></small><?php endif; ?></td>
                 <td class="text-center"><span class="badge bg-light text-dark"><?php echo (int) $i['dish_count']; ?></span></td>
                 <td class="text-end text-nowrap">

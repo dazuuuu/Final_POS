@@ -63,6 +63,10 @@ class Branding
         return [
             'name' => ($cfg['name'] ?? '') !== '' ? $cfg['name'] : 'Dazu Modern POS',
             'logo' => !empty($cfg['logo']) ? public_url(self::normalizeStoredPath($cfg['logo'])) : self::loginLogo(),
+            // Sales contacts for the landing page ("Talk to us", quote emails). Set in Support → Settings.
+            'phone' => (string) ($cfg['phone'] ?? ''),
+            'whatsapp' => (string) ($cfg['whatsapp'] ?? ''),
+            'email' => (string) ($cfg['email'] ?? ''),
         ];
     }
 

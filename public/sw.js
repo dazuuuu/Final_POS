@@ -1,7 +1,7 @@
 /* Dazu Modern POS service worker — makes the app installable + fast.
    Pages are always network-first (so live data + auth stay correct);
    only static assets and the login shell are cached. */
-const CACHE = 'dazu-pos-v5';
+const CACHE = 'dazu-pos-v6';
 // Derived from this script's own URL, not hard-coded — works whatever
 // folder the app is deployed under.
 const BASE  = new URL('.', self.location).pathname.replace(/\/$/, '');
@@ -51,6 +51,11 @@ self.addEventListener('fetch', (event) => {
       .then((response) => {
         if (!response || !response.ok) {
           throw new Error('Bad response');
+        }
+        // Never keep a page (HTML) — only files and data. A stored page could
+        // come back later in place of the login screen.
+        if ((response.headers.get('Content-Type') || '').indexOf('text/html') !== -1) {
+          return response;
         }
         const copy = response.clone();
         caches.open(CACHE).then((cache) => cache.put(request, copy));

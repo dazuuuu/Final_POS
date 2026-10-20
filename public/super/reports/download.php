@@ -1,7 +1,7 @@
 <?php
 // public/super/reports/download.php?date=YYYY-MM-DD — streams the daily report PDF
 require_once __DIR__ . '/../../../app/app.php';
-PageGuard::auth();
+PageGuard::money(); // owners/admins only — staff never see finances, profit or day totals
 
 $date = preg_replace('/[^0-9-]/', '', $_GET['date'] ?? '') ?: date('Y-m-d');
 $type = $_GET['type'] ?? 'general';

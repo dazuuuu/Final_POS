@@ -40,6 +40,7 @@ if (support_posted()) {
         $brand = is_file($pfile) ? (include $pfile) : [];
         $brand = is_array($brand) ? $brand : [];
         $brand['name'] = trim($_POST['brand_name'] ?? '') ?: 'Dazu Modern POS';
+        foreach (['phone', 'whatsapp', 'email'] as $c) { $brand[$c] = trim((string) ($_POST['brand_' . $c] ?? '')); }
         $err = '';
         $up = $_FILES['brand_logo'] ?? null;
         if ($up && ($up['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
@@ -123,6 +124,12 @@ ob_start();
         <div class="d-flex align-items-center gap-2 mb-2">
           <img src="<?php echo $h($brand['logo']); ?>" alt="" style="width:48px;height:48px;object-fit:contain;border-radius:10px;background:#f3f4f7">
           <input class="form-control form-control-sm" name="brand_name" value="<?php echo $h($brand['name']); ?>" placeholder="Platform name">
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-md-4"><label class="form-label small mb-0">Sales phone</label><input class="form-control form-control-sm" name="brand_phone" value="<?php echo $h($brand['phone']); ?>" placeholder="0712 345 678"></div>
+          <div class="col-md-4"><label class="form-label small mb-0">WhatsApp</label><input class="form-control form-control-sm" name="brand_whatsapp" value="<?php echo $h($brand['whatsapp']); ?>" placeholder="254712345678"></div>
+          <div class="col-md-4"><label class="form-label small mb-0">Sales email</label><input class="form-control form-control-sm" type="email" name="brand_email" value="<?php echo $h($brand['email']); ?>" placeholder="sales@…"></div>
+          <div class="col-12 form-text mt-0">Shown on the landing page ("Talk to us"); quote requests are emailed to the sales email (else the support login email).</div>
         </div>
         <input class="form-control form-control-sm mb-2" type="file" name="brand_logo" accept="image/png,image/jpeg,image/webp,image/svg+xml">
         <label class="form-check small mb-2"><input class="form-check-input" type="checkbox" name="brand_reset" value="1"><span class="form-check-label">Use the default logo</span></label>

@@ -71,6 +71,7 @@ if ($posted) {
                 $user = (new AuthService(Database::pdo()))->findByEmail($in['email']);
                 session_regenerate_id(true);
                 TenantContext::establish(Database::pdo(), $user);
+                SingleSession::claim(Database::pdo(), $user);
                 $_SESSION['username']     = $user['username'];
                 $_SESSION['logged_in']    = true;
                 $_SESSION['otp_verified'] = true;

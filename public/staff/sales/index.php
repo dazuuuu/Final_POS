@@ -113,26 +113,9 @@ $periodLabel = $period === 'date' && $selectedDate !== null
 $page_title = 'My sales';
 ob_start();
 ?>
+<?php // No takings or sales counts here: the day's figures are for the owner/manager only. ?>
 <div class="row g-3 mb-4">
-  <div class="col-6 col-md-3">
-    <div class="card border-0 shadow-sm" style="border-radius:14px;">
-      <div class="card-body p-3">
-        <div class="text-muted small text-uppercase fw-semibold">Today</div>
-        <div class="h5 mb-0 mt-1 fw-bold">KES <?php echo number_format($todaySum['revenue'], 0); ?></div>
-        <div class="text-muted small"><?php echo $todaySum['count']; ?> sale<?php echo $todaySum['count'] !== 1 ? 's' : ''; ?></div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card border-0 shadow-sm" style="border-radius:14px;">
-      <div class="card-body p-3">
-        <div class="text-muted small text-uppercase fw-semibold"><?php echo $period === 'today' ? 'Shown' : htmlspecialchars($periodLabel); ?></div>
-        <div class="h5 mb-0 mt-1 fw-bold">KES <?php echo number_format($sum['revenue'], 0); ?></div>
-        <div class="text-muted small"><?php echo $sum['count']; ?> sale<?php echo $sum['count'] !== 1 ? 's' : ''; ?></div>
-      </div>
-    </div>
-  </div>
-  <div class="col-12 col-md-6 d-flex align-items-center gap-2 flex-wrap">
+  <div class="col-12 d-flex align-items-center gap-2 flex-wrap">
     <a href="<?php echo public_url('staff/dashboard/'); ?>" class="btn btn-primary"><i class="fas fa-cash-register me-1"></i>Home</a>
     <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#shareCatalogueModal">
       <i class="fas fa-share-nodes me-1"></i>Share Catalogue
@@ -145,7 +128,6 @@ ob_start();
     <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
       <h2 class="h6 fw-bold mb-0">
         <?php echo htmlspecialchars($periodLabel); ?>
-        <span class="badge bg-light text-dark ms-1"><?php echo count($sales); ?></span>
       </h2>
       <div class="d-flex align-items-center gap-2 flex-wrap">
         <form method="get" class="d-flex align-items-center gap-2">

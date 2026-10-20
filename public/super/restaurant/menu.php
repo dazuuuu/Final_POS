@@ -143,7 +143,7 @@ if ($dishes) {
 $ingJs = array_map(fn($i) => [
     'id' => (int) $i['id'], 'name' => $i['name'], 'unit' => $i['unit'], 'ppu' => (float) $i['pieces_per_unit'],
     'stock' => (float) $i['quantity'], 'charge' => $i['charge_price'] === null ? null : (float) $i['charge_price'],
-    'ucost' => rest_ingredient_unit_cost($i),
+    'ucost' => PageGuard::seesMoney() ? rest_ingredient_unit_cost($i) : null, // staff never see costs
     'measures' => rest_measures($i),
 ], $ingredients);
 
@@ -151,7 +151,7 @@ $dishCost = rest_dish_costs($pdo, $tid);
 /** "Cost 120 · Profit 230 (66%)" for a dish card, or '' when no recipe cost is known. */
 $costLine = function (array $d) use ($dishCost, $currency): string {
     $c = $dishCost[(int) $d['id']] ?? null;
-    if (!$c || ($c['cost'] <= 0 && $c['missing'])) return '';
+    if (!PageGuard::seesMoney() || !$c || ($c['cost'] <= 0 && $c['missing'])) return '';
     $profit = (float) $d['price'] - $c['cost'];
     $pct = (float) $d['price'] > 0 ? round($profit / (float) $d['price'] * 100) : 0;
     return '<div class="small text-muted" title="' . ($c['missing'] ? 'No cost yet for: ' . htmlspecialchars(implode(', ', $c['missing'])) : 'From the recipe') . '">Cost '
@@ -214,7 +214,7 @@ ob_start();
             <div class="input-group"><span class="input-group-text"><?php echo $currency; ?></span>
               <input name="price" id="priceIn" type="number" step="0.01" min="0" class="form-control" value="<?php echo htmlspecialchars((string) $old['price']); ?>" required></div>
             <div class="form-text" id="suggest"></div>
-            <div class="small mt-1" id="recipeCost"></div>
+            <div class="small mt-1" id="recipeCost" <?php echo PageGuard::seesMoney() ? '' : 'hidden'; ?>></div>
           </div>
           <div>
             <button class="btn btn-primary"><?php echo $editId ? 'Save dish' : 'Add to menu'; ?></button>

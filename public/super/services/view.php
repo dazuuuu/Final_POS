@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         if ($res['ok']) {
             $_SESSION['flash']['success'] = 'Paid — ' . svc_money($res['total']) . ($res['change'] > 0 ? '. Change: ' . svc_money($res['change']) : '') . '.';
-            header('Location: ' . public_url('super/services/receipt.php?id=' . $id));
+            header('Location: ' . public_url('super/services/receipt.php?id=' . $id . '&new=1')); // new=1: print right away
             exit;
         }
     }
