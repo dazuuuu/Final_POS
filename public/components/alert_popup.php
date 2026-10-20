@@ -3,7 +3,9 @@
 // owner hasn't closed yet (Alerts), on any owner page. Text by default; a poster
 // image (if support added one) fills the left half. A vote / feedback alert
 // marked "required" can't be closed until they vote / answer.
-if (TenantContext::role() !== 'tenant_owner' || !empty($_SESSION['support_preview']) || !empty($_SESSION['demo']) || !class_exists('Alerts')) return;
+// Support previews see it exactly like the owner, but nothing is saved for the owner (see Alerts::pending / respond.php).
+if (TenantContext::role() !== 'tenant_owner' || !empty($_SESSION['demo']) || !class_exists('Alerts')) return;
+$__preview = !empty($_SESSION['support_preview']);
 try {
     $__acct = Features::accountId((int) TenantContext::tenantId());
     $__al = Alerts::pending($__acct, (int) TenantContext::userId());
@@ -11,7 +13,7 @@ try {
     return;
 }
 if (!$__al) return;
-Alerts::seen((int) $__al['id'], $__acct, (int) TenantContext::userId());
+if (!$__preview) Alerts::seen((int) $__al['id'], $__acct, (int) TenantContext::userId());
 require_once ROOT_PATH . '/app/helpers/uploads.php';
 $__img = Alerts::image($__al['image_path']);
 $__must = (int) $__al['required'] === 1 && $__al['kind'] !== 'notice';
@@ -57,6 +59,7 @@ $__back = (string) ($_SERVER['REQUEST_URI'] ?? '');
           <button class="dz-al-x" aria-label="Close">&#x2715;</button>
         </form>
       <?php endif; ?>
+      <?php if ($__preview): ?><span class="dz-al-tag" style="color:#7c3aed">Support preview — answers here are not saved</span><?php endif; ?>
       <span class="dz-al-tag"><?php echo $__al['target_account'] ? 'For you' : 'News'; ?> · <?php echo date('j M Y', strtotime($__al['created_at'])); ?></span>
       <h2 id="dzAlTitle"><?php echo $__e($__al['title']); ?></h2>
       <p><?php echo $__e($__al['body']); ?></p>

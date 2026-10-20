@@ -45,6 +45,7 @@ if (!$user) {
 }
 
 session_regenerate_id(true);
+unset($_SESSION['preview_alerts_closed']); // each preview starts fresh: pending alerts pop up again
 TenantContext::establish($pdo, $user);
 $slug = $pdo->prepare('SELECT slug FROM tenants WHERE id = ?');
 $slug->execute([$id]);

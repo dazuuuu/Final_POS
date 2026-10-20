@@ -6,6 +6,19 @@ require_once APP_ROOT . '/helpers/uploads.php';
 $back = (string) ($_POST['back'] ?? '');
 if ($back === '' || $back[0] !== '/' || str_starts_with($back, '//')) $back = public_url('super/dashboard/'); // same-site only
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify($_POST['csrf_token'] ?? null)) {
+    if (!empty($_SESSION['support_preview'])) {
+        // Support preview: check it the same way, but only remember it for this preview.
+        $a = Alerts::find((int) ($_POST['id'] ?? 0));
+        $answered = trim((string) ($_POST['choice'] ?? '')) !== '' || trim((string) ($_POST['feedback'] ?? '')) !== '';
+        if ($a && (int) $a['required'] === 1 && $a['kind'] !== 'notice' && !$answered) {
+            $_SESSION['alert_error'] = $a['kind'] === 'poll' ? 'Please vote to continue.' : 'Please leave your feedback to continue.';
+        } elseif ($a) {
+            $_SESSION['preview_alerts_closed'][] = (int) $a['id'];
+            $_SESSION['flash']['success'] = 'Preview: the alert closed as it would for the owner — nothing was saved.';
+        }
+        header('Location: ' . $back);
+        exit;
+    }
     $err = Alerts::respond((int) ($_POST['id'] ?? 0), Features::accountId((int) TenantContext::tenantId()), (int) TenantContext::userId(), $_POST);
     if ($err) $_SESSION['alert_error'] = $err;
     elseif (!empty($_POST['choice']) || !empty($_POST['feedback'])) $_SESSION['flash']['success'] = 'Thank you — your answer was sent to support.';

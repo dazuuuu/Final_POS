@@ -138,11 +138,16 @@ class Alerts
         return array_map(function ($a) { $a['option_list'] = $a['options'] ? (json_decode($a['options'], true) ?: []) : []; return $a; }, $st->fetchAll(PDO::FETCH_ASSOC));
     }
 
-    /** The oldest alert this user hasn't closed yet (the one to pop up), or null. */
+    /**
+     * The oldest alert this user hasn't closed yet (the one to pop up), or null.
+     * In a support preview, alerts closed during the preview (kept in the
+     * session only) are skipped too — the owner's own answers are untouched.
+     */
     public static function pending(int $account, int $userId): ?array
     {
+        $previewClosed = !empty($_SESSION['support_preview']) ? ($_SESSION['preview_alerts_closed'] ?? []) : [];
         foreach (array_reverse(self::forAccount($account, $userId)) as $a) {
-            if (empty($a['closed_at'])) return $a;
+            if (empty($a['closed_at']) && !in_array((int) $a['id'], $previewClosed, true)) return $a;
         }
         return null;
     }
