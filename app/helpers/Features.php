@@ -77,6 +77,9 @@ class Features
         '/super/dashboard/', '/staff/dashboard/', '/super/profile/',
         '/staff/reset-password.php', '/staff/change-pin.php',
         '/super/guide/', '/staff/guide/', '/super/help/', '/super/settings/menu.php',
+        '/super/locked.php', // shown while support has locked the account
+        '/super/alerts/',    // news & alerts from support
+        '/super/api/', // Website API add-on: its own switch (ShopApi), any package
     ];
 
     /**

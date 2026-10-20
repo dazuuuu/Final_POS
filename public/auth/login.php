@@ -35,12 +35,14 @@ if (($_GET['reset'] ?? '') === '1') {
     $notice = 'Your password has been set. Please sign in with your new password.';
 } elseif (($_GET['denied'] ?? '') === '1') {
     $error = 'You don\'t have access to that page. Please sign in with the right account.';
+} elseif (($_GET['imported'] ?? '') === '1') {
+    $notice = 'Your shop has been imported. Sign in with the email and password you used on your old POS.';
 } elseif (($_GET['elsewhere'] ?? '') === '1') {
     $error = 'You were signed out because your account was signed in on another device.';
 } elseif (($_GET['locked'] ?? '') === '1') {
     $error = 'Your account needs attention before you can sign in.';
 }
-$email = '';
+$email = (string) ($_GET['email'] ?? '');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email    = trim($_POST['email'] ?? '');

@@ -126,6 +126,9 @@ Demo::enforce();
 // Online / offline and sign-in history for the support console.
 UserSessions::touch();
 
+// Accounts locked by support: only the pages support left open.
+AccountLock::gate();
+
 // Per-shop addresses (domain/<slug>/super/…): validate the shop and keep
 // signed-in users on their own shop's address.
 ShopUrl::enforce();

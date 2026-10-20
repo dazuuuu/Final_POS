@@ -34,8 +34,8 @@ if (class_exists('ShopUrl', false) && ShopUrl::requestSlug() !== null
 
         .auth-card{width:400px;max-width:100%;background:#fff;border:1px solid #e4e4e7;border-radius:12px;overflow:hidden;}
         .auth-head{padding:32px 32px 0;text-align:center}
-        .logo-icon{width:52px;height:52px;border-radius:10px;overflow:hidden;background:#fff;
-                   border:1px solid #e4e4e7;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px}
+        .logo-icon{width:56px;height:56px;border-radius:10px;overflow:hidden;background:transparent;
+                   border:0;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px}
         .logo-icon img{width:100%;height:100%;object-fit:contain}
         .logo-icon i{color:var(--pos-green);font-size:22px}
         .logo-name{font-size:1.05rem;font-weight:600;color:var(--pos-ink);letter-spacing:-.02em;display:block}

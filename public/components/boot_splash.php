@@ -16,7 +16,7 @@ if (empty($__boot['boot_on'])) {
 }
 ?>
 <div id="dzBoot" aria-hidden="true" style="position:fixed;inset:0;z-index:99999;background:#fff;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;transition:opacity .28s ease">
-  <img src="<?php echo htmlspecialchars($__boot['logo']); ?>" alt="" style="width:64px;height:64px;object-fit:contain;border-radius:14px;border:1px solid #e4e4e7;padding:6px;background:#fff">
+  <img src="<?php echo htmlspecialchars($__boot['logo']); ?>" alt="" style="width:64px;height:64px;object-fit:contain">
   <div style="font:600 15px/1.2 -apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:#09090b;letter-spacing:-.01em"><?php echo htmlspecialchars($__boot['name']); ?></div>
   <div style="width:140px;height:3px;border-radius:3px;background:#f4f4f5;overflow:hidden"><i id="dzBootBar" style="display:block;height:100%;width:0;background:#09090b;border-radius:3px;transition:width .9s cubic-bezier(.4,0,.2,1)"></i></div>
 </div>

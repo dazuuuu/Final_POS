@@ -23,6 +23,28 @@
 class PosMenu
 {
     /** @return array<int, array{key:string,label:string,icon:string,links:array<int,array{0:string,1:string,2:string,3?:?string}>}> */
+    /** "2 new" when support alerts are waiting for this owner. */
+    private static function newAlerts(): ?string
+    {
+        try {
+            $n = class_exists('Alerts') ? Alerts::unreadCount(Features::accountId((int) TenantContext::tenantId()), (int) TenantContext::userId()) : 0;
+            return $n ? $n . ' new' : null;
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+
+    /** Is the Website API add-on switched on for this account? */
+    private static function apiOn(): bool
+    {
+        try {
+            $tid = TenantContext::tenantId();
+            return $tid !== null && class_exists('ShopApi') && ShopApi::enabled(Features::accountId((int) $tid));
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
     public static function groups(bool $arranged = true): array
     {
         $staff = TenantContext::role() === 'staff';
@@ -128,6 +150,7 @@ class PosMenu
             ['Admins', 'fa-user-shield', 'super/admins/', $shop && $primary, $pro],
             ['Updates', 'fa-download', 'super/updates/', $shop && $main, $updates ? $updates . ' new' : null],
             ['Cleanup', 'fa-broom', 'super/cleanup/', $shop && $primary],
+            ['Website API', 'fa-plug', 'super/api/', $owner, $owner && !self::apiOn() ? 'Premium' : null],
             ['Printer setup', 'fa-print', 'staff/printer/', $staff && $common],
             ['Change PIN', 'fa-key', 'staff/change-pin.php', $staff],
         ]];
@@ -143,6 +166,7 @@ class PosMenu
         $replies = self::ticketReplies();
         $g[] = ['help', 'Help', 'fa-life-ring', [
             ['Help centre', 'fa-circle-question', "$a/guide/", true],
+            ['News & alerts', 'fa-bullhorn', 'super/alerts/', $owner, $owner ? self::newAlerts() : null],
             ['Support tickets', 'fa-ticket', 'super/help/tickets.php', true, $replies ? $replies . ' new' : null],
         ]];
 

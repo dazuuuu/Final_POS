@@ -27,10 +27,11 @@ $__side = [
     ['packages', 'Packages', 'fa-box-open', 'support/packages/'],
     ['tickets', 'Support tickets', 'fa-ticket', 'support/tickets/'],
     ['quotes', 'Quote requests', 'fa-file-signature', 'support/quotes/'],
+    ['alerts', 'News & alerts', 'fa-bullhorn', 'support/alerts/'],
     ['settings', 'Settings', 'fa-gear', 'support/settings/'],
 ];
 if (SupportAccount::isOwner()) { // the support team is managed by the main admin only
-    array_splice($__side, 5, 0, [['team', 'Support team', 'fa-user-shield', 'support/team/']]);
+    array_splice($__side, 6, 0, [['team', 'Support team', 'fa-user-shield', 'support/team/']]);
 }
 ?><!doctype html>
 <html lang="en">

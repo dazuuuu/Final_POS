@@ -129,7 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   .side{flex:1 1 42%;background:#f0fdf4;border-left:1px solid #eef0f4;padding:26px;display:flex;flex-direction:column;justify-content:center;}
   .brand{text-align:center;margin-bottom:22px;}
-  .brand-icon{width:56px;height:56px;border-radius:14px;overflow:hidden;background:#fff;border:1px solid #bbf0d1;
+  .brand-icon{width:56px;height:56px;border-radius:14px;overflow:hidden;background:transparent;border:0;
               display:flex;align-items:center;justify-content:center;margin:0 auto 10px;color:#16a34a;font-size:1.4rem;}
   .brand-icon img{width:100%;height:100%;object-fit:contain;}
   .brand h1{color:#1f2330;font-size:1.1rem;font-weight:800;margin:0 0 2px;letter-spacing:-.02em;}

@@ -26,10 +26,36 @@ if (support_posted()) {
         $on = ($_POST['enabled'] ?? '') === '1';
         Features::set($id, $_POST['package'], $on);
         support_flash($catalog[$_POST['package']][0] . ($on ? ' switched ON' : ' switched OFF') . ' for ' . $acct['name'] . '.');
+    } elseif ($action === 'api_toggle') {
+        $on = ($_POST['enabled'] ?? '') === '1';
+        ShopApi::setEnabled($id, $on);
+        support_flash('Website API ' . ($on ? 'switched ON — the owner can now create keys under Business → Website API.' : 'switched OFF — its keys stop working.'));
+    } elseif ($action === 'api_key' && ShopApi::enabled($id)) {
+        $own = $pdo->prepare('SELECT id FROM tenants WHERE id = ? AND (id = ? OR parent_tenant_id = ?)');
+        $own->execute([(int) ($_POST['shop'] ?? 0), $id, $id]);
+        $apiShop = (int) ($own->fetchColumn() ?: $id); // only this account's own shops
+        [$plain] = ShopApi::createKey($id, $apiShop, (string) ($_POST['name'] ?? 'Test key (support)'),
+            (array) ($_POST['scopes'] ?? []), (string) ($_POST['origins'] ?? ''), null);
+        $_SESSION['support_api_key'] = $plain;
+        support_flash('Key created — copy it below, it is shown once.');
+    } elseif ($action === 'api_revoke') {
+        ShopApi::revokeKey($id, (int) ($_POST['key'] ?? 0));
+        support_flash('Key revoked.');
     } elseif ($action === 'multi_shop') {
         $on = ($_POST['enabled'] ?? '') === '1';
         Features::setMultiShop($id, $on);
         support_flash('Multiple shops ' . ($on ? 'enabled' : 'disabled') . ' for ' . $acct['name'] . '.');
+    } elseif ($action === 'lock') {
+        $reason = trim((string) ($_POST['reason'] ?? ''));
+        if ($reason === '') {
+            support_flash('Write the reason — the owner sees it when they sign in.', 'danger');
+        } else {
+            AccountLock::lock($id, $reason, (array) ($_POST['allow'] ?? []));
+            support_flash('Account locked. The owner can sign in but only use the pages you left open.');
+        }
+    } elseif ($action === 'unlock') {
+        AccountLock::unlock($id);
+        support_flash('Account unlocked — everything is open again.');
     } elseif ($action === 'status' && in_array($_POST['status'] ?? '', ['active', 'suspended', 'cancelled'], true)) {
         $pdo->prepare('UPDATE tenants SET status = ? WHERE id = ? OR parent_tenant_id = ?')->execute([$_POST['status'], $id, $id]);
         support_flash('Account is now ' . $_POST['status'] . '.');
@@ -198,7 +224,7 @@ echo $__css;
 ?>
 <a class="small text-decoration-none" href="<?php echo public_url('support/accounts/'); ?>"><i class="fas fa-arrow-left me-1"></i>All accounts</a>
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2 mb-4">
-  <h1 class="h4 mb-0"><?php echo htmlspecialchars($acct['name']); ?> <?php echo support_status_badge($acct['status']); ?></h1>
+  <h1 class="h4 mb-0"><?php echo htmlspecialchars($acct['name']); ?> <?php echo support_status_badge($acct['status']); ?><?php if (AccountLock::isLocked($id)): ?> <span class="badge bg-dark align-middle"><i class="fas fa-lock me-1"></i>Locked</span><?php endif; ?></h1>
   <span class="text-muted small">Account #<?php echo $id; ?> · since <?php echo date('d M Y', strtotime($acct['created_at'])); ?></span>
 </div>
 
@@ -241,6 +267,61 @@ echo $__css;
         </div>
       <?php endforeach; ?>
       <p class="small text-muted mt-2 mb-0">Branch shops are opened by the owner and share the account's packages.</p>
+    </div>
+
+    <?php // ---- Website API (custom add-on) ----
+      $apiS = ShopApi::settings($id); $apiOn = (int) $apiS['enabled'] === 1; $apiKeys = $apiOn ? ShopApi::keys($id) : [];
+      $apiNew = $_SESSION['support_api_key'] ?? null; unset($_SESSION['support_api_key']);
+      $apiBase = (((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost')) . rtrim((string) BASE_URL, '/') . '/api/v1/'; ?>
+    <div class="s-card mb-3">
+      <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+        <div>
+          <h2 class="h6 mb-1"><i class="fas fa-plug me-1"></i>Website API <span class="small text-muted fw-normal">(custom add-on)</span></h2>
+          <div class="small text-muted"><?php echo $apiOn ? 'On since ' . date('j M Y', strtotime((string) $apiS['enabled_at'])) . ' — the owner manages keys, orders and comments under Business → Website API.'
+              : ($apiS['requested_at'] ? 'The owner asked for it on ' . date('j M Y', strtotime($apiS['requested_at'])) . '.' : 'Off. Switch on after the quotation is accepted.'); ?></div>
+        </div>
+        <form method="post" class="flex-shrink-0" <?php if ($apiOn): ?>onsubmit="return confirm('Switch the Website API off? Every key of this account stops working.');"<?php endif; ?>>
+          <?php echo support_csrf_field(); ?><input type="hidden" name="action" value="api_toggle"><input type="hidden" name="enabled" value="<?php echo $apiOn ? '0' : '1'; ?>">
+          <button class="btn btn-sm <?php echo $apiOn ? 'btn-success' : 'btn-outline-secondary'; ?>"><?php echo $apiOn ? 'API ON' : 'API OFF'; ?></button>
+        </form>
+      </div>
+      <?php if ($apiOn): ?>
+        <?php if ($apiNew): ?>
+          <div class="border rounded p-2 mb-2" style="background:#09090b;color:#fafafa;font:12px ui-monospace,Menlo,monospace;word-break:break-all" id="apiNewKey"><?php echo htmlspecialchars($apiNew); ?></div>
+          <div class="d-flex gap-2 mb-2">
+            <button class="btn btn-sm btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('apiNewKey').textContent);this.textContent='Copied'">Copy key</button>
+            <button class="btn btn-sm btn-primary" type="button" id="apiTest">Test: list products</button>
+          </div>
+          <pre id="apiTestOut" class="small border rounded p-2 mb-2" style="max-height:260px;overflow:auto;white-space:pre-wrap;display:none"></pre>
+          <script>
+          document.getElementById('apiTest').addEventListener('click', function () {
+            var out = document.getElementById('apiTestOut'); out.style.display = 'block'; out.textContent = 'Calling…';
+            fetch(<?php echo json_encode($apiBase . 'products.php?per_page=5&stats=1'); ?>, { headers: { 'X-Api-Key': document.getElementById('apiNewKey').textContent.trim() }, credentials: 'omit' })
+              .then(function (r) { return r.text().then(function (t) { return r.status + '\n' + t; }); })
+              .then(function (t) { var i = t.indexOf('\n'); try { out.textContent = 'HTTP ' + t.slice(0, i) + '\n' + JSON.stringify(JSON.parse(t.slice(i + 1)), null, 2); } catch (e) { out.textContent = t; } })
+              .catch(function (e) { out.textContent = String(e); });
+          });
+          </script>
+        <?php endif; ?>
+        <form method="post" class="row g-2 align-items-end mb-2">
+          <?php echo support_csrf_field(); ?><input type="hidden" name="action" value="api_key">
+          <div class="col-6"><label class="form-label small mb-0">Key name</label><input class="form-control form-control-sm" name="name" value="Test key (support)"></div>
+          <div class="col-6"><label class="form-label small mb-0">Shop</label><select class="form-select form-select-sm" name="shop"><?php foreach ($shops as $s): ?><option value="<?php echo (int) $s['id']; ?>"><?php echo htmlspecialchars($s['name']); ?></option><?php endforeach; ?></select></div>
+          <div class="col-12 small"><?php foreach (ShopApi::SCOPES as $k => $l): ?><label class="me-2"><input type="checkbox" class="form-check-input me-1" name="scopes[]" value="<?php echo $k; ?>" checked><?php echo $k; ?></label><?php endforeach; ?></div>
+          <div class="col-12"><button class="btn btn-sm btn-outline-secondary">Create a test key</button></div>
+        </form>
+        <?php foreach ($apiKeys as $k): ?>
+          <div class="d-flex justify-content-between align-items-center border-top py-2 small" style="<?php echo $k['revoked_at'] ? 'opacity:.5' : ''; ?>">
+            <span><b><?php echo htmlspecialchars($k['name']); ?></b> <span class="text-muted" style="font-family:ui-monospace,Menlo,monospace"><?php echo htmlspecialchars($k['prefix']); ?>…</span><br>
+              <span class="text-muted"><?php echo htmlspecialchars($k['scopes']); ?> · <?php echo number_format((int) $k['requests']); ?> calls<?php echo $k['revoked_at'] ? ' · revoked' : ''; ?></span></span>
+            <?php if (!$k['revoked_at']): $full = ShopApi::reveal($k); ?>
+              <span class="d-flex gap-1">
+              <?php if ($full): ?><button type="button" class="btn btn-sm btn-primary" onclick="var b=this;(navigator.clipboard&&window.isSecureContext?navigator.clipboard.writeText(b.dataset.k):Promise.resolve((function(){var t=document.createElement('textarea');t.value=b.dataset.k;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();})())).then(function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy';},1500);})" data-k="<?php echo htmlspecialchars($full); ?>">Copy</button><?php endif; ?>
+              <form method="post"><?php echo support_csrf_field(); ?><input type="hidden" name="action" value="api_revoke"><input type="hidden" name="key" value="<?php echo (int) $k['id']; ?>">
+              <button class="btn btn-sm btn-outline-danger">Revoke</button></form></span><?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      <?php endif; ?>
     </div>
   </div>
 
@@ -413,6 +494,29 @@ echo $__css;
           <?php endforeach; ?>
         </select>
         <button class="btn btn-sm btn-outline-danger">Apply</button>
+      </form>
+    </div>
+
+    <?php $lk = AccountLock::state($id); ?>
+    <div class="s-card mt-3" style="<?php echo $lk['locked'] ? 'border:1px solid #09090b' : ''; ?>">
+      <h2 class="h6 mb-1"><i class="fas fa-lock me-1"></i><?php echo $lk['locked'] ? 'Account locked' : 'Lock account'; ?></h2>
+      <?php if ($lk['locked']): ?>
+        <p class="small text-muted mb-2">Since <?php echo date('j M Y H:i', strtotime((string) $lk['at'])); ?>. The owner sees:</p>
+        <div class="small border rounded p-2 mb-2" style="white-space:pre-wrap"><?php echo htmlspecialchars($lk['reason']); ?></div>
+        <p class="small mb-2">Open pages: <strong><?php echo htmlspecialchars(implode(', ', array_map(fn($k) => AccountLock::PAGES[$k][0], $lk['allow'])) ?: 'none'); ?></strong> (plus Help). Staff are signed out; Website API keys are paused.</p>
+        <form method="post" class="d-inline"><?php echo support_csrf_field(); ?><input type="hidden" name="action" value="unlock"><button class="btn btn-sm btn-primary">Unlock account</button></form>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#lockEdit">Change reason / pages</button>
+      <?php else: ?>
+        <p class="small text-muted mb-2">The owner can still sign in, but only sees the pages you leave open — by default just Export, so they can take their data. Staff are signed out and the Website API stops.</p>
+      <?php endif; ?>
+      <form method="post" class="<?php echo $lk['locked'] ? 'collapse mt-2' : ''; ?>" id="lockEdit"><?php echo support_csrf_field(); ?><input type="hidden" name="action" value="lock">
+        <label class="form-label small mb-1">Reason (shown to the owner)</label>
+        <textarea class="form-control form-control-sm mb-2" name="reason" rows="3" maxlength="1000" required placeholder="e.g. Your licence payment is overdue. Call 0712 345 678 to restore access."><?php echo htmlspecialchars($lk['reason']); ?></textarea>
+        <div class="small mb-2"><span class="text-muted d-block mb-1">Pages left open:</span>
+          <?php foreach (AccountLock::PAGES as $k => [$label]): ?>
+            <label class="me-3"><input type="checkbox" class="form-check-input me-1" name="allow[]" value="<?php echo $k; ?>" <?php echo in_array($k, $lk['allow'], true) ? 'checked' : ''; ?>><?php echo htmlspecialchars($label); ?></label>
+          <?php endforeach; ?></div>
+        <button class="btn btn-sm btn-dark" onclick="return confirm('Lock this account?')"><?php echo $lk['locked'] ? 'Save' : 'Lock account'; ?></button>
       </form>
     </div>
 

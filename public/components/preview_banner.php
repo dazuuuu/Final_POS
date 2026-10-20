@@ -9,6 +9,14 @@ if (Demo::active()): $__left = Demo::minutesLeft(); ?>
   <a href="<?php echo public_url('auth/logout.php'); ?>" style="background:#1f9a5f;color:#fff;border-radius:999px;padding:3px 12px;text-decoration:none">End demo</a>
 </div>
 <?php return; endif;
+if (!empty($_SESSION['logged_in']) && empty($_SESSION['support_preview']) && TenantContext::tenantId() !== null
+    && AccountLock::isLocked($__lockAcct = Features::accountId((int) TenantContext::tenantId()))): ?>
+<div style="position:sticky;top:0;z-index:2000;background:#09090b;color:#fff;font:500 13px/1.3 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+            padding:8px 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center">
+  <span><b>Account locked by support.</b> Only some pages are open. <?php echo htmlspecialchars(mb_strimwidth(AccountLock::state($__lockAcct)['reason'], 0, 140, '…')); ?></span>
+  <a href="<?php echo public_url('super/locked.php'); ?>" style="background:#fff;color:#09090b;border-radius:999px;padding:3px 12px;text-decoration:none">Details</a>
+</div>
+<?php return; endif;
 if (empty($_SESSION['support_preview']) || empty($_SESSION['support_auth'])) {
     return;
 }
