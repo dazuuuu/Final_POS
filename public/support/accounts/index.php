@@ -109,7 +109,8 @@ if (support_posted()) {
                 'INSERT INTO users (tenant_id, username, email, password_hash, role_id, is_active, email_verified, activated_at)
                  VALUES (?, ?, ?, ?, ?, 1, 1, NOW())'
             )->execute([$tenantId, $in['username'], $in['email'], password_hash($password, PASSWORD_DEFAULT), $roleId]);
-            $T->setOwner($tenantId, (int) $pdo->lastInsertId());
+            $newOwner = (int) $pdo->lastInsertId();
+            $T->setOwner($tenantId, $newOwner);
             $pdo->commit();
         } catch (Throwable $e) {
             $pdo->rollBack();
@@ -117,13 +118,16 @@ if (support_posted()) {
         }
         if (!$errors) {
             Features::setForAccount($tenantId, $in['packages']);
+            $cf = EmailConfirm::start('user', $newOwner, $in['email'], $in['username'], $password, EmailConfirm::absolute('admin/'), $tenantId);
             if (!empty($_POST['skip_activation'])) {
                 License::waive($tenantId);
-                support_flash('Account "' . $in['business_name'] . '" created and activated. The owner can sign in now at /auth/login.php with ' . $in['email'] . '.');
+                $pdo->prepare('UPDATE users SET email_verified = 0 WHERE id = ?')->execute([$newOwner]); // still waits for "Confirm your email"
+                support_flash('Account "' . $in['business_name'] . '" created and activated. ' . ($cf['sent'] ? 'A "Confirm your email" message went to ' . $in['email'] . ' — they can sign in once they confirm, and then get their login details.'
+                    : 'The confirm email could not be sent (check Settings → SMTP). Send the owner this link: ' . $cf['link']));
             } else {
                 $key = License::issue($tenantId);
-                support_flash('Account "' . $in['business_name'] . '" created. The owner can sign in at /auth/login.php with ' . $in['email']
-                    . '. Activation key: ' . $key . ' — email it below; the account locks in 2 hours without it.');
+                support_flash('Account "' . $in['business_name'] . '" created. ' . ($cf['sent'] ? 'A "Confirm your email" message went to ' . $in['email'] . '; they sign in after confirming.' : 'Confirm link (email not sent): ' . $cf['link'] . '.')
+                    . ' Activation key: ' . $key . ' — email it below; the account locks in 2 hours without it.');
             }
             header('Location: ' . public_url('support/accounts/view.php?id=' . $tenantId));
             exit;

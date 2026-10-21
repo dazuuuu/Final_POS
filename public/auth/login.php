@@ -44,7 +44,13 @@ if (($_GET['reset'] ?? '') === '1') {
 }
 $email = (string) ($_GET['email'] ?? '');
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+$needsConfirm = false;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['resend'])) {
+    // "Send the confirm email again" (shown when sign-in is refused for an unconfirmed email).
+    $email = trim($_POST['email'] ?? '');
+    $notice = EmailConfirm::resend($email) ? 'A new "Confirm your email" message is on its way to ' . $email . '.'
+        : 'If that login is waiting for confirmation, a new email is on its way (one every 2 minutes).';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email    = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     $ip       = $_SERVER['REMOTE_ADDR'] ?? null;
@@ -57,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $verdict = AccountGuard::evaluate($user);
         if (!$verdict['ok']) {
             $error = AccountGuard::message($verdict['reason']);
+            $needsConfirm = $verdict['reason'] === 'not_activated';
         } else {
             // Credentials good — no 2FA. Establish the full session right away.
             // findByEmail already returns role_name + must_reset_password, so we
@@ -91,32 +98,61 @@ $verdict = AccountGuard::evaluate($user);
     }
 }
 
-$page_title = 'Log in';
+$page_title = 'Sign in';
+// Staff PIN goes to the shop's own terminal when this page is opened at the shop's address.
+$__pinAction = ShopUrl::requestSlug() !== null ? rtrim((string) BASE_URL, '/') . '/' . ShopUrl::requestSlug() . '/' : public_url('terminal/');
+$staffTab = ($_GET['as'] ?? '') === 'staff';
 ob_start();
 ?>
-<div class="auth-title">Welcome back</div>
-<div class="auth-sub">Log in to your shop dashboard.</div>
+<style>
+.who{display:grid;grid-template-columns:1fr 1fr;border:1.5px solid var(--pos-green);border-radius:2px;margin-bottom:22px;}
+.who button{background:#fff;border:0;padding:10px;font:600 .9rem Archivo,system-ui,sans-serif;color:var(--pos-green);cursor:pointer;}
+.who button.on{background:var(--pos-green);color:#fff;}
+.who button i{margin-right:6px;}
+</style>
+<div class="auth-title">Sign in</div>
+<div class="auth-sub" id="whoSub"><?php echo $staffTab ? 'Staff: enter your PIN to sell, clock in or clock out.' : 'Owners and admins: use your email and password.'; ?></div>
+<div class="who" role="tablist">
+  <button type="button" class="<?php echo $staffTab ? '' : 'on'; ?>" data-who="owner" role="tab"><i class="fas fa-user-tie"></i>Owner</button>
+  <button type="button" class="<?php echo $staffTab ? 'on' : ''; ?>" data-who="staff" role="tab"><i class="fas fa-users"></i>Staff</button>
+</div>
 <?php if ($error): ?><div class="auth-alert err"><?php echo htmlspecialchars($error); ?></div><?php endif; ?>
 <?php if ($notice): ?><div class="auth-alert ok"><?php echo htmlspecialchars($notice); ?></div><?php endif; ?>
-<form method="post" novalidate>
+
+<div id="paneOwner" <?php echo $staffTab ? 'hidden' : ''; ?>>
+  <form method="post" novalidate>
     <div class="mb-3">
-        <label class="form-label">Email</label>
-        <input name="email" type="email" class="form-control" value="<?php echo htmlspecialchars($email); ?>" autofocus>
+      <label class="form-label">E-mail</label>
+      <input name="email" type="email" class="form-control" value="<?php echo htmlspecialchars($email); ?>" placeholder="you@example.com" <?php echo $staffTab ? '' : 'autofocus'; ?>>
     </div>
     <div class="mb-4">
-        <label class="form-label">Password</label>
-        <input name="password" type="password" class="form-control">
+      <label class="form-label">Password</label>
+      <input name="password" type="password" class="form-control" placeholder="Your password">
     </div>
-    <button class="btn-auth">Log in</button>
-</form>
-<?php if (Signup::enabled()): ?>
-<a href="<?php echo public_url('auth/signup.php'); ?>" class="btn btn-outline-success w-100 mt-2" style="border-radius:10px;padding:10px;font-weight:600;">New shop? Create your account</a>
-<?php endif; ?>
-<div class="auth-foot">
-    <a href="<?php echo public_url('auth/forgot-password.php'); ?>">Forgot password?</a>
-    <br>
-    <a href="<?php echo public_url('terminal/'); ?>">Staff? Go to the PIN screen</a>
+    <button class="btn-auth">Continue</button>
+  </form>
+  <?php if ($needsConfirm): ?>
+    <form method="post" class="mt-2"><input type="hidden" name="resend" value="1"><input type="hidden" name="email" value="<?php echo htmlspecialchars($email); ?>">
+      <button class="btn-line">Send the confirm email again</button></form>
+  <?php endif; ?>
+  <div class="auth-foot" style="margin-top:14px"><a href="<?php echo public_url('auth/forgot-password.php'); ?>">Forgot password?</a></div>
 </div>
+
+<div id="paneStaff" <?php echo $staffTab ? '' : 'hidden'; ?>>
+  <?php include ROOT_PATH . '/public/components/staff_pin.php'; ?>
+</div>
+<script>
+document.querySelectorAll('.who button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var staff = b.dataset.who === 'staff';
+    document.querySelectorAll('.who button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    document.getElementById('paneOwner').hidden = staff; document.getElementById('paneStaff').hidden = !staff;
+    document.getElementById('whoSub').textContent = staff ? 'Staff: enter your PIN to sell, clock in or clock out.' : 'Owners and admins: use your email and password.';
+    if (!staff) { var f = document.querySelector('#paneOwner input[name=email]'); if (f) f.focus(); } else if (document.activeElement) document.activeElement.blur();
+  });
+});
+</script>
 <?php
 $content = ob_get_clean();
+$__authBelow = Signup::enabled() ? '<div class="auth-foot">New shop? <a href="' . public_url('auth/signup.php') . '">Create your account</a></div>' : '';
 include ROOT_PATH . '/public/templates/auth/layout.php';

@@ -63,6 +63,9 @@ class SupportAccount
 
     // ---------------------------------------------------------------- team
 
+    /** Result of the last confirm email sent by addAgent() — ['sent', 'link']. */
+    public static ?array $lastConfirm = null;
+
     private static function ensureTable(PDO $pdo): void
     {
         static $done = false;
@@ -93,10 +96,15 @@ class SupportAccount
         try {
             $pdo = Database::pdo();
             self::ensureTable($pdo);
+            EmailConfirm::ensure(); // adds support_agents.email_verified
             $st = $pdo->prepare('SELECT * FROM support_agents WHERE email = ? AND is_active = 1');
             $st->execute([$email]);
             $a = $st->fetch(PDO::FETCH_ASSOC);
             if ($a && password_verify($password, $a['password_hash'])) {
+                if (isset($a['email_verified']) && !(int) $a['email_verified']) {
+                    self::$unconfirmed = true;
+                    return null;
+                }
                 $pdo->prepare('UPDATE support_agents SET last_login_at = NOW() WHERE id = ?')->execute([$a['id']]);
                 return ['role' => 'agent', 'id' => (int) $a['id'], 'email' => $a['email'], 'name' => $a['name']];
             }
@@ -105,6 +113,9 @@ class SupportAccount
         }
         return null;
     }
+
+    /** Set when a sign-in failed only because the email isn't confirmed yet. */
+    public static bool $unconfirmed = false;
 
     /** Put a successful sign-in into the session. */
     public static function signIn(array $who): void
@@ -167,6 +178,9 @@ class SupportAccount
         if ($chk->fetchColumn()) { return 'A team member with that email already exists.'; }
         $pdo->prepare('INSERT INTO support_agents (name, email, password_hash) VALUES (?, ?, ?)')
             ->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT)]);
+        // They confirm their email before they can sign in; the login details follow.
+        $cf = EmailConfirm::start('agent', (int) $pdo->lastInsertId(), $email, $name, $password, EmailConfirm::absolute('support/login.php'));
+        self::$lastConfirm = $cf;
         return null;
     }
 

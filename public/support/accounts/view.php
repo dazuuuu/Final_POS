@@ -117,7 +117,9 @@ if (support_posted()) {
                 $pdo->prepare('UPDATE tenants SET owner_user_id = ?, signup_completed_at = COALESCE(signup_completed_at, NOW()) WHERE id = ?')->execute([$newId, $id]);
             }
             License::forceActivate($id);
-            support_flash("New owner $username created — sign in at /auth/login.php with $email and the password you set."
+            $cf = EmailConfirm::start('user', $newId, $email, $username, $pw, EmailConfirm::absolute('admin/'), $id);
+            support_flash("New owner $username created. " . ($cf['sent'] ? "A \"Confirm your email\" message went to $email — they can sign in once they confirm, and then receive their login details."
+                    : "The confirm email could not be sent (check Settings → SMTP). Send them this link: {$cf['link']}")
                 . ($main ? ' It is now the main owner' . ($acct['owner_id'] ? " ({$acct['owner_username']} still works too)." : '.') : ' The main owner is unchanged.'));
         }
     } elseif ($action === 'delete_account') {
@@ -198,6 +200,12 @@ if (support_posted()) {
                 $pdo->prepare('UPDATE tenants SET owner_user_id = ?, signup_completed_at = COALESCE(signup_completed_at, NOW()) WHERE id = ?')->execute([$target, $id]);
                 $pdo->commit();
                 License::forceActivate($id);
+                // A new login, or a new email address, is confirmed by its owner before it can sign in.
+                if (!$ownerId || $target !== $ownerId || strtolower((string) ($acct['owner_email'] ?? '')) !== $email) {
+                    $cf = EmailConfirm::start('user', $target, $email, $username, $pw !== '' ? $pw : null, EmailConfirm::absolute('admin/'), $id);
+                    $notes[] = $cf['sent'] ? "A \"Confirm your email\" message went to $email — sign-in opens once they confirm."
+                        : "The confirm email could not be sent (check Settings → SMTP). Send them this link: {$cf['link']}";
+                }
                 support_flash(($ownerId ? 'Owner login updated' : 'Owner created') . ": $email" . ($pw !== '' ? ' (password set)' : '') . '. ' . implode(' ', $notes));
             } catch (Throwable $e) {
                 $pdo->rollBack();

@@ -65,15 +65,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         )->execute([$tenantId, $username, $old['email'], password_hash($old['password'], PASSWORD_DEFAULT), $roleId]);
         $newId = (int) $pdo->lastInsertId();
 
-        $success = 'Admin account created for ' . htmlspecialchars($old['email']) . '.';
-        $loginUrl = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
-            . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . public_url('admin/');
-        $msg = build_admin_credentials_email($old['name'], $old['email'], $old['password'], $shopName, $loginUrl);
-        if ((new MailService())->send($old['email'], $msg['subject'], $msg['html'], $msg['text'])) {
+        // The new admin confirms their email first; their login details follow once they do.
+        $success = 'Admin account created for ' . htmlspecialchars($old['email']) . ' — they confirm their email, then receive their login details.';
+        $cf = EmailConfirm::start('user', $newId, $old['email'], $old['name'], $old['password'], EmailConfirm::absolute('admin/'), Features::accountId((int) $tenantId));
+        if ($cf['sent']) {
             $mailResult = 'ok';
         } else {
             $mailResult = 'error';
-            $mailError = MailService::lastError() ?: 'Could not send the credentials email.';
+            $mailError = (MailService::lastError() ?: 'Could not send the confirm email.') . ' Send them this link: ' . $cf['link'];
         }
         $old = ['name' => '', 'email' => '', 'password' => ''];
     }

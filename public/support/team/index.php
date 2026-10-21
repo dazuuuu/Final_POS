@@ -11,7 +11,9 @@ if (support_posted()) {
     $id = (int) ($_POST['id'] ?? 0);
     if ($act === 'add') {
         $err = SupportAccount::addAgent((string) ($_POST['name'] ?? ''), (string) ($_POST['email'] ?? ''), (string) ($_POST['password'] ?? ''));
-        support_flash($err ?? 'Team member added. They sign in at the support login with that email and password.', $err ? 'danger' : 'success');
+        $cf = SupportAccount::$lastConfirm;
+        support_flash($err ?? ($cf && $cf['sent'] ? 'Team member added. They confirm their email first, then receive their login details.'
+            : 'Team member added, but the confirm email could not be sent (check Settings → SMTP). Send them this link: ' . ($cf['link'] ?? '')), $err ? 'danger' : 'success');
     } elseif ($act === 'toggle' && $id) {
         $on = !empty($_POST['on']);
         SupportAccount::setAgentActive($id, $on);
