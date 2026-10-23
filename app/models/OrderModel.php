@@ -69,6 +69,15 @@ class OrderModel extends Model
             $orderId = (int) $db->lastInsertId();
             $prefix  = $channel === 'walkin' ? 'RCP-' : 'ORD-';
             $receipt = $prefix . str_pad((string) $orderId, 6, '0', STR_PAD_LEFT);
+            // Imported shops keep their old receipt numbers, which can run ahead of
+            // new order ids — when this number is taken, use the next free one.
+            $taken = $db->prepare('SELECT 1 FROM orders WHERE tenant_id = ? AND receipt_number = ? AND id <> ? LIMIT 1');
+            $taken->execute([$tid, $receipt, $orderId]);
+            if ($taken->fetchColumn()) {
+                $max = $db->prepare("SELECT MAX(CAST(SUBSTRING(receipt_number, 5, 6) AS UNSIGNED)) FROM orders WHERE tenant_id = ? AND receipt_number REGEXP ?");
+                $max->execute([$tid, '^' . $prefix . '[0-9]{6}$']);
+                $receipt = $prefix . str_pad((string) ((int) $max->fetchColumn() + 1), 6, '0', STR_PAD_LEFT);
+            }
             $db->prepare('UPDATE orders SET receipt_number = ? WHERE id = ?')->execute([$receipt, $orderId]);
 
             $added = $this->insertItems($db, $tid, $orderId, $items, $openedBy, $saleType);
@@ -208,6 +217,11 @@ class OrderModel extends Model
                 }
                 $unitPrice = ProductModel::effectivePrice($offerRow)['price'];
                 if ($unitPrice <= 0) { $unitPrice = (float) ($p['retail_price'] ?: $p['selling_price']); }
+            }
+            // A price agreed with this customer at the till (Pro packages): this sale only —
+            // the product keeps its own price for the next sale.
+            if (isset($it['price']) && (float) $it['price'] > 0) {
+                $unitPrice = round((float) $it['price'], 2);
             }
             $lineTotal = round($unitPrice * $qty, 2);
 

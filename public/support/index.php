@@ -9,7 +9,7 @@ require_once __DIR__ . '/_boot.php';
 
 $pdo = Database::pdo();
 
-if (support_posted() && ($_POST['action'] ?? '') === 'signup_toggle') {
+if (support_posted() && ($_POST['action'] ?? '') === 'signup_toggle' && SupportOrg::isPlatformAdmin()) {
     $on = !empty($_POST['enabled']);
     if (Signup::setEnabled($on)) {
         support_flash($on ? 'Signup page is ON — "Create your account" now shows on the owner login.' : 'Signup page is OFF.');
@@ -20,6 +20,10 @@ if (support_posted() && ($_POST['action'] ?? '') === 'signup_toggle') {
     exit;
 }
 $signupOn = Signup::enabled();
+
+// Only this support company's accounts (company #1 also sees signed-out visitors).
+$mine = SupportOrg::accountIds();
+$IN = SupportOrg::inList();
 
 // ---------------------------------------------------------------- data
 $accounts = support_accounts($pdo);
@@ -43,7 +47,7 @@ foreach ($pdo->query('SELECT id, COALESCE(parent_tenant_id, id) FROM tenants')->
 $openTickets = $newTickets = 0;
 try {
     [$openTickets, $newTickets] = array_map('intval', $pdo->query(
-        "SELECT SUM(status IN ('open','in_progress','waiting')), SUM(unread_by_support = 1) FROM support_tickets"
+        "SELECT SUM(status IN ('open','in_progress','waiting')), SUM(unread_by_support = 1) FROM support_tickets WHERE account_id IN ($IN)"
     )->fetch(PDO::FETCH_NUM));
 } catch (\Throwable $e) { /* tickets table not installed yet */ }
 
@@ -53,19 +57,20 @@ UserSessions::ensure($pdo);
 // Users: owners/admins and staff (demo logins excluded), and who's online now.
 $userCounts = $pdo->query(
     "SELECT r.role_name, COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id
-      WHERE u.is_active = 1 AND u.email NOT LIKE '%@demo.local' AND r.role_name IN ('tenant_owner','staff') GROUP BY r.role_name"
+      WHERE u.is_active = 1 AND u.email NOT LIKE '%@demo.local' AND r.role_name IN ('tenant_owner','staff')
+        AND (SELECT COALESCE(t.parent_tenant_id, t.id) FROM tenants t WHERE t.id = u.tenant_id) IN ($IN) GROUP BY r.role_name"
 )->fetchAll(PDO::FETCH_KEY_PAIR);
 $owners = (int) ($userCounts['tenant_owner'] ?? 0);
 $staffN = (int) ($userCounts['staff'] ?? 0);
-$online = UserSessions::onlineCount($pdo);
+$online = UserSessions::onlineCount($pdo, $mine);
 
 // Requests: last 24 h against the 24 h before.
-$req24 = (int) $pdo->query('SELECT COALESCE(SUM(requests),0) FROM sys_traffic WHERE hour >= NOW() - INTERVAL 24 HOUR')->fetchColumn();
-$reqPrev = (int) $pdo->query('SELECT COALESCE(SUM(requests),0) FROM sys_traffic WHERE hour >= NOW() - INTERVAL 48 HOUR AND hour < NOW() - INTERVAL 24 HOUR')->fetchColumn();
+$req24 = (int) $pdo->query("SELECT COALESCE(SUM(requests),0) FROM sys_traffic WHERE account_id IN ($IN) AND hour >= NOW() - INTERVAL 24 HOUR")->fetchColumn();
+$reqPrev = (int) $pdo->query("SELECT COALESCE(SUM(requests),0) FROM sys_traffic WHERE account_id IN ($IN) AND hour >= NOW() - INTERVAL 48 HOUR AND hour < NOW() - INTERVAL 24 HOUR")->fetchColumn();
 $reqChange = $reqPrev > 0 ? round(($req24 - $reqPrev) / $reqPrev * 100, 1) : null;
 
 // Traffic: requests per day, this week against last week.
-$perDay = $pdo->query('SELECT DATE(hour) d, SUM(requests) FROM sys_traffic WHERE hour >= CURDATE() - INTERVAL 13 DAY GROUP BY d')->fetchAll(PDO::FETCH_KEY_PAIR);
+$perDay = $pdo->query("SELECT DATE(hour) d, SUM(requests) FROM sys_traffic WHERE account_id IN ($IN) AND hour >= CURDATE() - INTERVAL 13 DAY GROUP BY d")->fetchAll(PDO::FETCH_KEY_PAIR);
 $week = [];
 for ($i = 6; $i >= 0; $i--) {
     $d = date('Y-m-d', strtotime("-$i days"));
@@ -79,25 +84,25 @@ $yesterday = (int) ($perDay[date('Y-m-d', strtotime('-1 day'))] ?? 0);
 $server = Telemetry::server();
 $cpuHist = Telemetry::loadHistory($pdo, 24);
 $day = $pdo->query(
-    'SELECT COALESCE(SUM(requests),0) req, COALESCE(SUM(bytes_in),0) bin, COALESCE(SUM(bytes_out),0) bout,
+    "SELECT COALESCE(SUM(requests),0) req, COALESCE(SUM(bytes_in),0) bin, COALESCE(SUM(bytes_out),0) bout,
             COALESCE(SUM(cpu_ms),0) cpu, COALESCE(SUM(wall_ms),0) wall, COALESCE(MAX(max_ms),0) slowest, COALESCE(SUM(errors),0) err
-       FROM sys_traffic WHERE hour >= NOW() - INTERVAL 24 HOUR'
+       FROM sys_traffic WHERE account_id IN ($IN) AND hour >= NOW() - INTERVAL 24 HOUR"
 )->fetch(PDO::FETCH_ASSOC);
 $avgMs = $day['req'] ? round($day['wall'] / $day['req']) : 0;
 
 // Busiest accounts (7 days): their share of traffic and of CPU, data, speed, errors and who's on.
 $busy = $pdo->query(
-    'SELECT account_id, SUM(requests) req, SUM(bytes_in) bin, SUM(bytes_out) bout, SUM(cpu_ms) cpu, SUM(wall_ms) wall, SUM(errors) err
-       FROM sys_traffic WHERE hour >= NOW() - INTERVAL 7 DAY GROUP BY account_id ORDER BY req DESC LIMIT 8'
+    "SELECT account_id, SUM(requests) req, SUM(bytes_in) bin, SUM(bytes_out) bout, SUM(cpu_ms) cpu, SUM(wall_ms) wall, SUM(errors) err
+       FROM sys_traffic WHERE account_id IN ($IN) AND hour >= NOW() - INTERVAL 7 DAY GROUP BY account_id ORDER BY req DESC LIMIT 8"
 )->fetchAll(PDO::FETCH_ASSOC);
 $busyTotalReq = max(1, array_sum(array_column($busy, 'req')));
 $busyTotalCpu = max(1, array_sum(array_column($busy, 'cpu')));
-$onlineByAccount = $pdo->query('SELECT account_id, COUNT(DISTINCT user_id) FROM user_sessions WHERE ended_at IS NULL AND last_seen_at >= NOW() - INTERVAL '
+$onlineByAccount = $pdo->query("SELECT account_id, COUNT(DISTINCT user_id) FROM user_sessions WHERE account_id IN ($IN) AND ended_at IS NULL AND last_seen_at >= NOW() - INTERVAL "
     . UserSessions::ONLINE_MINUTES . ' MINUTE GROUP BY account_id')->fetchAll(PDO::FETCH_KEY_PAIR);
 
-$people = UserSessions::people($pdo, 60);
-$sessions = UserSessions::recent($pdo, 20);
-$errors = $pdo->query('SELECT created_at, account_id, method, path, status, message FROM sys_errors ORDER BY id DESC LIMIT 12')->fetchAll(PDO::FETCH_ASSOC);
+$people = UserSessions::people($pdo, 60, $mine);
+$sessions = UserSessions::recent($pdo, 20, $mine);
+$errors = $pdo->query("SELECT created_at, account_id, method, path, status, message FROM sys_errors WHERE account_id IN ($IN) ORDER BY id DESC LIMIT 12")->fetchAll(PDO::FETCH_ASSOC);
 
 // ---------------------------------------------------------------- helpers
 $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES);
@@ -367,7 +372,8 @@ ob_start();
   </div></div>
 </div>
 
-<!-- Signup switch -->
+<!-- Signup switch (platform-wide: company #1's main admin) -->
+<?php if (SupportOrg::isPlatformAdmin()): ?>
 <div class="c">
   <form method="post" class="d-flex flex-wrap align-items-center gap-3">
     <?php echo support_csrf_field(); ?><input type="hidden" name="action" value="signup_toggle">
@@ -389,6 +395,7 @@ ob_start();
     <?php endif; ?>
   </form>
 </div>
+<?php endif; ?>
 </div>
 <?php
 $content = ob_get_clean();

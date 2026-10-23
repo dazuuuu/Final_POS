@@ -26,7 +26,7 @@ class EmailConfirm
         if (!is_file($flag)) {
             $pdo->exec("CREATE TABLE IF NOT EXISTS email_confirmations (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                kind ENUM('user','agent') NOT NULL,
+                kind ENUM('user','agent','org') NOT NULL,
                 ref_id INT NOT NULL,
                 account_id INT NULL,
                 email VARCHAR(150) NOT NULL,
@@ -45,6 +45,11 @@ class EmailConfirm
                 $pdo->exec('ALTER TABLE support_agents ADD COLUMN email_verified TINYINT(1) NOT NULL DEFAULT 1'); // existing members stay signed-in-able
             }
             @file_put_contents($flag, date('c'));
+        }
+        $flag2 = Database::marker('email_confirm_v2'); // support accounts confirm too
+        if (!is_file($flag2)) {
+            $pdo->exec("ALTER TABLE email_confirmations MODIFY kind ENUM('user','agent','org') NOT NULL");
+            @file_put_contents($flag2, date('c'));
         }
         $done = true;
     }
@@ -92,6 +97,8 @@ class EmailConfirm
         $pdo = Database::pdo();
         if ($kind === 'user') {
             $pdo->prepare('UPDATE users SET email_verified = 0 WHERE id = ?')->execute([$refId]);
+        } elseif ($kind === 'org') {
+            $pdo->prepare('UPDATE support_orgs SET email_verified = 0 WHERE id = ?')->execute([$refId]);
         } else {
             $pdo->prepare('UPDATE support_agents SET email_verified = 0 WHERE id = ?')->execute([$refId]);
         }
@@ -123,6 +130,9 @@ class EmailConfirm
         if ($c['kind'] === 'user') {
             $pdo->prepare('UPDATE users SET email_verified = 1, is_active = 1, activated_at = COALESCE(activated_at, NOW()) WHERE id = ?')->execute([(int) $c['ref_id']]);
             $u = $pdo->prepare('SELECT username, email FROM users WHERE id = ?');
+        } elseif ($c['kind'] === 'org') {
+            $pdo->prepare('UPDATE support_orgs SET email_verified = 1 WHERE id = ?')->execute([(int) $c['ref_id']]);
+            $u = $pdo->prepare('SELECT email AS username, email FROM support_orgs WHERE id = ?');
         } else {
             $pdo->prepare('UPDATE support_agents SET email_verified = 1 WHERE id = ?')->execute([(int) $c['ref_id']]);
             $u = $pdo->prepare('SELECT email AS username, email FROM support_agents WHERE id = ?');

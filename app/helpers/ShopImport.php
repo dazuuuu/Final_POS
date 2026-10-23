@@ -595,8 +595,10 @@ class ShopImport
                 return $mine;
             }
         }
-        $chk = $pdo->prepare('SELECT COUNT(*) FROM users WHERE email = ? OR username = ?');
-        $chk->execute([$email, (string) $u['username']]);
+        // Only the email (the sign-in) has to be free; usernames are per shop.
+        $chk = $pdo->prepare('SELECT COUNT(*) FROM users u LEFT JOIN tenants t ON t.id = u.tenant_id
+                               WHERE u.email = ? OR (u.username = ? AND (t.id = ? OR t.parent_tenant_id = ?))');
+        $chk->execute([$email, (string) $u['username'], $accountId, $accountId]);
         if ($chk->fetchColumn()) {
             throw new RuntimeException("The old owner's login ({$u['username']}, $email) is already used on this system. "
                 . 'Tick "Take over the old logins" and import again.');
@@ -622,9 +624,9 @@ class ShopImport
         $st = $pdo->prepare(
             'SELECT u.id, u.username, u.email, t.id AS tid, t.parent_tenant_id AS parent, t.name AS shop
                FROM users u LEFT JOIN tenants t ON t.id = u.tenant_id
-              WHERE u.email = ? OR u.username = ?'
+              WHERE u.email = ? OR (u.username = ? AND (t.id = ? OR t.parent_tenant_id = ?))'
         );
-        $st->execute([$email, $username]);
+        $st->execute([$email, $username, $accountId, $accountId]); // another business's "Admin" is not this login
         $mine = null;
         foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $hit) {
             if ((int) $hit['tid'] === $accountId || (int) $hit['parent'] === $accountId) {
@@ -674,8 +676,8 @@ class ShopImport
         $username = (string) $u['username'];
         $base = $username;
         for ($k = 2; ; $k++) {
-            $c = $pdo->prepare('SELECT COUNT(*) FROM users WHERE username = ?');
-            $c->execute([$username]);
+            $c = $pdo->prepare('SELECT COUNT(*) FROM users WHERE username = ? AND tenant_id = ?'); // per shop
+            $c->execute([$username, $accountId]);
             if (!$c->fetchColumn()) break;
             $username = substr($base, 0, 44) . '_' . $k;
         }

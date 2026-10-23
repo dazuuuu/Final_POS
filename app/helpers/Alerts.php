@@ -22,6 +22,7 @@ class Alerts
         static $done = false;
         if ($done) return;
         $pdo ??= Database::pdo();
+        SupportOrg::ensure(); // tenants.support_org
         $flag = Database::marker('alerts_v1');
         if (!is_file($flag)) {
             $pdo->exec("CREATE TABLE IF NOT EXISTS support_alerts (
@@ -55,6 +56,14 @@ class Alerts
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
             @file_put_contents($flag, date('c'));
         }
+        // Each support company sends to its own accounts only.
+        $flag2 = Database::marker('alerts_v2');
+        if (!is_file($flag2)) {
+            if (!(int) $pdo->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'support_alerts' AND column_name = 'org_id'")->fetchColumn()) {
+                $pdo->exec('ALTER TABLE support_alerts ADD COLUMN org_id INT NOT NULL DEFAULT 1');
+            }
+            @file_put_contents($flag2, date('c'));
+        }
         $done = true;
     }
 
@@ -68,11 +77,12 @@ class Alerts
         $opts = $kind === 'poll' ? array_values(array_filter(array_map('trim', preg_split('/\R/', (string) ($in['options'] ?? ''))))) : [];
         $target = (int) ($in['target'] ?? 0) ?: null;
         $ends = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($in['ends_at'] ?? '')) ? $in['ends_at'] . ' 23:59:59' : null;
-        Database::pdo()->prepare('INSERT INTO support_alerts (title, body, image_path, kind, options, required, button_label, target_account, ends_at, created_by)
-                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        if ($target !== null && !SupportOrg::owns($target)) $target = -1; // never another company's account
+        Database::pdo()->prepare('INSERT INTO support_alerts (title, body, image_path, kind, options, required, button_label, target_account, ends_at, created_by, org_id)
+                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
             ->execute([mb_substr(trim((string) $in['title']), 0, 160), trim((string) $in['body']), $image, $kind, $opts ? json_encode($opts) : null,
                        $kind !== 'notice' && !empty($in['required']) ? 1 : 0, mb_substr(trim((string) ($in['button_label'] ?? '')), 0, 40) ?: null,
-                       $target, $ends, $by]);
+                       $target, $ends, $by, SupportOrg::current()]);
         return (int) Database::pdo()->lastInsertId();
     }
 
@@ -82,7 +92,7 @@ class Alerts
         return Database::pdo()->query('SELECT a.*, t.name AS target_name,
                 (SELECT COUNT(*) FROM support_alert_responses r WHERE r.alert_id = a.id AND r.seen_at IS NOT NULL) AS seen,
                 (SELECT COUNT(*) FROM support_alert_responses r WHERE r.alert_id = a.id AND (r.choice IS NOT NULL OR r.feedback IS NOT NULL)) AS answered
-              FROM support_alerts a LEFT JOIN tenants t ON t.id = a.target_account ORDER BY a.id DESC')->fetchAll(PDO::FETCH_ASSOC);
+              FROM support_alerts a LEFT JOIN tenants t ON t.id = a.target_account WHERE a.org_id = ' . SupportOrg::current() . ' ORDER BY a.id DESC')->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public static function find(int $id): ?array
@@ -91,6 +101,8 @@ class Alerts
         $st = Database::pdo()->prepare('SELECT * FROM support_alerts WHERE id = ?');
         $st->execute([$id]);
         $a = $st->fetch(PDO::FETCH_ASSOC);
+        // In the support console, only this company's alerts.
+        if ($a && !empty($_SESSION['support_auth']) && empty($_SESSION['logged_in']) && (int) $a['org_id'] !== SupportOrg::current()) $a = false;
         if ($a) $a['option_list'] = $a['options'] ? (json_decode($a['options'], true) ?: []) : [];
         return $a ?: null;
     }
@@ -111,13 +123,14 @@ class Alerts
     public static function setActive(int $id, bool $on): void
     {
         self::ensure();
-        Database::pdo()->prepare('UPDATE support_alerts SET active = ? WHERE id = ?')->execute([$on ? 1 : 0, $id]);
+        Database::pdo()->prepare('UPDATE support_alerts SET active = ? WHERE id = ? AND org_id = ?')->execute([$on ? 1 : 0, $id, SupportOrg::current()]);
     }
 
     public static function delete(int $id): void
     {
         self::ensure();
         $pdo = Database::pdo();
+        if (!self::find($id)) return; // another company's alert
         $pdo->prepare('DELETE FROM support_alert_responses WHERE alert_id = ?')->execute([$id]);
         $pdo->prepare('DELETE FROM support_alerts WHERE id = ?')->execute([$id]);
     }
@@ -131,10 +144,11 @@ class Alerts
         $st = Database::pdo()->prepare(
             'SELECT a.*, r.choice, r.feedback, r.closed_at, r.seen_at FROM support_alerts a
                LEFT JOIN support_alert_responses r ON r.alert_id = a.id AND r.user_id = ?
-              WHERE a.active = 1 AND (a.target_account IS NULL OR a.target_account = ?) AND (a.ends_at IS NULL OR a.ends_at >= NOW())
+              WHERE a.active = 1 AND (a.target_account = ? OR (a.target_account IS NULL AND a.org_id = (SELECT support_org FROM tenants WHERE id = ?)))
+                AND (a.ends_at IS NULL OR a.ends_at >= NOW())
               ORDER BY a.id DESC LIMIT 100'
         );
-        $st->execute([$userId, $account]);
+        $st->execute([$userId, $account, $account]);
         return array_map(function ($a) { $a['option_list'] = $a['options'] ? (json_decode($a['options'], true) ?: []) : []; return $a; }, $st->fetchAll(PDO::FETCH_ASSOC));
     }
 

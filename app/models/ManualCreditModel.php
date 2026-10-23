@@ -24,18 +24,57 @@ class ManualCreditModel
         return $tid;
     }
 
+    /** manual_credits.customer_id: every credit-book name is also a customer, so credit sales add to the same person. */
+    public static function ensureCustomerLink(\PDO $db): void
+    {
+        static $done = false;
+        if ($done) return;
+        $flag = \Database::marker('manual_credit_customer_v1');
+        if (!is_file($flag)) {
+            $has = (int) $db->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'manual_credits' AND column_name = 'customer_id'")->fetchColumn();
+            if (!$has) $db->exec('ALTER TABLE manual_credits ADD COLUMN customer_id INT NULL AFTER tenant_id, ADD KEY idx_mc_customer (tenant_id, customer_id)');
+            @file_put_contents($flag, date('c'));
+        }
+        $done = true;
+    }
+
+    /** Link this shop's older credit-book entries to customers (by phone, else name), creating customers as needed. */
+    public function linkCustomers(): int
+    {
+        self::ensureCustomerLink($this->db);
+        $st = $this->db->prepare('SELECT id, customer_name, phone FROM manual_credits WHERE tenant_id = ? AND customer_id IS NULL LIMIT 500');
+        $st->execute([$this->tid()]);
+        $CU = new CustomerModel($this->db);
+        $upd = $this->db->prepare('UPDATE manual_credits SET customer_id = ? WHERE id = ?');
+        $n = 0;
+        foreach ($st->fetchAll() as $r) {
+            $c = $CU->findOrCreateByContact((string) $r['customer_name'], '', trim((string) $r['phone']));
+            if ($c) { $upd->execute([(int) $c['id'], (int) $r['id']]); $n++; }
+        }
+        return $n;
+    }
+
     public function create(array $in): array
     {
+        self::ensureCustomerLink($this->db);
         $name = trim((string) ($in['customer_name'] ?? ''));
         $amount = round((float) ($in['amount'] ?? 0), 2);
         if ($name === '') { return ['ok' => false, 'error' => 'Enter the customer\'s name.']; }
         if ($amount <= 0) { return ['ok' => false, 'error' => 'Enter how much they owe.']; }
         $date = preg_match('/^\d{4}-\d{2}-\d{2}$/', $in['credit_date'] ?? '') ? $in['credit_date'] : date('Y-m-d');
+        $phone = trim((string) ($in['phone'] ?? ''));
+        // The same person as in the customer list (picked, or found / created by phone or name).
+        $CU = new CustomerModel($this->db);
+        $customer = !empty($in['customer_id']) ? $CU->find((int) $in['customer_id']) : null;
+        $customer = $customer ?: $CU->findOrCreateByContact($name, '', $phone);
+        if ($customer && $phone !== '' && empty($customer['phone'])) {
+            $CU->save(array_merge($customer, ['phone' => $phone]));
+        }
         $this->db->prepare(
-            'INSERT INTO manual_credits (tenant_id, customer_name, phone, amount, notes, credit_date, created_by) VALUES (?,?,?,?,?,?,?)'
-        )->execute([$this->tid(), $name, trim((string) ($in['phone'] ?? '')) ?: null, $amount,
+            'INSERT INTO manual_credits (tenant_id, customer_id, customer_name, phone, amount, notes, credit_date, created_by) VALUES (?,?,?,?,?,?,?,?)'
+        )->execute([$this->tid(), $customer['id'] ?? null, $name, $phone ?: null, $amount,
                     trim((string) ($in['notes'] ?? '')) ?: null, $date, \TenantContext::userId()]);
-        return ['ok' => true, 'error' => null];
+        return ['ok' => true, 'error' => null, 'customer_id' => $customer['id'] ?? null];
     }
 
     public function find(int $id): ?array

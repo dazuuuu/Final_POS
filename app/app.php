@@ -123,6 +123,9 @@ SingleSession::enforce();
 // Landing-page demo shops: time limit, closed pages.
 Demo::enforce();
 
+// Usernames are unique per shop, not platform-wide (runs once).
+Signup::usernamesPerShop();
+
 // Online / offline and sign-in history for the support console.
 UserSessions::touch();
 

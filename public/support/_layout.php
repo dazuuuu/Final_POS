@@ -15,7 +15,7 @@ $__tabs = [
 ];
 $__newTickets = 0;
 try {
-    $__newTickets = (int) Database::pdo()->query('SELECT COUNT(*) FROM support_tickets WHERE unread_by_support = 1')->fetchColumn();
+    $__newTickets = (int) Database::pdo()->query('SELECT COUNT(*) FROM support_tickets WHERE unread_by_support = 1 AND account_id IN (SELECT id FROM tenants WHERE support_org = ' . SupportOrg::current() . ')')->fetchColumn();
 } catch (\Throwable $e) { /* tickets table not installed yet */ }
 $__initial = strtoupper(substr(SupportAccount::currentEmail() ?: 'S', 0, 1));
 $__brand = Branding::platform(); // Support → Settings → Platform brand: also used on the shared login pages
@@ -31,7 +31,7 @@ $__side = [
     ['settings', 'Settings', 'fa-gear', 'support/settings/'],
 ];
 if (SupportAccount::isOwner()) { // the support team is managed by the main admin only
-    array_splice($__side, 6, 0, [['team', 'Support team', 'fa-user-shield', 'support/team/']]);
+    array_splice($__side, 6, 0, [['team', 'Create support account', 'fa-user-plus', 'support/team/']]);
 }
 ?><!doctype html>
 <html lang="en">
@@ -151,7 +151,7 @@ h1.h4{font-weight:600;letter-spacing:-.02em;}
 <aside class="side-nav" aria-label="Support navigation">
   <a class="side-brand" href="<?php echo public_url('support/'); ?>">
     <span class="app-logo has-img"><img src="<?php echo htmlspecialchars($__brand['logo']); ?>" alt=""></span>
-    <span><b><?php echo htmlspecialchars($__brand['name']); ?></b><small>Support console</small></span>
+    <span><b><?php echo htmlspecialchars($__brand['name']); ?></b><small><?php echo htmlspecialchars(SupportOrg::current() === SupportOrg::MAIN ? 'Support console' : SupportOrg::name(SupportOrg::current())); ?></small></span>
   </a>
   <a class="side-new" href="<?php echo public_url('support/accounts/?new=1'); ?>"><i class="fas fa-plus"></i><span>New account<small class="d-block fw-normal" style="color:#9fb3a6;font-size:.7rem;">Create a shop owner</small></span></a>
   <form class="side-search" method="get" action="<?php echo public_url('support/accounts/'); ?>">
@@ -180,7 +180,7 @@ h1.h4{font-weight:600;letter-spacing:-.02em;}
       <button class="app-avatar" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Account"><?php echo htmlspecialchars($__initial); ?></button>
       <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="border-radius:14px;">
         <li><span class="dropdown-item-text small text-muted"><?php echo htmlspecialchars(SupportAccount::currentEmail()); ?><br><?php echo SupportAccount::isOwner() ? 'Main admin' : 'Support team'; ?></span></li>
-        <?php if (SupportAccount::isOwner()): ?><li><a class="dropdown-item" href="<?php echo public_url('support/team/'); ?>"><i class="fas fa-user-shield me-2"></i>Support team</a></li><?php endif; ?>
+        <?php if (SupportAccount::isOwner()): ?><li><a class="dropdown-item" href="<?php echo public_url('support/team/'); ?>"><i class="fas fa-user-plus me-2"></i>Create support account</a></li><?php endif; ?>
         <li><hr class="dropdown-divider"></li>
         <li><a class="dropdown-item" href="<?php echo public_url('support/settings/'); ?>"><i class="fas fa-envelope me-2"></i>Email (SMTP) settings</a></li>
         <li><a class="dropdown-item text-danger" href="<?php echo public_url('support/logout.php'); ?>"><i class="fas fa-arrow-right-from-bracket me-2"></i>Sign out</a></li>

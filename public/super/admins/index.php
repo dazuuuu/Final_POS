@@ -20,9 +20,9 @@ function admins_unique_username(PDO $pdo, string $email): string
     $base = preg_replace('/[^a-z0-9_]+/', '', strtolower(explode('@', $email)[0])) ?: 'admin';
     $name = $base;
     $i = 0;
-    $stmt = $pdo->prepare('SELECT 1 FROM users WHERE username = ? LIMIT 1');
+    $stmt = $pdo->prepare('SELECT 1 FROM users WHERE username = ? AND tenant_id = ? LIMIT 1'); // unique per shop
     while (true) {
-        $stmt->execute([$name]);
+        $stmt->execute([$name, (int) TenantContext::tenantId()]);
         if (!$stmt->fetchColumn()) {
             return $name;
         }

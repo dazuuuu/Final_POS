@@ -37,6 +37,7 @@ $__shellShops = TenantContext::role() === 'tenant_owner' ? ShopContext::shops(tr
                 </ul>
             </div>
             <?php endif; ?>
+            <?php include __DIR__ . '/install_button.php'; ?>
             <span class="tk-date"><?php echo date('l, j M Y'); ?></span>
             <span class="tk-user"><i class="fas fa-user"></i><span><?php echo htmlspecialchars($__shellUser); ?></span></span>
             <a href="<?php echo public_url('auth/logout.php'); ?>" title="Logout" aria-label="Logout"><i class="fas fa-arrow-right-from-bracket"></i></a>

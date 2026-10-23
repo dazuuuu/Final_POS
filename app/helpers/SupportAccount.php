@@ -78,6 +78,8 @@ class SupportAccount
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             last_login_at DATETIME NULL,
+            email_verified TINYINT(1) NOT NULL DEFAULT 1,
+            org_id INT NOT NULL DEFAULT 1,
             UNIQUE KEY uq_support_agent_email (email)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         $done = true;
@@ -91,12 +93,14 @@ class SupportAccount
     {
         $email = strtolower(trim($email));
         if (self::verify($email, $password)) {
-            return ['role' => 'owner', 'id' => 0, 'email' => self::email(), 'name' => 'Main admin'];
+            return ['role' => 'owner', 'id' => 0, 'email' => self::email(), 'name' => 'Main admin', 'org' => SupportOrg::MAIN];
         }
         try {
+            if ($org = SupportOrg::authenticate($email, $password)) return $org; // main admin of a partner company
             $pdo = Database::pdo();
             self::ensureTable($pdo);
-            EmailConfirm::ensure(); // adds support_agents.email_verified
+            if (class_exists('EmailConfirm')) EmailConfirm::ensure(); // adds support_agents.email_verified
+            SupportOrg::ensure();   // adds support_agents.org_id
             $st = $pdo->prepare('SELECT * FROM support_agents WHERE email = ? AND is_active = 1');
             $st->execute([$email]);
             $a = $st->fetch(PDO::FETCH_ASSOC);
@@ -106,7 +110,7 @@ class SupportAccount
                     return null;
                 }
                 $pdo->prepare('UPDATE support_agents SET last_login_at = NOW() WHERE id = ?')->execute([$a['id']]);
-                return ['role' => 'agent', 'id' => (int) $a['id'], 'email' => $a['email'], 'name' => $a['name']];
+                return ['role' => 'agent', 'id' => (int) $a['id'], 'email' => $a['email'], 'name' => $a['name'], 'org' => (int) ($a['org_id'] ?? SupportOrg::MAIN)];
             }
         } catch (Throwable $e) {
             error_log('SupportAccount::authenticate: ' . $e->getMessage());
@@ -126,6 +130,7 @@ class SupportAccount
         $_SESSION['support_agent'] = $who['id'];
         $_SESSION['support_email'] = $who['email'];
         $_SESSION['support_name']  = $who['name'];
+        $_SESSION['support_org']   = (int) ($who['org'] ?? SupportOrg::MAIN); // which company's accounts this person sees
     }
 
     /** Is the signed-in support user the main admin? (Sessions from before teams existed were the admin.) */
@@ -159,7 +164,10 @@ class SupportAccount
     {
         $pdo = Database::pdo();
         self::ensureTable($pdo);
-        return $pdo->query('SELECT id, name, email, is_active, created_at, last_login_at FROM support_agents ORDER BY is_active DESC, name')->fetchAll(PDO::FETCH_ASSOC);
+        SupportOrg::ensure();
+        $st = $pdo->prepare('SELECT id, name, email, is_active, created_at, last_login_at FROM support_agents WHERE org_id = ? ORDER BY is_active DESC, name');
+        $st->execute([SupportOrg::current()]);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /** Add a team member. Returns an error message, or null when done. */
@@ -176,10 +184,14 @@ class SupportAccount
         $chk = $pdo->prepare('SELECT COUNT(*) FROM support_agents WHERE email = ?');
         $chk->execute([$email]);
         if ($chk->fetchColumn()) { return 'A team member with that email already exists.'; }
-        $pdo->prepare('INSERT INTO support_agents (name, email, password_hash) VALUES (?, ?, ?)')
-            ->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT)]);
+        SupportOrg::ensure();
+        $pdo->prepare('INSERT INTO support_agents (name, email, password_hash, org_id) VALUES (?, ?, ?, ?)')
+            ->execute([$name, $email, password_hash($password, PASSWORD_DEFAULT), SupportOrg::current()]);
         // They confirm their email before they can sign in; the login details follow.
-        $cf = EmailConfirm::start('agent', (int) $pdo->lastInsertId(), $email, $name, $password, EmailConfirm::absolute('support/login.php'));
+        // (Without EmailConfirm.php on the server the member can sign in straight away.)
+        $cf = class_exists('EmailConfirm')
+            ? EmailConfirm::start('agent', (int) $pdo->lastInsertId(), $email, $name, $password, EmailConfirm::absolute('support/login.php'))
+            : ['sent' => true, 'link' => ''];
         self::$lastConfirm = $cf;
         return null;
     }
@@ -188,7 +200,7 @@ class SupportAccount
     {
         $pdo = Database::pdo();
         self::ensureTable($pdo);
-        $pdo->prepare('UPDATE support_agents SET is_active = ? WHERE id = ?')->execute([$on ? 1 : 0, $id]);
+        $pdo->prepare('UPDATE support_agents SET is_active = ? WHERE id = ? AND org_id = ?')->execute([$on ? 1 : 0, $id, SupportOrg::current()]);
     }
 
     public static function setAgentPassword(int $id, string $password): ?string
@@ -196,7 +208,7 @@ class SupportAccount
         if (strlen($password) < 8) { return 'The password must be at least 8 characters.'; }
         $pdo = Database::pdo();
         self::ensureTable($pdo);
-        $pdo->prepare('UPDATE support_agents SET password_hash = ? WHERE id = ?')->execute([password_hash($password, PASSWORD_DEFAULT), $id]);
+        $pdo->prepare('UPDATE support_agents SET password_hash = ? WHERE id = ? AND org_id = ?')->execute([password_hash($password, PASSWORD_DEFAULT), $id, SupportOrg::current()]);
         return null;
     }
 
@@ -204,6 +216,6 @@ class SupportAccount
     {
         $pdo = Database::pdo();
         self::ensureTable($pdo);
-        $pdo->prepare('DELETE FROM support_agents WHERE id = ?')->execute([$id]);
+        $pdo->prepare('DELETE FROM support_agents WHERE id = ? AND org_id = ?')->execute([$id, SupportOrg::current()]);
     }
 }

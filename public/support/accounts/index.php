@@ -31,6 +31,7 @@ if (support_posted() && ($_POST['action'] ?? '') === 'migrate') {
             throw new RuntimeException('A shop called "' . $name . '" already exists. Use a different business name.');
         }
         $newId = Signup::invite($name, $pk, trim($_POST['phone'] ?? ''));
+        SupportOrg::claim((int) $newId); // the account belongs to the support company that created it
         $_SESSION['shop_import_' . $newId] = $file;
         support_flash('Shop "' . $name . '" created. Check the preview and import — the old owner then signs in with their old login.');
         header('Location: ' . public_url('support/accounts/import.php?id=' . $newId));
@@ -61,6 +62,7 @@ if (support_posted() && ($_POST['action'] ?? '') === 'invite') {
         exit;
     }
     $newId = Signup::invite($name, $pk, trim($_POST['phone'] ?? ''));
+        SupportOrg::claim((int) $newId); // the account belongs to the support company that created it
     if ($ownerEmail === '') {
         support_flash('Shop "' . $name . '" created. Send the owner their shop link below.');
     } elseif (($err = Signup::emailInvite($newId, $ownerEmail)) === null) {
@@ -88,8 +90,9 @@ if (support_posted()) {
     if (!filter_var($in['email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'Enter a valid owner email.';
     if (strlen($password) < 8) $errors[] = 'Password must be at least 8 characters.';
     if (!$errors) {
-        $chk = $pdo->prepare('SELECT SUM(email = ?), SUM(username = ?) FROM users');
-        $chk->execute([$in['email'], $in['username']]);
+        // A brand-new account: only the email (the sign-in) must be free; usernames are per shop.
+        $chk = $pdo->prepare('SELECT SUM(email = ?), 0 FROM users');
+        $chk->execute([$in['email']]);
         [$emailTaken, $userTaken] = $chk->fetch(PDO::FETCH_NUM);
         if ($emailTaken) $errors[] = 'That email already has an account.';
         if ($userTaken) $errors[] = 'That username is taken.';
@@ -102,6 +105,7 @@ if (support_posted()) {
         $pdo->beginTransaction();
         try {
             $tenantId = $T->create($in['business_name'], $T->uniqueSlug($in['business_name']));
+            SupportOrg::claim((int) $tenantId); // the account belongs to the support company that created it
             if ($in['phone'] !== '') {
                 $pdo->prepare('UPDATE tenants SET phone = ? WHERE id = ?')->execute([$in['phone'], $tenantId]);
             }

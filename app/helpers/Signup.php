@@ -55,6 +55,35 @@ class Signup
         $done = true;
     }
 
+    /**
+     * Usernames are unique per shop account, not across the whole platform:
+     * two businesses can both have an "Admin". (Sign-in is by email — still
+     * unique everywhere — and staff use PINs inside their own shop.)
+     * Swaps the old global UNIQUE(username) for UNIQUE(tenant_id, username), once.
+     */
+    public static function usernamesPerShop(): void
+    {
+        static $done = false;
+        if ($done) return;
+        $done = true;
+        $flag = Database::marker('usernames_per_shop_v1');
+        if (is_file($flag)) return;
+        try {
+            $pdo = Database::pdo();
+            $idx = $pdo->query("SELECT DISTINCT index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'users'
+                                  AND non_unique = 0 AND column_name = 'username' AND index_name <> 'PRIMARY'")->fetchAll(PDO::FETCH_COLUMN);
+            foreach ($idx as $i) {
+                $cols = $pdo->query("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'users' AND index_name = " . $pdo->quote($i))->fetchColumn();
+                if ((int) $cols === 1) $pdo->exec('ALTER TABLE users DROP INDEX `' . str_replace('`', '', $i) . '`'); // the global one
+            }
+            $has = (int) $pdo->query("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'users' AND index_name = 'uq_users_tenant_username'")->fetchColumn();
+            if (!$has) $pdo->exec('ALTER TABLE users ADD UNIQUE KEY uq_users_tenant_username (tenant_id, username)');
+            @file_put_contents($flag, date('c'));
+        } catch (Throwable $e) {
+            error_log('Signup::usernamesPerShop: ' . $e->getMessage());
+        }
+    }
+
     /** Is the public signup page open? Toggled from the support Overview. */
     public static function enabled(): bool
     {
@@ -165,11 +194,12 @@ class Signup
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Enter a valid email address.';
         if (strlen($password) < 8) $errors[] = 'Password must be at least 8 characters.';
         if (!$errors) {
-            $chk = $pdo->prepare('SELECT SUM(email = ?), SUM(username = ?) FROM users');
-            $chk->execute([$email, $username]);
+            // Email is the sign-in, unique everywhere; the username only has to be free in this shop.
+            $chk = $pdo->prepare('SELECT SUM(email = ?), SUM(username = ? AND tenant_id = ?) FROM users');
+            $chk->execute([$email, $username, $accountId]);
             [$emailTaken, $userTaken] = $chk->fetch(PDO::FETCH_NUM);
             if ($emailTaken) $errors[] = 'That email already has an account. Sign in instead.';
-            if ($userTaken) $errors[] = 'That username is taken.';
+            if ($userTaken) $errors[] = 'That username is already used in this shop — pick another.';
         }
         $roleId = (int) $pdo->query("SELECT id FROM roles WHERE role_name = 'tenant_owner' LIMIT 1")->fetchColumn();
         if (!$roleId) $errors[] = 'The account cannot be set up right now. Please contact support.';

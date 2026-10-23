@@ -5,6 +5,7 @@ require_once __DIR__ . '/../_boot.php';
 
 $pdo = Database::pdo();
 $id = (int) ($_GET['id'] ?? 0);
+SupportOrg::guard($id); // only this support company's accounts
 $stmt = $pdo->prepare(
     'SELECT t.*, u.id AS owner_id, u.username AS owner_username, u.email AS owner_email
        FROM tenants t LEFT JOIN users u ON u.id = t.owner_user_id
@@ -94,8 +95,10 @@ if (support_posted()) {
         $username = trim($_POST['username'] ?? '');
         $email = strtolower(trim($_POST['email'] ?? ''));
         $pw = $_POST['password'] ?? '';
-        $taken = $pdo->prepare('SELECT username, email FROM users WHERE email = ? OR username = ? LIMIT 1');
-        $taken->execute([$email, $username]);
+        // Email is unique everywhere; the username only within this account's shops.
+        $taken = $pdo->prepare('SELECT u.username, u.email FROM users u LEFT JOIN tenants t ON t.id = u.tenant_id
+                                 WHERE u.email = ? OR (u.username = ? AND (t.id = ? OR t.parent_tenant_id = ?)) LIMIT 1');
+        $taken->execute([$email, $username, $id, $id]);
         $hit = $taken->fetch(PDO::FETCH_ASSOC);
         if (!preg_match('/^[A-Za-z0-9_.@-]{3,50}$/', $username)) {
             support_flash('Username must be 3–50 letters, numbers, dots, dashes or underscores.', 'danger');
@@ -156,9 +159,9 @@ if (support_posted()) {
             $hit = $pdo->prepare(
                 'SELECT u.id, u.username, u.email, t.name AS shop, (t.id = ? OR t.parent_tenant_id = ?) AS mine
                    FROM users u LEFT JOIN tenants t ON t.id = u.tenant_id
-                  WHERE (u.email = ? OR u.username = ?) AND u.id <> ?'
+                  WHERE (u.email = ? OR (u.username = ? AND (t.id = ? OR t.parent_tenant_id = ?))) AND u.id <> ?'
             );
-            $hit->execute([$id, $id, $email, $username, $ownerId]);
+            $hit->execute([$id, $id, $email, $username, $id, $id, $ownerId]);
             $hits = $hit->fetchAll(PDO::FETCH_ASSOC);
             $others = array_filter($hits, fn($h) => !$h['mine']);
             if ($others && empty($_POST['take_over'])) {

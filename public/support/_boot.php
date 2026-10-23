@@ -6,6 +6,8 @@ if (empty($_SESSION['support_auth'])) {
     header('Location: ' . public_url('support/login.php'));
     exit;
 }
+// Every support login is its own private, primary account (converts old team members once).
+SupportOrg::ensure();
 // A team member who was switched off or removed is signed out straight away.
 if (!SupportAccount::agentStillActive()) {
     unset($_SESSION['support_auth'], $_SESSION['support_role'], $_SESSION['support_agent'], $_SESSION['support_email'], $_SESSION['support_name']);
@@ -50,6 +52,7 @@ function support_flash(?string $msg = null, string $type = 'success'): ?array
 /** All accounts (top-level tenants) with owner + branch count. */
 function support_accounts(PDO $pdo): array
 {
+    SupportOrg::ensure(); // each support company sees only its own accounts
     // Demo shops from the landing page are not client accounts.
     $demo = class_exists('Demo');
     if ($demo) { Demo::ensureSchema($pdo); }
@@ -58,7 +61,7 @@ function support_accounts(PDO $pdo): array
                 (SELECT COUNT(*) FROM tenants b WHERE b.parent_tenant_id = t.id) AS branch_count
            FROM tenants t
            LEFT JOIN users u ON u.id = t.owner_user_id
-          WHERE t.parent_tenant_id IS NULL' . ($demo ? ' AND t.demo_expires_at IS NULL' : '') . '
+          WHERE t.parent_tenant_id IS NULL AND t.support_org = ' . SupportOrg::current() . ($demo ? ' AND t.demo_expires_at IS NULL' : '') . '
           ORDER BY t.created_at DESC'
     )->fetchAll(PDO::FETCH_ASSOC);
 }
