@@ -79,6 +79,7 @@ class Features
         '/super/guide/', '/staff/guide/', '/super/help/', '/super/settings/menu.php',
         '/super/locked.php', // shown while support has locked the account
         '/super/alerts/',    // news & alerts from support
+        '/super/statements/', // transaction statement: every package (owners only)
         '/super/api/', // Website API add-on: its own switch (ShopApi), any package
     ];
 
@@ -303,6 +304,15 @@ class Features
             }
         } elseif (self::enabled(self::SHOP_POS, $account)) {
             return;
+        }
+        // Restaurant-only accounts: the shop's orders, sales, credit and stock pages don't apply —
+        // the restaurant has its own (orders, payments, store stock, kitchen).
+        $restOnly = self::enabled(self::RESTAURANT_POS, $account);
+        foreach (['/inventory/', '/stock/', '/orders/', '/sales/', '/credits/'] as $shopPage) {
+            if ($restOnly && strpos($script, $shopPage) !== false) {
+                header('Location: ' . public_url('super/restaurant/dashboard.php'));
+                exit;
+            }
         }
         if (self::anyPackage($account)) {
             foreach (self::COMMON_PAGES as $ok) {

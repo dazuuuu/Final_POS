@@ -3,6 +3,12 @@
 require_once __DIR__ . '/../../../app/app.php';
 PageGuard::auth();
 
+// Restaurant-only accounts get the restaurant dashboard, not the shop one.
+if (!Features::enabled(Features::SHOP_POS) && Features::enabled(Features::RESTAURANT_POS)) {
+    header('Location: ' . public_url('super/restaurant/dashboard.php'));
+    exit;
+}
+
 $pdo = Database::pdo();
 $__tenant = (new Models\TenantModel($pdo))->find(TenantContext::tenantId());
 $currency = $__tenant['currency'] ?? 'KES';

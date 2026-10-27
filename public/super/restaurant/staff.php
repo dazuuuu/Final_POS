@@ -10,7 +10,7 @@ require_once __DIR__ . '/_common.php';
 $self = public_url('super/restaurant/staff.php');
 $svc = new StaffService($pdo);
 $roleDefaults = $svc->roleDefaultCaps('staff');
-$positions = ['Waiter', 'Cashier', 'Chef', 'Manager'];
+$positions = ['Waiter', 'Cashier', 'Chef', 'Kitchen', 'Manager']; // Chef / Kitchen open the kitchen portal
 $errors = [];
 $old = ['name' => '', 'position' => 'Waiter', 'pin' => '', 'payments' => false];
 

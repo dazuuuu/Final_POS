@@ -116,7 +116,7 @@ ob_start();
     <i class="fas fa-circle-check text-success" style="font-size:3rem;"></i>
     <h5 class="mt-2 mb-1" id="dnTitle"></h5>
     <div class="fs-4 fw-bold mb-3" id="dnChange"></div>
-    <a class="btn btn-outline-primary mb-2" id="dnReceipt" target="_blank"><i class="fas fa-print me-1"></i>Print receipt</a>
+    <a class="btn btn-outline-primary mb-2" id="dnReceipt" data-receipt-popup><i class="fas fa-print me-1"></i>Print receipt</a>
     <a class="btn btn-primary" href="<?php echo $self; ?>">Done</a>
   </div></div>
 </div>

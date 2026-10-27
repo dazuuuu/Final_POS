@@ -19,7 +19,7 @@ $self = public_url('super/restaurant/pos.php');
 function pos_dishes(PDO $pdo, int $tid): array
 {
     $stmt = $pdo->prepare('SELECT d.*, c.name AS category_name FROM rest_dishes d LEFT JOIN rest_categories c ON c.id = d.category_id
-                            WHERE d.tenant_id = ? AND d.is_active = 1 ORDER BY c.sort_order IS NULL, c.sort_order, c.name, d.name');
+                            WHERE d.tenant_id = ? AND d.is_active = 1 AND d.sold_out = 0 ORDER BY c.sort_order IS NULL, c.sort_order, c.name, d.name');
     $stmt->execute([$tid]);
     $dishes = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $d) {
@@ -336,7 +336,7 @@ ob_start();
     <div class="small text-muted mb-1">Amount due</div>
     <div class="fs-4 fw-bold mb-1" id="dnTotal"></div>
     <div class="small text-muted mb-3">The customer pays with this receipt number on the Payments page.</div>
-    <a class="btn btn-outline-primary mb-2" id="dnReceipt" target="_blank"><i class="fas fa-print me-1"></i>Print order slip</a>
+    <a class="btn btn-outline-primary mb-2" id="dnReceipt" data-receipt-popup><i class="fas fa-print me-1"></i>Print order slip</a>
     <button class="btn btn-primary" id="dnNext">Next order</button>
   </div></div>
 </div>

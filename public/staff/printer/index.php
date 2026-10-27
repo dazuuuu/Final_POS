@@ -16,7 +16,9 @@ ob_start();
 ?>
 <meta name="csrf-token" content="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES); ?>">
 <meta name="taso-print-endpoint" content="<?php echo htmlspecialchars(public_url('api/print/network.php')); ?>">
+<?php $localServer = PrintLocal::server(); if ($localServer): ?><meta name="taso-print-local" content="1"><?php endif; ?>
 <style>
+  @media print { body *{visibility:hidden !important;} #sample,#sample *{visibility:visible !important;} #sample{position:absolute;left:0;top:0;width:100%;border:0 !important;} }
   .pmode{cursor:pointer;border:2px solid #e2e8f0;border-radius:12px;padding:12px 14px;display:flex;gap:12px;align-items:flex-start;height:100%;}
   .pmode:hover{border-color:#94a3b8;}
   .pmode.active{border-color:#2563eb;background:#eff6ff;}
@@ -32,13 +34,14 @@ ob_start();
         <div class="row g-2 mb-3" id="modes">
           <?php foreach ([
               ['bluetooth', 'fa-brands fa-bluetooth-b', 'Bluetooth printer', 'Thermal printers (BLE). Chrome on Android, Windows or Mac.'],
-              ['network',   'fas fa-wifi',             'Wi-Fi / network printer', 'Thermal printer on the shop network (port 9100).'],
-              ['system',    'fas fa-print',            'Device printer', 'Any printer installed on this phone or computer — Wi-Fi, USB, AirPrint.'],
+              ['wifi',      'fas fa-wifi',             'Wi-Fi printer', 'A printer on the shop Wi-Fi. Add it to this phone or computer once — then every receipt prints with one tap.'],
+              ['system',    'fas fa-print',            'USB / other printer', 'Any printer already installed on this phone or computer (USB, AirPrint, shared).'],
+              ...($localServer ? [['network', 'fas fa-network-wired', 'Wi-Fi printer by IP (silent)', 'This system runs on a computer in the shop: send receipts straight to the printer\'s IP, no dialog.']] : []),
               ['rawbt',     'fas fa-mobile-screen',    'Bluetooth via RawBT (Android)', 'Older Bluetooth printers paired in Android settings.'],
               ['off',       'fas fa-ban',              'No printer', 'Print button opens the normal print dialog.'],
           ] as [$val, $icon, $label, $hint]):
               // Basic (20k): Bluetooth and USB / device printing — Wi-Fi is Pro.
-              $locked = Features::isBasic() && $val === 'network'; ?>
+              $locked = Features::isBasic() && ($val === 'network' || $val === 'wifi'); ?>
           <div class="col-12 col-md-6">
             <?php if ($locked): ?>
             <a class="pmode text-decoration-none text-reset" style="opacity:.6" href="<?php echo public_url('super/upgrade.php?f=' . urlencode($label)); ?>">
@@ -72,12 +75,22 @@ ob_start();
           <div class="form-text mb-3">Print a self-test page on the printer (hold the feed button while switching it on) to find its IP. This works when the system runs on a computer in the shop. If it's online, connect the printer to this device's Wi-Fi printing instead and choose <em>Device printer</em>.</div>
         </div>
 
+        <div class="alert alert-light border small mb-3 d-none" data-for="wifi">
+          <div class="fw-semibold mb-1">Add the Wi-Fi printer to this device (once):</div>
+          <ol class="mb-2 ps-3">
+            <li>Connect the printer to the shop Wi-Fi (see its manual) and connect this phone / computer to the <b>same Wi-Fi</b>.</li>
+            <li><b>Android:</b> Settings → Connected devices → Printing → turn on <em>Default print service</em> (or install <em>Mopria</em>); the printer appears by itself. <b>iPhone / iPad:</b> nothing to do — AirPrint printers appear automatically. <b>Windows / Mac:</b> Settings → Printers → Add printer.</li>
+            <li>Tap <em>Test print</em> below, pick the printer, and print. Your choice is remembered.</li>
+          </ol>
+          After a sale a small receipt preview opens — tap <b>Print</b> and it goes to this printer.
+        </div>
+
         <div class="alert alert-light border small mb-3 d-none" data-for="rawbt">
           Install <strong>RawBT</strong> from the Play Store, pair your printer in Android Bluetooth settings, and select it inside RawBT. Receipts are then handed to RawBT automatically.
         </div>
 
         <div class="alert alert-light border small mb-3 d-none" data-for="system">
-          Receipts open the print dialog automatically — choose your printer once and it's remembered. For fully silent printing on a computer, start Chrome with <code>--kiosk-printing</code> and set your receipt printer as the default.
+          After a sale a small receipt preview opens with a Print button — choose your printer once and it's remembered. For fully silent printing on a computer, start Chrome with <code>--kiosk-printing</code> and set your receipt printer as the default.
         </div>
 
         <div class="row g-3 mb-3" data-for="bluetooth network rawbt">
@@ -95,7 +108,7 @@ ob_start();
           </div>
         </div>
 
-        <div class="form-check form-switch mb-4" data-for="bluetooth network rawbt system">
+        <div class="form-check form-switch mb-4" data-for="bluetooth network rawbt system wifi">
           <input class="form-check-input" type="checkbox" id="autoPrint">
           <label class="form-check-label fw-semibold" for="autoPrint">Print automatically after every sale</label>
         </div>

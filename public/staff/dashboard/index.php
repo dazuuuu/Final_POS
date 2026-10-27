@@ -20,7 +20,10 @@ if (!TenantContext::can(Capabilities::SALES_RECORD) && Features::enabled(Feature
 
 // Restaurant-only accounts: staff home is the restaurant order screen.
 if (!Features::enabled(Features::SHOP_POS) && Features::enabled(Features::RESTAURANT_POS)) {
-    header('Location: ' . public_url('super/restaurant/pos.php'));
+    $pos = Database::pdo()->prepare('SELECT position FROM users WHERE id = ?');
+    $pos->execute([TenantContext::userId()]);
+    $chef = in_array(strtolower(trim((string) $pos->fetchColumn())), ['chef', 'kitchen', 'cook'], true);
+    header('Location: ' . public_url($chef ? 'super/restaurant/kitchen.php' : 'super/restaurant/pos.php'));
     exit;
 }
 
@@ -249,7 +252,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     $_SESSION['sale_form_token'] = bin2hex(random_bytes(16));
                     $_SESSION['flash']['success'] = $okMsg;
-                    header('Location: ' . public_url($area . '/orders/receipt.php?id=' . $orderId . '&new=1'));
+                    // Back to the sale screen; the receipt opens there in a small preview.
+                    $_SESSION['receipt_popup'] = public_url($area . '/orders/receipt.php?id=' . $orderId . '&new=1');
+                    header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
                     exit;
                 }
                 // Rare: opened fine but settling failed. It's now a normal open

@@ -44,6 +44,14 @@ $stmt->execute([$tid]);
 $stockList = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $stockById = array_column($stockList, null, 'id');
 
+// Kitchen requests ("Request from store" on the kitchen portal): mark sent or declined.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['act'] ?? '') === 'kreq' && csrf_verify($_POST['csrf_token'] ?? null)) {
+    $pdo->prepare("UPDATE rest_kitchen_requests SET status = ?, done_by = ?, done_at = NOW() WHERE id = ? AND tenant_id = ? AND status = 'pending'")
+        ->execute([($_POST['to'] ?? '') === 'declined' ? 'declined' : 'done', TenantContext::userId(), (int) ($_POST['id'] ?? 0), $tid]);
+    header('Location: ' . $self);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_verify($_POST['csrf_token'] ?? null)) {
     $action = $_POST['action'] ?? 'move';
 
@@ -137,7 +145,25 @@ $stmt->execute([$tid]);
 $recent = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $post = $_SERVER['REQUEST_METHOD'] === 'POST' && $error;
+$kreq = $pdo->prepare("SELECT r.*, u.username FROM rest_kitchen_requests r LEFT JOIN users u ON u.id = r.requested_by WHERE r.tenant_id = ? AND r.status = 'pending' ORDER BY r.id");
+$kreq->execute([$tid]);
+$kreq = $kreq->fetchAll(PDO::FETCH_ASSOC);
 ob_start();
+if ($kreq): ?>
+  <div class="card mb-3 border-warning"><div class="card-body p-3">
+    <h2 class="h6 fw-bold"><i class="fas fa-fire-burner me-1"></i>Kitchen is asking for</h2>
+    <?php foreach ($kreq as $r): ?>
+      <div class="d-flex justify-content-between align-items-center border-top py-2 small">
+        <span><b><?php echo htmlspecialchars($r['name']); ?></b><?php echo $r['quantity'] !== null ? ' · ' . rest_qty((float) $r['quantity']) . ' ' . htmlspecialchars((string) $r['unit']) : ''; ?>
+          <span class="text-muted"> — <?php echo htmlspecialchars(($r['username'] ?? '') . ' ' . date('j M H:i', strtotime($r['created_at']))); ?><?php echo $r['note'] ? ' · ' . htmlspecialchars($r['note']) : ''; ?></span></span>
+        <form method="post" class="d-flex gap-1"><?php echo csrf_field(); ?><input type="hidden" name="act" value="kreq"><input type="hidden" name="id" value="<?php echo (int) $r['id']; ?>">
+          <button class="btn btn-sm btn-success" name="to" value="done" title="Move it below first">Sent</button>
+          <button class="btn btn-sm btn-outline-secondary" name="to" value="declined">Decline</button></form>
+      </div>
+    <?php endforeach; ?>
+    <p class="small text-muted mb-0 mt-1">Move the stock to the Kitchen below, then mark the request Sent.</p>
+  </div></div>
+<?php endif;
 ?>
 <div class="row g-4">
   <div class="col-12 col-xl-5">

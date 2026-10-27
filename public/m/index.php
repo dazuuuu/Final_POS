@@ -26,7 +26,7 @@ function m_shop(PDO $pdo, string $token): ?array
 function m_menu(PDO $pdo, int $tid): array
 {
     $stmt = $pdo->prepare('SELECT d.*, c.name AS category_name, c.sort_order FROM rest_dishes d LEFT JOIN rest_categories c ON c.id = d.category_id
-                            WHERE d.tenant_id = ? AND d.is_active = 1 ORDER BY c.sort_order IS NULL, c.sort_order, c.name, d.name');
+                            WHERE d.tenant_id = ? AND d.is_active = 1 AND d.sold_out = 0 ORDER BY c.sort_order IS NULL, c.sort_order, c.name, d.name');
     $stmt->execute([$tid]);
     $dishes = [];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $d) {

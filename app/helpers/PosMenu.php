@@ -45,6 +45,18 @@ class PosMenu
         }
     }
 
+    /** Staff whose position is Chef / Kitchen / Cook. */
+    private static function isKitchen(): bool
+    {
+        try {
+            $st = Database::pdo()->prepare('SELECT position FROM users WHERE id = ?');
+            $st->execute([TenantContext::userId()]);
+            return in_array(strtolower(trim((string) $st->fetchColumn())), ['chef', 'kitchen', 'cook'], true);
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
     public static function groups(bool $arranged = true): array
     {
         $staff = TenantContext::role() === 'staff';
@@ -52,6 +64,9 @@ class PosMenu
         $can = fn(string $c) => TenantContext::can($c);
         $shop = Features::enabled(Features::SHOP_POS);
         $common = Features::anyPackage(); // staff, sales, credit/held, reports, printer, inventory: every package
+        // Restaurant-only accounts have their own orders, stock and payments — no shop menus.
+        $restOnly = !$shop && Features::enabled(Features::RESTAURANT_POS);
+        $shopCommon = $common && !$restOnly;
         $main = $owner && ShopContext::isMainShop();
         $primary = $owner && self::isPrimaryOwner();
         $a = $staff ? 'staff' : 'super';
@@ -65,9 +80,10 @@ class PosMenu
         $g = [];
         $g[] = ['home', 'Home', 'fa-house', [
             ['Dashboard', 'fa-gauge-high', $staff ? 'staff/dashboard/' : 'super/dashboard/', true],
+            ['Statement', 'fa-file-lines', 'super/statements/', $owner],
         ]];
 
-        $g[] = ['shop', 'Shop', 'fa-cash-register', !$common ? [] : [
+        $g[] = ['shop', 'Shop', 'fa-cash-register', !$shopCommon ? [] : [
             ['New sale', 'fa-cash-register', $staff ? 'staff/dashboard/' : 'super/pos/', $shop && $can(Capabilities::SALES_RECORD)],
             ['Credit sale', 'fa-hand-holding-dollar', "$a/orders/", $credit],
             ['Held sales', 'fa-pause', "$a/orders/held.php", $can(Capabilities::SALES_RECORD)],
@@ -80,6 +96,7 @@ class PosMenu
 
         if (Features::enabled(Features::RESTAURANT_POS)) {
             $g[] = ['restaurant', 'Restaurant', 'fa-utensils', [
+                ['Kitchen', 'fa-fire-burner', 'super/restaurant/kitchen.php', $owner || self::isKitchen()],
                 ['New order', 'fa-cash-register', 'super/restaurant/pos.php', $staff || $can(Capabilities::SALES_RECORD)],
                 [$staff ? 'My orders' : 'Orders', 'fa-receipt', 'super/restaurant/orders.php', $staff || $can(Capabilities::SALES_RECORD)],
                 ['Payments', 'fa-money-bill-wave', 'super/restaurant/payments.php', $pay, $pay ? self::onlineOrders() : null],
@@ -116,7 +133,7 @@ class PosMenu
         }
 
         $elec = Features::enabled(Features::ELECTRONICS);
-        $g[] = ['stock', 'Stock', 'fa-boxes-stacked', [
+        $g[] = ['stock', 'Stock', 'fa-boxes-stacked', $restOnly ? [] : [
             ['Inventory', 'fa-warehouse', "$a/inventory/", $common && ($can(Capabilities::INVENTORY_VIEW) || $invEdit)],
             ['Record stock', 'fa-truck-ramp-box', "$a/stock/new.php", $common && ($staff ? $can(Capabilities::STOCK_ENTER) : $invEdit)],
             ['Products', 'fa-box', 'super/products/', $shop && !$staff && $invEdit],
@@ -130,7 +147,7 @@ class PosMenu
             ['Warranty & repairs', 'fa-screwdriver-wrench', 'super/electronics/repairs.php', $elec && $can(Capabilities::SALES_RECORD)],
         ]];
 
-        $g[] = ['money', 'Money', 'fa-wallet', !$common ? [] : [
+        $g[] = ['money', 'Money', 'fa-wallet', !$shopCommon ? [] : [
             ['Expenses', 'fa-file-invoice-dollar', "$a/expenses/", $shop && $can(Capabilities::EXPENSES_RECORD)],
             ['Finances', 'fa-scale-balanced', 'super/finances/', $shop && !$staff],
             [$staff ? 'My sales' : 'Sales', 'fa-receipt', "$a/sales/", $staff ? $can(Capabilities::SALES_VIEW) : $owner],

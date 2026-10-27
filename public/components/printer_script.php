@@ -7,6 +7,7 @@ require_once ROOT_PATH . '/app/helpers/uploads.php';
 <meta name="csrf-token" content="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES); ?>">
 <meta name="taso-print-endpoint" content="<?php echo htmlspecialchars(public_url('api/print/network.php')); ?>">
 <?php if (Features::isBasic()): ?><meta name="taso-print-basic" content="1"><?php endif; ?>
+<?php if (PrintLocal::server()): ?><meta name="taso-print-local" content="1"><?php endif; ?>
 <script src="<?php echo htmlspecialchars(public_url('assets/js/printer.js')); ?>"></script>
 <?php if (!empty($autoPrint)): ?>
 <script>
@@ -14,4 +15,11 @@ require_once ROOT_PATH . '/app/helpers/uploads.php';
   history.replaceState(null, '', location.href.replace(/([?&])new=1(&|$)/, '$1').replace(/[?&]$/, ''));
   window.addEventListener('load', function () { TasoPrinter.autoPrint(); });
 </script>
+<?php endif; ?>
+<?php if (!empty($_GET['embed'])): // shown inside the receipt popup: just the receipt ?>
+<style>
+  body{padding:8px !important;background:#f1f5f9 !important;}
+  .actions,.noprint,.no-print,.np{display:none !important;}
+  .sheet{margin:0 auto !important;}
+</style>
 <?php endif; ?>
