@@ -103,7 +103,7 @@ ob_start();
   </div>
   <div class="d-flex gap-2">
     <a class="btn btn-sm btn-outline-secondary" href="<?php echo $ordersBase; ?>"><i class="fas fa-arrow-left me-1"></i>Credit sales</a>
-    <a class="btn btn-sm btn-outline-primary" href="<?php echo $receiptUrl; ?>"><i class="fas fa-receipt me-1"></i>Receipt</a>
+    <a data-receipt-popup class="btn btn-sm btn-outline-primary" href="<?php echo $receiptUrl; ?>"><i class="fas fa-receipt me-1"></i>Receipt</a>
   </div>
 </div>
 

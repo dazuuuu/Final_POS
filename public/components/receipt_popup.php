@@ -23,12 +23,17 @@ unset($_SESSION['receipt_popup']);
 </div></div>
 <script>
 (function () {
-  var back = document.getElementById('rpBack'), frame = document.getElementById('rpFrame');
-  function open(url) {
+  var back = document.getElementById('rpBack'), frame = document.getElementById('rpFrame'), onClose = null;
+  // open(url[, onClose]): onClose runs when the preview is closed (e.g. reload a list).
+  function open(url, cb) {
     url += (url.indexOf('?') < 0 ? '?' : '&') + 'embed=1';
+    onClose = typeof cb === 'function' ? cb : null;
     frame.src = url; back.classList.add('on');
   }
-  function close() { back.classList.remove('on'); frame.src = 'about:blank'; }
+  function close() {
+    back.classList.remove('on'); frame.src = 'about:blank';
+    if (onClose) { var cb = onClose; onClose = null; cb(); }
+  }
   document.getElementById('rpClose').onclick = close;
   back.addEventListener('click', function (e) { if (e.target === back) close(); });
   document.getElementById('rpPrint').onclick = function () {

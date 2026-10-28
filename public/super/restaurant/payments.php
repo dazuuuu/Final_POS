@@ -189,6 +189,8 @@ ob_start();
         btn.disabled = false;
         if (!r.ok) { $('pmErr').textContent = r.error; $('pmErr').style.display = ''; return; }
         pm.hide();
+        // Preview the receipt right here (it prints itself); closing it refreshes the list for the next payment.
+        if (window.TasoReceipt) { TasoReceipt.open(r.receipt, function () { location.href = API; }); return; }
         $('dnTitle').textContent = 'Order #' + cur.no + ' paid';
         $('dnChange').textContent = r.change > 0 ? 'Change: ' + money(r.change) : '';
         $('dnReceipt').href = r.receipt;

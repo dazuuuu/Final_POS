@@ -100,6 +100,8 @@ class PosMenu
                 ['New order', 'fa-cash-register', 'super/restaurant/pos.php', $staff || $can(Capabilities::SALES_RECORD)],
                 [$staff ? 'My orders' : 'Orders', 'fa-receipt', 'super/restaurant/orders.php', $staff || $can(Capabilities::SALES_RECORD)],
                 ['Payments', 'fa-money-bill-wave', 'super/restaurant/payments.php', $pay, $pay ? self::onlineOrders() : null],
+                ['Sales', 'fa-chart-column', 'super/restaurant/sales.php', !$staff && $can(Capabilities::REPORTS_VIEW)],
+                ['Reports', 'fa-chart-line', 'super/restaurant/reports.php', !$staff && $can(Capabilities::REPORTS_VIEW)],
                 ['Share menu / QR', 'fa-qrcode', 'super/restaurant/share.php', !$staff && $can(Capabilities::SETTINGS_MANAGE)],
                 ['Waiters & staff', 'fa-user-tie', 'super/restaurant/staff.php', !$staff && $can(Capabilities::STAFF_MANAGE)],
                 ['Menu', 'fa-bowl-food', 'super/restaurant/menu.php', !$staff && $invEdit],

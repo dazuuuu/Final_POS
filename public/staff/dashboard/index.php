@@ -120,7 +120,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $saleToken = preg_replace('/[^a-f0-9]/', '', (string) ($_POST['sale_token'] ?? ''));
     if (in_array($action, ['pay', 'credit'], true) && $saleToken !== '' && isset($_SESSION['processed_sale_tokens'][$saleToken])) {
         $done = $_SESSION['processed_sale_tokens'][$saleToken];
-        header('Location: ' . public_url($area . '/orders/receipt.php?id=' . (int) $done['id']));
+        $_SESSION['receipt_popup'] = public_url($area . '/orders/receipt.php?id=' . (int) $done['id']); // already sold: just preview it again
+        header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
         exit;
     }
     $cart = json_decode($_POST['cart'] ?? '[]', true);

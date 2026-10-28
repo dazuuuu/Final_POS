@@ -51,7 +51,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare("UPDATE rest_orders SET delivery_status = 'delivered', delivered_at = COALESCE(delivered_at, NOW()) WHERE id = ?")->execute([$id]);
             }
             rest_flash('Payment recorded for ' . $order['order_no'] . ($res['change'] > 0 ? ' — change ' . $currency . ' ' . number_format($res['change'], 2) : '') . '. It is now a sale.');
-            header('Location: ' . $ordersUrl . '?receipt=' . $id . '&print=1');
+            $_SESSION['receipt_popup'] = $ordersUrl . '?receipt=' . $id . '&print=1'; // previewed on this page
+            header('Location: ' . strtok($_SERVER['REQUEST_URI'], '?'));
             exit;
         }
         rest_flash($res['error'], 'error');
@@ -141,7 +142,7 @@ ob_start();
         <div class="small text-muted mb-2"><?php echo $h(implode(', ', $items[(int) $o['id']] ?? [])); ?></div>
         <div class="d-flex justify-content-between align-items-center border-top pt-2 mt-auto">
           <strong><?php echo $currency . ' ' . number_format((float) $o['total'], 2); ?></strong>
-          <a class="small" href="<?php echo $ordersUrl . '?receipt=' . (int) $o['id']; ?>"><?php echo $paid ? 'Receipt' : 'Order slip'; ?></a>
+          <a class="small" data-receipt-popup href="<?php echo $ordersUrl . '?receipt=' . (int) $o['id']; ?>"><?php echo $paid ? 'Receipt' : 'Order slip'; ?></a>
         </div>
         <div class="d-flex flex-wrap gap-2 mt-2">
           <?php if ($next): ?>

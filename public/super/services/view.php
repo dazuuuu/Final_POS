@@ -80,7 +80,7 @@ ob_start();
       <?php if ($t['notes']): ?><div class="small mt-1"><i class="fas fa-note-sticky me-1 text-warning"></i><?php echo svc_h($t['notes']); ?></div><?php endif; ?>
     </div>
     <div class="d-flex gap-2 align-items-start flex-wrap">
-      <?php if ($isDesk): ?><a class="btn btn-sm btn-outline-secondary" href="<?php echo public_url('super/services/receipt.php?id=' . $id); ?>"><i class="fas fa-print me-1"></i><?php echo $t['status'] === 'paid' ? 'Receipt' : 'Invoice'; ?></a><?php endif; ?>
+      <?php if ($isDesk): ?><a data-receipt-popup class="btn btn-sm btn-outline-secondary" href="<?php echo public_url('super/services/receipt.php?id=' . $id); ?>"><i class="fas fa-print me-1"></i><?php echo $t['status'] === 'paid' ? 'Receipt' : 'Invoice'; ?></a><?php endif; ?>
       <?php if ($canAssign && $t['status'] === 'booked'): ?>
         <form method="post"><input type="hidden" name="action" value="checkin"><button class="btn btn-sm btn-primary"><i class="fas fa-door-open me-1"></i>Client arrived</button></form>
       <?php endif; ?>

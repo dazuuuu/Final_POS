@@ -1,7 +1,7 @@
 /* Dazu Modern POS service worker — makes the app installable + fast.
    Pages are always network-first (so live data + auth stay correct);
    only static assets and the login shell are cached. */
-const CACHE = 'dazu-pos-v6';
+const CACHE = 'dazu-pos-v7';
 // Derived from this script's own URL, not hard-coded — works whatever
 // folder the app is deployed under.
 const BASE  = new URL('.', self.location).pathname.replace(/\/$/, '');
@@ -33,6 +33,13 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+
+  // This file (or the manifest) opened as a page — e.g. the installed app
+  // reopening the last address it had: go to the POS, never show the code.
+  if (req.mode === 'navigate' && /\/(sw\.js|manifest\.webmanifest)$/.test(url.pathname)) {
+    event.respondWith(Response.redirect(BASE + '/terminal/', 302));
+    return;
+  }
 
   // Let redirects pass through normally; the browser rejects a redirected response
   // when the service worker tries to handle it with a non-follow mode.

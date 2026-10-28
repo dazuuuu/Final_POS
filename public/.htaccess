@@ -2,6 +2,11 @@
 # (see app/helpers/ShopUrl.php).
 <IfModule mod_rewrite.c>
 RewriteEngine On
+# sw.js / the manifest opened as a page (not the browser's background fetch,
+# which sends "Service-Worker: script"): go to the POS instead of showing code.
+RewriteCond %{HTTP:Service-Worker} ^$
+RewriteCond %{HTTP:Sec-Fetch-Dest} ^document$
+RewriteRule ^(sw\.js|manifest\.webmanifest)$ terminal/ [R=302,L]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^([a-z0-9-]+)(/.*)?$ index.php [L,QSA]

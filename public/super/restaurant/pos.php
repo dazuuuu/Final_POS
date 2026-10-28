@@ -546,7 +546,10 @@ ob_start();
     send(payload('place')).then(function (r) {
       btn.disabled = false;
       if (!r.ok) { alert(r.error); return; }
-      $('dnTitle').textContent = 'Order #' + r.order_no + (orderStatus === 'open' ? ' updated' : ' placed');
+      // Preview the order slip right here (it prints itself) and get the till ready for the next order.
+      resetOrder();
+      if (window.TasoReceipt) { TasoReceipt.open(r.receipt); return; }
+      $('dnTitle').textContent = 'Order #' + r.order_no + ' placed';
       $('dnTotal').textContent = money(r.total);
       $('dnReceipt').href = r.receipt;
       new bootstrap.Modal($('doneModal'), {backdrop: 'static'}).show();
