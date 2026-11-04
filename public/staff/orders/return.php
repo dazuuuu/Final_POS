@@ -91,7 +91,7 @@ ob_start();
           <?php foreach ($recent as $r): ?>
             <tr class="small">
               <td><?php echo date('j M, g:i a', strtotime($r['created_at'])); ?></td>
-              <td><a href="<?php echo public_url($area . '/orders/receipt.php?id=' . (int) $r['order_id']); ?>"><?php echo htmlspecialchars($r['receipt_number']); ?></a><div class="text-muted"><?php echo htmlspecialchars($r['table_name']); ?></div></td>
+              <td><a data-receipt-popup href="<?php echo public_url($area . '/orders/receipt.php?id=' . (int) $r['order_id']); ?>"><?php echo htmlspecialchars($r['receipt_number']); ?></a><div class="text-muted"><?php echo htmlspecialchars($r['table_name']); ?></div></td>
               <td><?php echo htmlspecialchars($r['summary'] ?? ''); ?></td>
               <td class="text-end"><?php echo number_format((float) $r['return_value'], 0); ?></td>
               <td class="text-end"><?php echo (float) $r['refund_amount'] > 0 ? number_format((float) $r['refund_amount'], 0) . ' <span class="text-muted">' . ($r['refund_method'] === 'mpesa' ? 'M-Pesa' : 'cash') . '</span>' : '—'; ?></td>

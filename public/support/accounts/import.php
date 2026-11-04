@@ -3,6 +3,7 @@
 require_once __DIR__ . '/../_boot.php';
 
 $id = (int) ($_GET['id'] ?? 0);
+SupportOrg::guard($id); // only this support company's accounts
 $stmt = Database::pdo()->prepare('SELECT name FROM tenants WHERE id = ? AND parent_tenant_id IS NULL');
 $stmt->execute([$id]);
 $name = $stmt->fetchColumn();

@@ -186,7 +186,7 @@ ob_start();
               <td class="text-end fw-semibold small">KES <?php echo number_format((float) $s['total'], 0); ?></td>
               <td class="text-end">
                 <div class="btn-group btn-group-sm">
-                  <a class="btn btn-outline-secondary" href="<?php echo public_url($s['receipt_url']); ?>">Receipt</a>
+                  <a data-receipt-popup class="btn btn-outline-secondary" href="<?php echo public_url($s['receipt_url']); ?>">Receipt</a>
                   <?php if (!empty($s['edit_url']) && TenantContext::can(Capabilities::SALES_RECORD)): ?>
                     <a class="btn btn-outline-primary" href="<?php echo public_url($s['edit_url']); ?>">Edit</a>
                   <?php endif; ?>

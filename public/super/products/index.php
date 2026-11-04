@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'quantity'            => $_POST['quantity'] ?? '',
         'unit'                => $_POST['unit'] ?? 'piece',
         // Staff never see or change the cost price — it stays as the owner set it.
-        'buying_price'        => PageGuard::seesMoney() ? ($_POST['buying_price'] ?? '') : ($editRow['buying_price'] ?? ''),
+        'buying_price'        => PageGuard::seesStockValue() ? ($_POST['buying_price'] ?? '') : ($editRow['buying_price'] ?? ''),
         'wholesale_price'     => $_POST['wholesale_price'] ?? '',
         'retail_price'        => $_POST['retail_price'] ?? '',
         'offer_price'         => $_POST['offer_price'] ?? '',
@@ -288,7 +288,7 @@ $actionBadge = function (string $a): string {
             </div>
           </div>
 
-          <?php $__money = PageGuard::seesMoney(); $__pc = $__money ? 'col-4' : 'col-6'; ?>
+          <?php $__money = PageGuard::seesStockValue(); $__pc = $__money ? 'col-4' : 'col-6'; ?>
           <div class="row g-2">
             <?php if ($__money): // cost price: owners/admins only ?>
             <div class="col-4 mb-3">
@@ -446,17 +446,22 @@ $actionBadge = function (string $a): string {
         });
         menu.classList.add('show');
       }
+      function load(q) {
+        var cat = document.querySelector('.ta-input[data-field="category"]');
+        var extra = field === 'subcategory' ? '&category=' + encodeURIComponent(cat ? cat.value.trim() : '') : '';
+        fetch(API + 'suggest.php?field=' + encodeURIComponent(field) + '&q=' + encodeURIComponent(q) + extra)
+          .then(function (r) { return r.json(); })
+          .then(function (data) { render(data.items || []); })
+          .catch(function () {});
+      }
       input.addEventListener('input', function () {
         clearTimeout(timer);
         var q = input.value.trim();
-        if (!q) { menu.classList.remove('show'); return; }
-        timer = setTimeout(function () {
-          fetch(API + 'suggest.php?field=' + encodeURIComponent(field) + '&q=' + encodeURIComponent(q))
-            .then(function (r) { return r.json(); })
-            .then(function (data) { render(data.items || []); })
-            .catch(function () {});
-        }, 180);
+        if (!q && field !== 'subcategory') { menu.classList.remove('show'); return; }
+        timer = setTimeout(function () { load(q); }, 180);
       });
+      // Subcategories of the chosen category, as soon as the box is tapped.
+      if (field === 'subcategory') { input.addEventListener('focus', function () { load(input.value.trim()); }); }
       input.addEventListener('blur', function () { setTimeout(function () { menu.classList.remove('show'); }, 150); });
     });
   })();

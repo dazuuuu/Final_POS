@@ -71,6 +71,18 @@ if ($rel === '' || $rel === 'index.php' || !is_file($file)) {
     $rel = 'index.php';
 }
 
+// The service worker / manifest are only ever fetched by the browser in the
+// background (that fetch carries "Service-Worker: script" or isn't a page
+// load). Opened as a PAGE — e.g. an installed app reopening the last address
+// it had — they'd show raw code, so send that person to the POS instead.
+if (in_array($rel, ['sw.js', 'manifest.webmanifest'], true) && empty($_SERVER['HTTP_SERVICE_WORKER'])
+    && (($_SERVER['HTTP_SEC_FETCH_DEST'] ?? '') === 'document'
+        || (!isset($_SERVER['HTTP_SEC_FETCH_DEST']) && strpos($_SERVER['HTTP_ACCEPT'] ?? '', 'text/html') !== false))) {
+    header('Cache-Control: no-store');
+    header('Location: ' . $base . '/terminal/', true, 302);
+    exit;
+}
+
 // Static files: served from public/ with a long cache (they're versioned by name).
 if (strtolower(pathinfo($file, PATHINFO_EXTENSION)) !== 'php') {
     $types = [

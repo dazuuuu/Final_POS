@@ -31,6 +31,27 @@ class Database
      * another install (e.g. app/storage uploaded from a laptop) never makes
      * the live database skip a change it hasn't had.
      */
+    /**
+     * Run a model's "add missing tables/columns" check once per database and
+     * per version of the model file, instead of on every page load (those
+     * information_schema lookups were a large share of each request's time).
+     */
+    public static function schemaOnce(string $class, string $file, callable $fn): void
+    {
+        static $ran = [];
+        if (isset($ran[$class])) {
+            return;
+        }
+        $ran[$class] = true;
+        // Install folder in the name: a marker copied from another computer never matches.
+        $flag = self::marker('schema_' . preg_replace('/\W+/', '_', $class) . '_' . @filemtime($file) . '_' . crc32(ROOT_PATH));
+        if (is_file($flag)) {
+            return;
+        }
+        $fn();
+        @file_put_contents($flag, date('c'));
+    }
+
     public static function marker(string $name): string
     {
         static $db = null;

@@ -9,7 +9,7 @@ class SaleModel extends Model
     public function __construct(?\PDO $db = null)
     {
         parent::__construct($db);
-        $this->ensureSchema();
+        \Database::schemaOnce(static::class, __FILE__, fn() => $this->ensureSchema());
     }
 
     /**

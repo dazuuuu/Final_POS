@@ -108,6 +108,12 @@ if (support_posted()) {
                 support_flash('Branding saved.');
             }
         }
+    } elseif ($action === 'org_create' && SupportOrg::isPlatformAdmin()) {
+        [$org, $err] = SupportOrg::create((string) ($_POST['company'] ?? ''), (string) ($_POST['email'] ?? ''), (string) ($_POST['password'] ?? ''));
+        support_flash($err ?? 'Support company created. Sign in at the support login with that email and password — it has its own accounts and team, hidden from every other company.', $err ? 'danger' : 'success');
+    } elseif ($action === 'org_invite' && SupportOrg::isPlatformAdmin()) {
+        $_SESSION['org_invite_link'] = SupportOrg::invite((string) ($_POST['note'] ?? ''));
+        support_flash('Registration link created — send it to the partner. It works once, for 7 days.');
     } elseif ($action === 'test') {
         $to = strtolower(trim($_POST['to'] ?? ''));
         if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
@@ -254,6 +260,8 @@ ob_start();
         <button class="btn btn-sm btn-outline-primary text-nowrap">Send test</button>
       </form>
     </div>
+    <?php if (SupportOrg::isPlatformAdmin()): $orgLink = $_SESSION['org_invite_link'] ?? null; unset($_SESSION['org_invite_link']); ?>
+    <?php endif; ?>
   </div>
 </div>
 <?php

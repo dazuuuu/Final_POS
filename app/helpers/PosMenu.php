@@ -23,6 +23,40 @@
 class PosMenu
 {
     /** @return array<int, array{key:string,label:string,icon:string,links:array<int,array{0:string,1:string,2:string,3?:?string}>}> */
+    /** "2 new" when support alerts are waiting for this owner. */
+    private static function newAlerts(): ?string
+    {
+        try {
+            $n = class_exists('Alerts') ? Alerts::unreadCount(Features::accountId((int) TenantContext::tenantId()), (int) TenantContext::userId()) : 0;
+            return $n ? $n . ' new' : null;
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+
+    /** Is the Website API add-on switched on for this account? */
+    private static function apiOn(): bool
+    {
+        try {
+            $tid = TenantContext::tenantId();
+            return $tid !== null && class_exists('ShopApi') && ShopApi::enabled(Features::accountId((int) $tid));
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
+    /** Staff whose position is Chef / Kitchen / Cook. */
+    private static function isKitchen(): bool
+    {
+        try {
+            $st = Database::pdo()->prepare('SELECT position FROM users WHERE id = ?');
+            $st->execute([TenantContext::userId()]);
+            return in_array(strtolower(trim((string) $st->fetchColumn())), ['chef', 'kitchen', 'cook'], true);
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+
     public static function groups(bool $arranged = true): array
     {
         $staff = TenantContext::role() === 'staff';
@@ -30,8 +64,12 @@ class PosMenu
         $can = fn(string $c) => TenantContext::can($c);
         $shop = Features::enabled(Features::SHOP_POS);
         $common = Features::anyPackage(); // staff, sales, credit/held, reports, printer, inventory: every package
+        // Restaurant-only accounts have their own orders, stock and payments — no shop menus.
+        $restOnly = !$shop && Features::enabled(Features::RESTAURANT_POS);
+        $shopCommon = $common && !$restOnly;
         $main = $owner && ShopContext::isMainShop();
         $primary = $owner && self::isPrimaryOwner();
+        $money = PageGuard::seesMoney();
         $a = $staff ? 'staff' : 'super';
         $pay = $can(Capabilities::PAYMENTS_PROCESS);
         $credit = $can(Capabilities::CREDIT_SALES);
@@ -43,9 +81,11 @@ class PosMenu
         $g = [];
         $g[] = ['home', 'Home', 'fa-house', [
             ['Dashboard', 'fa-gauge-high', $staff ? 'staff/dashboard/' : 'super/dashboard/', true],
+            ['Statement', 'fa-file-lines', 'super/statements/', $money],
+            ['Opening & closing sales', 'fa-sun', 'super/day/', true],
         ]];
 
-        $g[] = ['shop', 'Shop', 'fa-cash-register', !$common ? [] : [
+        $g[] = ['shop', 'Shop', 'fa-cash-register', !$shopCommon ? [] : [
             ['New sale', 'fa-cash-register', $staff ? 'staff/dashboard/' : 'super/pos/', $shop && $can(Capabilities::SALES_RECORD)],
             ['Credit sale', 'fa-hand-holding-dollar', "$a/orders/", $credit],
             ['Held sales', 'fa-pause', "$a/orders/held.php", $can(Capabilities::SALES_RECORD)],
@@ -58,9 +98,12 @@ class PosMenu
 
         if (Features::enabled(Features::RESTAURANT_POS)) {
             $g[] = ['restaurant', 'Restaurant', 'fa-utensils', [
+                ['Kitchen', 'fa-fire-burner', 'super/restaurant/kitchen.php', $owner || self::isKitchen()],
                 ['New order', 'fa-cash-register', 'super/restaurant/pos.php', $staff || $can(Capabilities::SALES_RECORD)],
                 [$staff ? 'My orders' : 'Orders', 'fa-receipt', 'super/restaurant/orders.php', $staff || $can(Capabilities::SALES_RECORD)],
                 ['Payments', 'fa-money-bill-wave', 'super/restaurant/payments.php', $pay, $pay ? self::onlineOrders() : null],
+                ['Sales', 'fa-chart-column', 'super/restaurant/sales.php', $money && $can(Capabilities::REPORTS_VIEW)],
+                ['Reports', 'fa-chart-line', 'super/restaurant/reports.php', $money && $can(Capabilities::REPORTS_VIEW)],
                 ['Share menu / QR', 'fa-qrcode', 'super/restaurant/share.php', !$staff && $can(Capabilities::SETTINGS_MANAGE)],
                 ['Waiters & staff', 'fa-user-tie', 'super/restaurant/staff.php', !$staff && $can(Capabilities::STAFF_MANAGE)],
                 ['Menu', 'fa-bowl-food', 'super/restaurant/menu.php', !$staff && $invEdit],
@@ -87,32 +130,32 @@ class PosMenu
                 ['New client', 'fa-user-plus', 'super/services/new.php', $can(Capabilities::SERVICES_BOOK)],
                 ['My clients', 'fa-user-check', 'super/services/mine.php', true],
                 ['Services & prices', 'fa-list', 'super/services/catalog.php', $can(Capabilities::SERVICES_MANAGE)],
-                ['Commissions', 'fa-percent', 'super/services/commissions.php', $owner],
+                ['Commissions', 'fa-percent', 'super/services/commissions.php', $money],
                 ['Pay staff', 'fa-hand-holding-dollar', 'super/services/payouts.php', $can(Capabilities::SERVICES_PAYOUT)],
                 ['Record my job', 'fa-pen-to-square', 'super/services/my-job.php', !$owner],
             ]];
         }
 
         $elec = Features::enabled(Features::ELECTRONICS);
-        $g[] = ['stock', 'Stock', 'fa-boxes-stacked', [
+        $g[] = ['stock', 'Stock', 'fa-boxes-stacked', $restOnly ? [] : [
             ['Inventory', 'fa-warehouse', "$a/inventory/", $common && ($can(Capabilities::INVENTORY_VIEW) || $invEdit)],
             ['Record stock', 'fa-truck-ramp-box', "$a/stock/new.php", $common && ($staff ? $can(Capabilities::STOCK_ENTER) : $invEdit)],
             ['Products', 'fa-box', 'super/products/', $shop && !$staff && $invEdit],
             ['Categories', 'fa-tags', 'super/categories/', $shop && !$staff && $invEdit],
             ['Suppliers', 'fa-truck-field', "$a/suppliers/", $shop && $invEdit],
             ...self::fieldLinks($shop && !$staff && $invEdit),
-            ['Purchases', 'fa-cart-flatbed', 'super/purchases/', $shop && $owner, $pro],
+            ['Purchases', 'fa-cart-flatbed', 'super/purchases/', $shop && $money, $pro],
             ['Warehouse', 'fa-building', 'super/warehouse/', $shop && $main, $pro],
             ['Transfer to shops', 'fa-right-left', 'super/transfer/', $shop && $main, $pro],
             ['Devices & serials', 'fa-mobile-screen', 'super/electronics/', $elec && $can(Capabilities::INVENTORY_VIEW)],
             ['Warranty & repairs', 'fa-screwdriver-wrench', 'super/electronics/repairs.php', $elec && $can(Capabilities::SALES_RECORD)],
         ]];
 
-        $g[] = ['money', 'Money', 'fa-wallet', !$common ? [] : [
+        $g[] = ['money', 'Money', 'fa-wallet', !$shopCommon ? [] : [
             ['Expenses', 'fa-file-invoice-dollar', "$a/expenses/", $shop && $can(Capabilities::EXPENSES_RECORD)],
-            ['Finances', 'fa-scale-balanced', 'super/finances/', $shop && !$staff],
-            [$staff ? 'My sales' : 'Sales', 'fa-receipt', "$a/sales/", $staff ? $can(Capabilities::SALES_VIEW) : $owner],
-            ['Reports', 'fa-chart-line', 'super/reports/', !$staff && $can(Capabilities::REPORTS_VIEW)],
+            ['Finances', 'fa-scale-balanced', 'super/finances/', $shop && $money],
+            [$staff ? 'My sales' : 'Sales', 'fa-receipt', "$a/sales/", $staff ? $can(Capabilities::SALES_VIEW) : $money],
+            ['Reports', 'fa-chart-line', 'super/reports/', $money && $can(Capabilities::REPORTS_VIEW)],
         ]];
 
         $g[] = ['people', 'People', 'fa-users', !$common || $staff ? [] : [
@@ -125,9 +168,10 @@ class PosMenu
         $updates = $shop && $main ? count(Updates::pending()) : 0;
         $g[] = ['business', $staff ? 'Account' : 'Business', 'fa-briefcase', [
             [ShopContext::isMainShop() ? 'My shops' : 'Shops', 'fa-shop', 'super/shops/', $shop && $owner, $pro],
-            ['Admins', 'fa-user-shield', 'super/admins/', $shop && $primary, $pro],
+            ['Admins', 'fa-user-shield', 'super/admins/', $primary, $pro],
             ['Updates', 'fa-download', 'super/updates/', $shop && $main, $updates ? $updates . ' new' : null],
             ['Cleanup', 'fa-broom', 'super/cleanup/', $shop && $primary],
+            ['Website API', 'fa-plug', 'super/api/', $owner, $owner && !self::apiOn() ? 'Premium' : null],
             ['Printer setup', 'fa-print', 'staff/printer/', $staff && $common],
             ['Change PIN', 'fa-key', 'staff/change-pin.php', $staff],
         ]];
@@ -143,6 +187,7 @@ class PosMenu
         $replies = self::ticketReplies();
         $g[] = ['help', 'Help', 'fa-life-ring', [
             ['Help centre', 'fa-circle-question', "$a/guide/", true],
+            ['News & alerts', 'fa-bullhorn', 'super/alerts/', $owner, $owner ? self::newAlerts() : null],
             ['Support tickets', 'fa-ticket', 'super/help/tickets.php', true, $replies ? $replies . ' new' : null],
         ]];
 
@@ -289,6 +334,9 @@ class PosMenu
 
     private static function isPrimaryOwner(): bool
     {
+        if (isset($_SESSION['is_primary'])) {
+            return (bool) $_SESSION['is_primary'];
+        }
         $stmt = Database::pdo()->prepare('SELECT owner_user_id FROM tenants WHERE id = ? LIMIT 1');
         $stmt->execute([TenantContext::tenantId()]);
         return (int) $stmt->fetchColumn() === (int) TenantContext::userId();

@@ -64,6 +64,15 @@ class ShopUrl
         self::$slug = $slug;
 
         if (substr($file, -4) !== '.php') {
+            // domain/<slug>/sw.js opened as a page (not the browser's background
+            // fetch): show the shop's POS, never the service worker's code.
+            if (in_array($rel, ['sw.js', 'manifest.webmanifest'], true) && empty($_SERVER['HTTP_SERVICE_WORKER'])
+                && (($_SERVER['HTTP_SEC_FETCH_DEST'] ?? '') === 'document'
+                    || (!isset($_SERVER['HTTP_SEC_FETCH_DEST']) && strpos($_SERVER['HTTP_ACCEPT'] ?? '', 'text/html') !== false))) {
+                header('Cache-Control: no-store');
+                header('Location: ' . $base . '/' . $slug . '/', true, 302);
+                exit;
+            }
             self::serveStatic($file);
         }
         $script = $base . '/' . ltrim(substr($file, strlen(PUBLIC_ROOT)), '/');

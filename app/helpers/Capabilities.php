@@ -31,6 +31,10 @@ class Capabilities
     const ROOMS_MANAGE     = 'rooms.manage';     // add / edit rooms, prices and the late-checkout fee
     const ROOMS_DESK       = 'rooms.desk';       // book guests in, add room service, check out and take payment
     const TABLE_BOOKINGS   = 'tables.book';      // group / family table bookings with pre-set menus and platters
+    // Money views. The primary owner always holds these; admins have finances
+    // unless the owner switches it off, but start without stock value. Staff never get them.
+    const FINANCE_VIEW     = 'finance.view';     // finances, profit, reports, statements, day totals
+    const STOCK_VALUE      = 'stock.value';      // stock value and cost (buying) prices
 
     // Platform-scoped capabilities (what you, the SaaS owner, can do).
     const PLATFORM_TENANTS = 'platform.tenants.manage';
@@ -50,7 +54,25 @@ class Capabilities
             self::CREDIT_SALES, self::EXPENSES_RECORD,
             self::SERVICES_BOOK, self::SERVICES_CASHIER, self::SERVICES_MONEY, self::SERVICES_MANAGE,
             self::SERVICES_PAYOUT, self::ROOMS_MANAGE, self::ROOMS_DESK, self::TABLE_BOOKINGS,
+            self::FINANCE_VIEW, self::STOCK_VALUE,
         ];
+    }
+
+    /** Off for an admin until the primary owner switches it on: stock value only. */
+    public static function adminDefaultOff(): array
+    {
+        return [self::STOCK_VALUE];
+    }
+
+    /** Is this user the shop's primary owner (tenants.owner_user_id)? */
+    public static function isPrimaryOwner(PDO $db, int $userId, ?int $tenantId): bool
+    {
+        if (!$tenantId) {
+            return false;
+        }
+        $stmt = $db->prepare('SELECT owner_user_id FROM tenants WHERE id = ? LIMIT 1');
+        $stmt->execute([$tenantId]);
+        return (int) $stmt->fetchColumn() === $userId;
     }
 
     /**
@@ -60,7 +82,7 @@ class Capabilities
      *
      * Returns ['*'] for platform admins (all access).
      */
-    public static function effective(PDO $db, int $userId, int $roleId): array
+    public static function effective(PDO $db, int $userId, int $roleId, ?int $tenantId = null): array
     {
         // Role defaults
         $stmt = $db->prepare('SELECT capabilities FROM roles WHERE id = ?');
@@ -80,6 +102,14 @@ class Capabilities
         $stmt->execute([$roleId]);
         if ($stmt->fetchColumn() === 'tenant_owner') {
             $caps += array_fill_keys(self::allTenantCaps(), true);
+            // The primary owner can't be restricted. Admins they created start
+            // without the money views, then get the owner's grants/revokes below.
+            if ($tenantId === null || self::isPrimaryOwner($db, $userId, $tenantId)) {
+                return array_keys($caps);
+            }
+            foreach (self::adminDefaultOff() as $c) {
+                unset($caps[$c]);
+            }
         }
 
         // Per-user overrides

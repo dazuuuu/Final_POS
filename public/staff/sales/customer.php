@@ -192,7 +192,7 @@ ob_start();
                   <?php endif; ?>
                 </td>
                 <td class="text-end fw-semibold small">KES <?php echo number_format((float) $v['total'], 0); ?></td>
-                <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="<?php echo public_url($v['receipt_url']); ?>">Receipt</a></td>
+                <td class="text-end"><a data-receipt-popup class="btn btn-sm btn-outline-secondary" href="<?php echo public_url($v['receipt_url']); ?>">Receipt</a></td>
               </tr>
               <?php endforeach; ?>
             </tbody>

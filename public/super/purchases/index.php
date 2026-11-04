@@ -3,7 +3,7 @@
 // on sale yet) and moving stock from it into this shop's or a branch's
 // inventory, by package or by unit, with the selling prices.
 require_once __DIR__ . '/../../../app/app.php';
-PageGuard::tenant(); // owner only
+PageGuard::money(); // owner only
 
 $pdo = Database::pdo();
 $PM = new Models\PurchaseModel($pdo);

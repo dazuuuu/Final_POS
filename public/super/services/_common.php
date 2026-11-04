@@ -14,7 +14,7 @@ PageGuard::auth();
 
 $pdo = Database::pdo();
 $SD = new Models\ServiceDeskModel($pdo);
-$isOwner = TenantContext::role() === 'tenant_owner';
+$isOwner = TenantContext::isPrimaryOwner() || (TenantContext::role() === 'tenant_owner' && PageGuard::seesMoney()); // admins: only with finance rights; their other rights come from can()
 $canBook = TenantContext::can(Capabilities::SERVICES_BOOK);
 $canCash = TenantContext::can(Capabilities::SERVICES_CASHIER);
 $canMoney = $isOwner || $canCash || TenantContext::can(Capabilities::SERVICES_MONEY);

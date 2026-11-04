@@ -34,7 +34,7 @@ class ServiceDeskModel
     public function __construct(?\PDO $db = null)
     {
         $this->db = $db ?? \Database::pdo();
-        self::ensureSchema($this->db);
+        \Database::schemaOnce(static::class, __FILE__, fn() => self::ensureSchema($this->db));
     }
 
     public static function ensureSchema(\PDO $db): void

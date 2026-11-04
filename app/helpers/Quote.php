@@ -6,6 +6,15 @@
 
 class Quote
 {
+    /** Add-ons that are quoted per client and are not in the package catalogue. */
+    const EXTRAS = ['website_api' => ['Website API (custom)', 0, 'Connect your website to your POS: live products, offers and stock, comments, likes, views and website orders.']];
+
+    /** Package or add-on name for a key. */
+    public static function label(string $key): string
+    {
+        return Features::catalog()[$key][0] ?? self::EXTRAS[$key][0] ?? $key;
+    }
+
     const STATUSES = ['new' => 'New', 'contacted' => 'Contacted', 'won' => 'Became a client', 'closed' => 'Closed'];
 
     public static function ensureTable(PDO $pdo): void
@@ -37,7 +46,7 @@ class Quote
         $package = (string) ($in['package'] ?? '');
         $shop = trim((string) ($in['shop_name'] ?? ''));
         $business = trim((string) ($in['business'] ?? ''));
-        $catalog = Features::catalog();
+        $catalog = Features::catalog() + self::EXTRAS;
         if ($name === '') { return 'Enter your name.'; }
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) { return 'Enter a valid email address.'; }
         if (!isset($catalog[$package])) { return 'Choose a package.'; }

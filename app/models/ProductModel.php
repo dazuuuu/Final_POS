@@ -9,7 +9,7 @@ class ProductModel extends Model
     public function __construct(?\PDO $db = null)
     {
         parent::__construct($db);
-        $this->ensureSchema();
+        \Database::schemaOnce(static::class, __FILE__, fn() => $this->ensureSchema());
     }
 
     public const UNITS = ['piece', 'g', 'kg', 'tonne', 'ml', 'litre'];
@@ -217,7 +217,7 @@ class ProductModel extends Model
                        p.offer_price, p.offer_starts_at, p.offer_ends_at,
                        p.quantity, p.unit, p.status, p.barcode, p.colors, p.sizes,
                        p.image_path, p.size_value, p.size_unit,
-                       p.category_id, c.name AS category_name,
+                       p.category_id, c.name AS category_name, p.subcategory_id,
                        p.grade_id, g.name AS grade_name,
                        p.publisher_id, pu.name AS publisher_name,
                        p.brand_id, br.name AS brand_name

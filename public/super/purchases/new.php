@@ -3,7 +3,7 @@
 // in what packages, how many units per package and the price per package.
 // It goes to the purchases store (not on sale) until moved into inventory.
 require_once __DIR__ . '/../../../app/app.php';
-PageGuard::tenant(); // owner only
+PageGuard::money(); // owner only
 
 $pdo = Database::pdo();
 $PM = new Models\PurchaseModel($pdo);

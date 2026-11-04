@@ -24,7 +24,7 @@ class AccountGuard
     public static function message(string $reason): string
     {
         return [
-            'not_activated' => 'Please activate your account using the link we emailed you.',
+            'not_activated' => 'Confirm your email first — open the "Confirm your email" link we sent you, then sign in.',
             'switched_off'  => 'This login is switched off. Ask the shop owner or support to turn it back on.',
         ][$reason] ?? 'Your account cannot be accessed right now. Please contact support.';
     }

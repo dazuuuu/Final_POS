@@ -35,7 +35,7 @@ ob_start();
         <td class="fw-semibold"><?php echo $h($r['name']); ?></td>
         <td><a href="mailto:<?php echo $h($r['email']); ?>"><?php echo $h($r['email']); ?></a>
           <?php if ($r['phone']): ?><br><a href="tel:<?php echo $h(preg_replace('/[^0-9+]/', '', $r['phone'])); ?>"><?php echo $h($r['phone']); ?></a><?php endif; ?></td>
-        <td><?php echo $h($catalog[$r['package_key']][0] ?? $r['package_key']); ?></td>
+        <td><?php echo $h(Quote::label($r['package_key'])); ?></td>
         <td><?php echo $h($r['shop_name'] ?: '—'); ?><?php if ($r['business']): ?><div class="text-muted small"><?php echo $h($r['business']); ?></div><?php endif; ?></td>
         <td>
           <form method="post" class="m-0"><?php echo support_csrf_field(); ?><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?php echo (int) $r['id']; ?>">

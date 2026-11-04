@@ -17,7 +17,7 @@ $sql = "SELECT t.*, a.name AS account_name, s.name AS shop_name,
           FROM support_tickets t
           JOIN tenants a ON a.id = t.account_id
           LEFT JOIN tenants s ON s.id = t.tenant_id
-         WHERE $where";
+         WHERE $where AND a.support_org = " . SupportOrg::current();
 $args = [];
 if ($q !== '') {
     $sql .= ' AND (t.subject LIKE ? OR a.name LIKE ? OR t.user_name LIKE ? OR t.id = ?)';
@@ -29,7 +29,8 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($args);
 $tickets = $stmt->fetchAll(PDO::FETCH_ASSOC);
 $counts = $pdo->query(
-    "SELECT SUM(status IN ('open','in_progress','waiting')) a, SUM(unread_by_support = 1) n, SUM(status IN ('resolved','closed')) d, COUNT(*) t FROM support_tickets"
+    "SELECT SUM(status IN ('open','in_progress','waiting')) a, SUM(unread_by_support = 1) n, SUM(status IN ('resolved','closed')) d, COUNT(*) t FROM support_tickets
+      WHERE account_id IN (SELECT id FROM tenants WHERE support_org = " . SupportOrg::current() . ")"
 )->fetch(PDO::FETCH_NUM);
 $chips = ['active' => ['Active', $counts[0]], 'new' => ['Needs reply', $counts[1]], 'done' => ['Resolved', $counts[2]], 'all' => ['All', $counts[3]]];
 

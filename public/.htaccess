@@ -2,7 +2,39 @@
 # (see app/helpers/ShopUrl.php).
 <IfModule mod_rewrite.c>
 RewriteEngine On
+# sw.js / the manifest opened as a page (not the browser's background fetch,
+# which sends "Service-Worker: script"): go to the POS instead of showing code.
+RewriteCond %{HTTP:Service-Worker} ^$
+RewriteCond %{HTTP:Sec-Fetch-Dest} ^document$
+RewriteRule ^(sw\.js|manifest\.webmanifest)$ terminal/ [R=302,L]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^([a-z0-9-]+)(/.*)?$ index.php [L,QSA]
 </IfModule>
+
+# ---- Speed ----
+# Compress pages, styles and scripts (often 70-80% smaller over the network).
+<IfModule mod_deflate.c>
+AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript application/javascript application/json application/manifest+json image/svg+xml
+</IfModule>
+# Images, fonts, styles and scripts: the browser keeps them instead of
+# downloading them again on every page. Our own .js/.css are linked with
+# ?v=<file time>, so a changed file is still picked up straight away.
+<IfModule mod_expires.c>
+ExpiresActive On
+ExpiresByType image/png "access plus 30 days"
+ExpiresByType image/jpeg "access plus 30 days"
+ExpiresByType image/webp "access plus 30 days"
+ExpiresByType image/gif "access plus 30 days"
+ExpiresByType image/svg+xml "access plus 30 days"
+ExpiresByType image/x-icon "access plus 30 days"
+ExpiresByType font/woff2 "access plus 1 year"
+ExpiresByType text/css "access plus 7 days"
+ExpiresByType application/javascript "access plus 7 days"
+ExpiresByType text/javascript "access plus 7 days"
+</IfModule>
+<FilesMatch "^sw\.js$">
+  <IfModule mod_headers.c>
+    Header set Cache-Control "no-cache"
+  </IfModule>
+</FilesMatch>

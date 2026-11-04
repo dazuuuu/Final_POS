@@ -39,7 +39,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'settl
             $_SESSION['flash']['success'] = $res['fully_paid']
                 ? 'Paid in full — ' . $order['receipt_number'] . ' is settled.'
                 : 'KES ' . number_format($res['amount'], 0) . ' received. ' . $order['table_name'] . ' still owes KES ' . number_format($res['balance'], 0) . '.';
-            header('Location: ' . public_url($area . '/orders/receipt.php?id=' . (int) $order['id'] . '&new=1'));
+            $_SESSION['receipt_popup'] = public_url($area . '/orders/receipt.php?id=' . (int) $order['id'] . '&new=1');
+            header('Location: ' . public_url($area . '/payments/'));
             exit;
         }
         $error = $res['error'] ?? 'Could not record the payment.';
@@ -116,7 +117,7 @@ ob_start();
       </div>
       <div class="d-flex gap-2">
         <a class="btn btn-sm btn-outline-secondary" href="<?php echo $selfUrl; ?>"><i class="fas fa-list me-1"></i>All balances</a>
-        <a class="btn btn-sm btn-outline-secondary" href="<?php echo public_url($area . '/orders/receipt.php?id=' . (int) $order['id']); ?>"><i class="fas fa-receipt me-1"></i>Receipt</a>
+        <a data-receipt-popup class="btn btn-sm btn-outline-secondary" href="<?php echo public_url($area . '/orders/receipt.php?id=' . (int) $order['id']); ?>"><i class="fas fa-receipt me-1"></i>Receipt</a>
       </div>
     </div>
 

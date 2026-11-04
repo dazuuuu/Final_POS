@@ -213,7 +213,44 @@ function rest_schema(PDO $pdo): void
     rest_column($pdo, 'rest_orders', 'delivery_status', "ENUM('new','preparing','packed','out','delivered') NULL AFTER delivery_address");
     rest_column($pdo, 'rest_orders', 'rider', 'VARCHAR(80) NULL AFTER delivery_status');
     rest_column($pdo, 'rest_orders', 'delivered_at', 'DATETIME NULL AFTER rider');
+    // Kitchen portal (kitchen.php): each dish line goes new → preparing → ready → served.
+    // NULL = not seen by the kitchen yet (counted as "new" for dishes of live orders).
+    rest_column($pdo, 'rest_order_items', 'kitchen_status', "ENUM('new','preparing','ready','served') NULL");
+    rest_column($pdo, 'rest_order_items', 'kitchen_started_at', 'DATETIME NULL');
+    rest_column($pdo, 'rest_order_items', 'kitchen_ready_at', 'DATETIME NULL');
+    // The kitchen marks a dish "finished" (sold out) until it can make it again.
+    rest_column($pdo, 'rest_dishes', 'sold_out', 'TINYINT(1) NOT NULL DEFAULT 0');
+    // Restock requests from the kitchen to whoever moves stock out of the store.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS rest_kitchen_requests (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        tenant_id INT NOT NULL,
+        ingredient_id INT NULL,
+        stock_id INT NULL,
+        name VARCHAR(120) NOT NULL,
+        quantity DECIMAL(12,3) NULL,
+        unit VARCHAR(10) NULL,
+        note VARCHAR(255) NULL,
+        status ENUM('pending','done','declined') NOT NULL DEFAULT 'pending',
+        requested_by INT NULL,
+        done_by INT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        done_at DATETIME NULL,
+        KEY idx_rkr_tenant (tenant_id, status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $done = true;
+}
+
+/** Kitchen staff: position Chef / Kitchen (set on Waiters & staff). Owners can open the kitchen too. */
+function rest_is_kitchen(): bool
+{
+    if (TenantContext::role() === 'tenant_owner') return true;
+    static $pos = null;
+    if ($pos === null) {
+        $st = Database::pdo()->prepare('SELECT position FROM users WHERE id = ?');
+        $st->execute([(int) TenantContext::userId()]);
+        $pos = strtolower(trim((string) $st->fetchColumn()));
+    }
+    return in_array($pos, ['chef', 'kitchen', 'cook'], true);
 }
 
 const REST_DELIVERY_STEPS = [

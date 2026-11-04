@@ -51,12 +51,30 @@ class PageGuard
     /**
      * Can the signed-in user see the shop's money: stock value and cost
      * prices, profit, finance records, expenses of others and the day's sales
-     * totals? Only the shop's owners/admins (tenant_owner role). Staff never
-     * do — not even with inventory, stock or report rights delegated to them.
+     * totals? The primary owner always; an admin only when the owner has
+     * switched "Finances" on for them. Staff never do — not even with
+     * inventory, stock or report rights delegated to them.
      */
     public static function seesMoney(): bool
     {
-        return TenantContext::role() === 'tenant_owner' || TenantContext::isPlatformAdmin();
+        return TenantContext::isPlatformAdmin()
+            || (TenantContext::role() === 'tenant_owner' && TenantContext::can(Capabilities::FINANCE_VIEW));
+    }
+
+    /** Stock value and cost (buying) prices: the owner, or an admin they allowed. Never staff. */
+    public static function seesStockValue(): bool
+    {
+        return TenantContext::isPlatformAdmin()
+            || (TenantContext::role() === 'tenant_owner' && TenantContext::can(Capabilities::STOCK_VALUE));
+    }
+
+    /** Require an owner/admin who holds a capability (admins can be restricted by the owner). */
+    public static function ownerCan(string $cap): void
+    {
+        self::tenant();
+        if (!TenantContext::can($cap)) {
+            self::deny();
+        }
     }
 
     /** Pages that are all about money (finances, reports, profit): owners/admins only. */

@@ -77,6 +77,11 @@ class Features
         '/super/dashboard/', '/staff/dashboard/', '/super/profile/',
         '/staff/reset-password.php', '/staff/change-pin.php',
         '/super/guide/', '/staff/guide/', '/super/help/', '/super/settings/menu.php',
+        '/super/locked.php', // shown while support has locked the account
+        '/super/alerts/',    // news & alerts from support
+        '/super/statements/', // transaction statement: every package (owners only)
+        '/super/api/', // Website API add-on: its own switch (ShopApi), any package
+        '/super/day/', // opening & closing sales: every package, everyone
     ];
 
     /**
@@ -225,6 +230,7 @@ class Features
     {
         static $done = false;
         if ($done) { return; }
+        try { Database::pdo()->query('SELECT multi_shop FROM tenants LIMIT 0'); $done = true; return; } catch (\Throwable $e) { /* add it below */ }
         $chk = Database::pdo()->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'tenants' AND column_name = 'multi_shop'");
         if (!(int) $chk->fetchColumn()) {
             Database::pdo()->exec('ALTER TABLE tenants ADD COLUMN multi_shop TINYINT(1) NOT NULL DEFAULT 1');
@@ -234,6 +240,15 @@ class Features
 
     /** The top-level tenant (account) a shop belongs to. */
     public static function accountId(int $tenantId): int
+    {
+        static $cache = [];
+        if (isset($cache[$tenantId])) {
+            return $cache[$tenantId]; // asked many times per page
+        }
+        return $cache[$tenantId] = self::lookupAccountId($tenantId);
+    }
+
+    private static function lookupAccountId(int $tenantId): int
     {
         $stmt = Database::pdo()->prepare('SELECT parent_tenant_id FROM tenants WHERE id = ? LIMIT 1');
         $stmt->execute([$tenantId]);
@@ -300,6 +315,15 @@ class Features
             }
         } elseif (self::enabled(self::SHOP_POS, $account)) {
             return;
+        }
+        // Restaurant-only accounts: the shop's orders, sales, credit and stock pages don't apply —
+        // the restaurant has its own (orders, payments, store stock, kitchen).
+        $restOnly = self::enabled(self::RESTAURANT_POS, $account);
+        foreach (['/inventory/', '/stock/', '/orders/', '/sales/', '/credits/'] as $shopPage) {
+            if ($restOnly && strpos($script, $shopPage) !== false) {
+                header('Location: ' . public_url('super/restaurant/dashboard.php'));
+                exit;
+            }
         }
         if (self::anyPackage($account)) {
             foreach (self::COMMON_PAGES as $ok) {

@@ -116,7 +116,7 @@ ob_start();
     <i class="fas fa-circle-check text-success" style="font-size:3rem;"></i>
     <h5 class="mt-2 mb-1" id="dnTitle"></h5>
     <div class="fs-4 fw-bold mb-3" id="dnChange"></div>
-    <a class="btn btn-outline-primary mb-2" id="dnReceipt" target="_blank"><i class="fas fa-print me-1"></i>Print receipt</a>
+    <a class="btn btn-outline-primary mb-2" id="dnReceipt" data-receipt-popup><i class="fas fa-print me-1"></i>Print receipt</a>
     <a class="btn btn-primary" href="<?php echo $self; ?>">Done</a>
   </div></div>
 </div>
@@ -189,6 +189,8 @@ ob_start();
         btn.disabled = false;
         if (!r.ok) { $('pmErr').textContent = r.error; $('pmErr').style.display = ''; return; }
         pm.hide();
+        // Preview the receipt right here (it prints itself); closing it refreshes the list for the next payment.
+        if (window.TasoReceipt) { TasoReceipt.open(r.receipt, function () { location.href = API; }); return; }
         $('dnTitle').textContent = 'Order #' + cur.no + ' paid';
         $('dnChange').textContent = r.change > 0 ? 'Change: ' + money(r.change) : '';
         $('dnReceipt').href = r.receipt;

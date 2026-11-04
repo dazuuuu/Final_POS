@@ -34,8 +34,8 @@ body{font-family:'Courier New',monospace;font-size:13px;color:#000;background:#f
 hr{border:0;border-top:1px dashed #000;margin:8px 0;} h1{font-size:16px;margin:0 0 2px;}
 .tot{font-weight:bold;font-size:15px;} .big{font-size:20px;font-weight:bold;letter-spacing:1px;}
 @media print{body{background:#fff;} .r{margin:0;width:auto;} .np{display:none;}}
-</style></head><body>
-<div class="r">
+</style><?php $autoPrint = false; include PUBLIC_ROOT . '/components/printer_script.php'; ?></head><body>
+<div class="r sheet">
   <div class="c">
     <h1><?php echo htmlspecialchars($__tenant['name'] ?? ''); ?></h1>
     <?php if (!empty($__tenant['phone'])): ?><div class="muted"><?php echo htmlspecialchars($__tenant['phone']); ?></div><?php endif; ?>
@@ -76,7 +76,7 @@ hr{border:0;border-top:1px dashed #000;margin:8px 0;} h1{font-size:16px;margin:0
   <div class="c muted" style="margin-top:8px;">Thank you!</div>
   <div class="c np" style="margin-top:12px;"><button onclick="window.print()">Print</button></div>
 </div>
-<?php if (isset($_GET['print'])): ?><script>window.print();</script><?php endif; ?>
+<?php if (isset($_GET['print'])): ?><script>window.addEventListener('load', function () { var c = TasoPrinter.load(); if (c.mode === 'off' || c.mode === 'system') window.print(); else TasoPrinter.print().catch(function () {}); });</script><?php endif; ?>
 </body></html>
 <?php
     exit;
@@ -201,7 +201,7 @@ ob_start();
                 <a class="btn btn-sm btn-outline-warning" href="<?php echo $posUrl . '?order=' . (int) $o['id']; ?>" title="Add or remove items"><i class="fas fa-pen"></i></a>
                 <?php if (TenantContext::can(Capabilities::PAYMENTS_PROCESS)): ?><a class="btn btn-sm btn-success" href="<?php echo public_url('super/restaurant/payments.php?q=' . urlencode($o['order_no'])); ?>">Pay</a><?php endif; ?>
               <?php endif; ?>
-              <a class="btn btn-sm btn-outline-secondary" target="_blank" href="<?php echo $self . '?receipt=' . (int) $o['id']; ?>"><i class="fas fa-receipt"></i></a>
+              <a class="btn btn-sm btn-outline-secondary" data-receipt-popup href="<?php echo $self . '?receipt=' . (int) $o['id']; ?>"><i class="fas fa-receipt"></i></a>
             </td>
           </tr>
         <?php endforeach; ?>

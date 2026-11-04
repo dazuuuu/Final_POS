@@ -30,11 +30,17 @@
 
   // Basic (20k) package: Bluetooth and USB / device printing only — Wi-Fi falls back to the device printer.
   var BASIC = !!document.querySelector('meta[name="taso-print-basic"]');
+  // The server runs on a computer in the shop, so it can reach printers on the shop network.
+  var LOCAL = !!document.querySelector('meta[name="taso-print-local"]');
+  // 'wifi' = a Wi-Fi printer added to this phone / computer: printed through the device's print dialog.
+  function viaDevice(mode) { return mode === 'off' || mode === 'system' || mode === 'wifi'; }
   function load() {
     var cfg;
     try { cfg = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(KEY) || '{}')); }
     catch (e) { cfg = Object.assign({}, DEFAULTS); }
-    if (BASIC && cfg.mode === 'network') cfg.mode = 'system';
+    // Direct-IP printing needs the server inside the shop; online it can't reach the printer — use the device's Wi-Fi printing.
+    if (cfg.mode === 'network' && (BASIC || !LOCAL)) cfg.mode = 'wifi';
+    if (BASIC && cfg.mode === 'wifi') cfg.mode = 'system';
     return cfg;
   }
   function save(cfg) {
@@ -237,7 +243,7 @@
     opts = opts || {};
     var cfg = Object.assign(load(), opts.config || {});
     var sheet = opts.element || document.querySelector('.sheet');
-    if (cfg.mode === 'off' || cfg.mode === 'system' || !sheet) { window.print(); return; }
+    if (viaDevice(cfg.mode) || !sheet) { window.print(); return; }
     var bytes = escpos(sheet, cfg);
     if (cfg.mode === 'bluetooth') return sendBluetooth(bytes, !!opts.user);
     if (cfg.mode === 'rawbt') return sendRawBT(bytes);
@@ -266,7 +272,7 @@
     try {
       // No printer set up on this device yet: open the device's print dialog,
       // so the receipt still prints right after checkout without a tap.
-      if (cfg.mode === 'system' || cfg.mode === 'off') { setTimeout(function () { window.print(); }, 300); return; }
+      if (viaDevice(cfg.mode)) { setTimeout(function () { window.print(); }, 300); return; }
       await print();
       if (cfg.mode !== 'rawbt') toast('Receipt printed.', true);
     } catch (e) {

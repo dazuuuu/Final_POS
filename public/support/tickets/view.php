@@ -12,8 +12,8 @@ $stmt = $pdo->prepare(
        LEFT JOIN tenants s ON s.id = t.tenant_id
        LEFT JOIN users u ON u.id = t.user_id
        LEFT JOIN users o ON o.id = a.owner_user_id
-      WHERE t.id = ?'
-);
+      WHERE t.id = ? AND a.support_org = ' . SupportOrg::current() . '
+');
 $stmt->execute([$id]);
 $t = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$t) {

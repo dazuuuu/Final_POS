@@ -15,7 +15,7 @@ class BookAttributeModel extends Model
     public function __construct(?\PDO $db = null)
     {
         parent::__construct($db);
-        $this->ensureSchema();
+        \Database::schemaOnce(static::class, __FILE__, fn() => $this->ensureSchema());
     }
 
     /** Reuse the existing row for this type+name, or create one. Blank name -> null. */

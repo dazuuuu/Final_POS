@@ -31,6 +31,7 @@ if (support_posted() && ($_POST['action'] ?? '') === 'migrate') {
             throw new RuntimeException('A shop called "' . $name . '" already exists. Use a different business name.');
         }
         $newId = Signup::invite($name, $pk, trim($_POST['phone'] ?? ''));
+        SupportOrg::claim((int) $newId); // the account belongs to the support company that created it
         $_SESSION['shop_import_' . $newId] = $file;
         support_flash('Shop "' . $name . '" created. Check the preview and import — the old owner then signs in with their old login.');
         header('Location: ' . public_url('support/accounts/import.php?id=' . $newId));
@@ -61,6 +62,7 @@ if (support_posted() && ($_POST['action'] ?? '') === 'invite') {
         exit;
     }
     $newId = Signup::invite($name, $pk, trim($_POST['phone'] ?? ''));
+        SupportOrg::claim((int) $newId); // the account belongs to the support company that created it
     if ($ownerEmail === '') {
         support_flash('Shop "' . $name . '" created. Send the owner their shop link below.');
     } elseif (($err = Signup::emailInvite($newId, $ownerEmail)) === null) {
@@ -88,8 +90,9 @@ if (support_posted()) {
     if (!filter_var($in['email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'Enter a valid owner email.';
     if (strlen($password) < 8) $errors[] = 'Password must be at least 8 characters.';
     if (!$errors) {
-        $chk = $pdo->prepare('SELECT SUM(email = ?), SUM(username = ?) FROM users');
-        $chk->execute([$in['email'], $in['username']]);
+        // A brand-new account: only the email (the sign-in) must be free; usernames are per shop.
+        $chk = $pdo->prepare('SELECT SUM(email = ?), 0 FROM users');
+        $chk->execute([$in['email']]);
         [$emailTaken, $userTaken] = $chk->fetch(PDO::FETCH_NUM);
         if ($emailTaken) $errors[] = 'That email already has an account.';
         if ($userTaken) $errors[] = 'That username is taken.';
@@ -102,6 +105,7 @@ if (support_posted()) {
         $pdo->beginTransaction();
         try {
             $tenantId = $T->create($in['business_name'], $T->uniqueSlug($in['business_name']));
+            SupportOrg::claim((int) $tenantId); // the account belongs to the support company that created it
             if ($in['phone'] !== '') {
                 $pdo->prepare('UPDATE tenants SET phone = ? WHERE id = ?')->execute([$in['phone'], $tenantId]);
             }
@@ -109,7 +113,8 @@ if (support_posted()) {
                 'INSERT INTO users (tenant_id, username, email, password_hash, role_id, is_active, email_verified, activated_at)
                  VALUES (?, ?, ?, ?, ?, 1, 1, NOW())'
             )->execute([$tenantId, $in['username'], $in['email'], password_hash($password, PASSWORD_DEFAULT), $roleId]);
-            $T->setOwner($tenantId, (int) $pdo->lastInsertId());
+            $newOwner = (int) $pdo->lastInsertId();
+            $T->setOwner($tenantId, $newOwner);
             $pdo->commit();
         } catch (Throwable $e) {
             $pdo->rollBack();
@@ -117,13 +122,16 @@ if (support_posted()) {
         }
         if (!$errors) {
             Features::setForAccount($tenantId, $in['packages']);
+            $cf = EmailConfirm::start('user', $newOwner, $in['email'], $in['username'], $password, EmailConfirm::absolute('admin/'), $tenantId);
             if (!empty($_POST['skip_activation'])) {
                 License::waive($tenantId);
-                support_flash('Account "' . $in['business_name'] . '" created and activated. The owner can sign in now at /auth/login.php with ' . $in['email'] . '.');
+                $pdo->prepare('UPDATE users SET email_verified = 0 WHERE id = ?')->execute([$newOwner]); // still waits for "Confirm your email"
+                support_flash('Account "' . $in['business_name'] . '" created and activated. ' . ($cf['sent'] ? 'A "Confirm your email" message went to ' . $in['email'] . ' — they can sign in once they confirm, and then get their login details.'
+                    : 'The confirm email could not be sent (check Settings → SMTP). Send the owner this link: ' . $cf['link']));
             } else {
                 $key = License::issue($tenantId);
-                support_flash('Account "' . $in['business_name'] . '" created. The owner can sign in at /auth/login.php with ' . $in['email']
-                    . '. Activation key: ' . $key . ' — email it below; the account locks in 2 hours without it.');
+                support_flash('Account "' . $in['business_name'] . '" created. ' . ($cf['sent'] ? 'A "Confirm your email" message went to ' . $in['email'] . '; they sign in after confirming.' : 'Confirm link (email not sent): ' . $cf['link'] . '.')
+                    . ' Activation key: ' . $key . ' — email it below; the account locks in 2 hours without it.');
             }
             header('Location: ' . public_url('support/accounts/view.php?id=' . $tenantId));
             exit;

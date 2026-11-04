@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     usleep(500000); // slow down guessing
-    $error = 'Invalid support credentials.';
+    $error = SupportAccount::$unconfirmed ? 'Confirm your email first — open the link we emailed you.' : 'Invalid support credentials.';
 }
 
 $page_title = 'Support';

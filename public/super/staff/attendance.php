@@ -3,7 +3,7 @@
 // who's in right now, recent history (flagging forgotten clock-outs), and
 // authorizing a second clock-in for someone who's already used today's.
 require_once __DIR__ . '/../../../app/app.php';
-PageGuard::tenant(); // owner only
+PageGuard::ownerCan(Capabilities::STAFF_MANAGE); // owner only
 
 $pdo = Database::pdo();
 $svc = new StaffService($pdo);

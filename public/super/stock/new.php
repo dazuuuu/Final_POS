@@ -434,18 +434,31 @@ ob_start();
       menu.classList.add('show');
     }
 
+    // Subcategories follow the category typed on the same row.
+    function extra() {
+      if (field !== 'subcategory') return '';
+      var scope = input.closest('.stock-row') || input.closest('form') || document;
+      var cat = scope.querySelector('[data-field="category"]');
+      return '&category=' + encodeURIComponent(cat ? cat.value.trim() : '');
+    }
+    function load(q) {
+      fetch(API + 'suggest.php?field=' + encodeURIComponent(field) + '&q=' + encodeURIComponent(q) + extra())
+        .then(function (r) { return r.json(); })
+        .then(function (data) { render(data.items || []); })
+        .catch(function () {});
+    }
+
     input.addEventListener('input', function () {
       if (onPick) onPick(null); // typing invalidates any earlier pick (e.g. restock match)
       clearTimeout(timer);
       var q = input.value.trim();
-      if (!q) { menu.classList.remove('show'); return; }
-      timer = setTimeout(function () {
-        fetch(API + 'suggest.php?field=' + encodeURIComponent(field) + '&q=' + encodeURIComponent(q))
-          .then(function (r) { return r.json(); })
-          .then(function (data) { render(data.items || []); })
-          .catch(function () {});
-      }, 180);
+      if (!q && field !== 'subcategory') { menu.classList.remove('show'); return; }
+      timer = setTimeout(function () { load(q); }, 180);
     });
+    // Tapping the subcategory box lists the chosen category's subcategories.
+    if (field === 'subcategory') {
+      input.addEventListener('focus', function () { load(input.value.trim()); });
+    }
     input.addEventListener('blur', function () { setTimeout(function () { menu.classList.remove('show'); }, 150); });
   }
 

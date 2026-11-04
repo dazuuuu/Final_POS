@@ -139,7 +139,7 @@ ob_start();
           <td><?php if (!$n): ?><span class="badge bg-success">Keep</span>
               <?php elseif ($r['fixable']): ?><input class="form-check-input" type="checkbox" name="pick[]" value="<?php echo $h($key); ?>" checked>
               <?php else: ?><span class="badge bg-secondary" title="Open tabs can't be auto-reversed — edit them instead">Tab</span><?php endif; ?></td>
-          <td class="small fw-semibold"><a href="<?php echo public_url(($r['source'] === 'sale' ? 'super/sales/receipt.php?id=' : 'super/orders/receipt.php?id=') . (int) $r['id']); ?>"><?php echo $h($r['receipt_number']); ?></a></td>
+          <td class="small fw-semibold"><a data-receipt-popup href="<?php echo public_url(($r['source'] === 'sale' ? 'super/sales/receipt.php?id=' : 'super/orders/receipt.php?id=') . (int) $r['id']); ?>"><?php echo $h($r['receipt_number']); ?></a></td>
           <td class="small text-nowrap"><?php echo date('D j M Y, g:i:s a', strtotime($r['at'])); ?>
             <?php if ($n): ?><span class="text-danger">(+<?php echo max(0, strtotime($r['at']) - strtotime($g[$n - 1]['at'])); ?>s)</span><?php endif; ?></td>
           <td class="small"><?php echo $h($r['customer_name'] ?: '—'); ?></td>

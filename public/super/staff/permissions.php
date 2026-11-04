@@ -1,7 +1,7 @@
 <?php
 // public/super/staff/permissions.php — owner grants/revokes per-staff authorities
 require_once __DIR__ . '/../../../app/app.php';
-PageGuard::tenant(); // owner only
+PageGuard::ownerCan(Capabilities::STAFF_MANAGE); // owner only
 
 $pdo = Database::pdo();
 $svc = new StaffService($pdo);

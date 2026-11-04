@@ -110,6 +110,9 @@ $shopName = $__tenant['name'] ?? 'My Shop';
     </main>
 </div>
 <?php include __DIR__ . '/../../components/bottom_nav.php'; ?>
+<?php include __DIR__ . '/../../components/alert_popup.php'; ?>
+<?php include __DIR__ . '/../../components/receipt_popup.php'; ?>
+<?php include __DIR__ . '/../../components/day_greet.php'; ?>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <?php echo $extra_js ?? ''; ?>
 </body>

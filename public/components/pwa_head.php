@@ -9,6 +9,12 @@
 <meta name="apple-mobile-web-app-title" content="Dazu POS">
 <link rel="apple-touch-icon" href="<?php echo public_url('assets/icons/apple-touch-icon.png'); ?>">
 <link rel="icon" type="image/png" sizes="32x32" href="<?php echo public_url('assets/icons/favicon-32.png'); ?>">
+<?php /* 1%–100% loader for slow pages, forms and connections (invisible when things are fast). */ ?>
+<?php /* Speed: open connections to the style/icon servers early, and fetch the next page as soon as a link is pointed at or touched. */ ?>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<script src="<?php echo public_url('assets/js/page-loader.js'); ?>?v=<?php echo @filemtime(__DIR__ . '/../assets/js/page-loader.js'); ?>"></script>
+<script src="<?php echo public_url('assets/js/instant-nav.js'); ?>?v=<?php echo @filemtime(__DIR__ . '/../assets/js/instant-nav.js'); ?>" defer></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
