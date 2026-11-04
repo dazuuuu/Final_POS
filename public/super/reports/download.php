@@ -15,7 +15,7 @@ if (($_GET['format'] ?? '') === 'xlsx') {
     $tid = (int) TenantContext::tenantId();
     $sessions = DaySales::sessions($pdo, $tid, $date, $date);
     foreach ($sessions as &$s) {
-        if ($s['closed_at'] === null) { $s['live_closing'] = DaySales::totalFor($pdo, $tid, $date, $date, (int) $s['user_id'])['total']; }
+        if ($s['closed_at'] === null) { $s['live_closing'] = DaySales::totalFor($pdo, $tid, $date, $date, (int) $s['user_id'] ?: null)['total']; }
     }
     unset($s);
     ExcelExport::download($type . '-report-' . $date . '.xlsx', DaySales::sheets(DaySales::sales($pdo, $tid, $date, $date), $sessions, true));

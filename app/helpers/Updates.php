@@ -58,6 +58,28 @@ class Updates
                     self::ensureTable($db);
                 },
             ],
+            [
+                'version' => '2.3.0',
+                'date'    => '2026-11-04',
+                'title'   => 'Opening & closing sales, business hours, admin permissions, subcategories',
+                'notes'   => [
+                    'Opening & closing sales: everyone sees their own day; the owner sees the whole shop and every person, per staff and per product, with Excel and PDF downloads.',
+                    'Business hours (owner only): set your opening and closing time. Sales close automatically at closing time; staff and admins can close their own day while the shop carries on.',
+                    'Admins: choose what each admin can do (Admins → Permissions). Stock value and buying prices are hidden from admins unless you allow them.',
+                    'Subcategories work at the till: tap a category, then a subcategory, to see its products.',
+                    'Faster pages, and a loading screen when the connection is slow.',
+                ],
+                'run' => function (PDO $db) {
+                    DaySales::ensure($db);
+                    DaySales::hours((int) TenantContext::tenantId()); // adds the business-hours columns
+                    // Re-check every table and column the models need.
+                    foreach (glob(ROOT_PATH . '/app/storage/schema_*.ok') ?: [] as $f) { @unlink($f); }
+                    foreach (['ProductModel', 'SaleModel', 'OrderModel', 'HeldOrderModel', 'CustomerModel', 'CategoryModel', 'FinanceModel', 'StockIntakeModel', 'TimeLogModel'] as $m) {
+                        $c = 'Models\\' . $m;
+                        new $c($db);
+                    }
+                },
+            ],
         ];
     }
 

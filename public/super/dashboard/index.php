@@ -114,10 +114,24 @@ $__day = $__money ? $__report->compare($__shops, date('Y-m-d'), date('Y-m-d')) :
 $__here = null;
 foreach ($__day['rows'] as $__r) { if ((int) $__r['shop']['id'] === (int) TenantContext::tenantId()) { $__here = $__r; } }
 $__here = $__here ?? ($__money ? $__report->forShop((int) TenantContext::tenantId(), date('Y-m-d'), date('Y-m-d')) : []);
-$__mine = DaySales::open($pdo, (int) TenantContext::tenantId(), (int) TenantContext::userId());
-$__mineNow = DaySales::totalFor($pdo, (int) TenantContext::tenantId(), date('Y-m-d'), date('Y-m-d'), (int) TenantContext::userId());
+// "Today" tiles follow the business day (owner's opening → closing time).
+// Never let this blank the dashboard: on any problem, fall back to the
+// calendar day's figures computed above.
+$__shopToday = ['total' => $todaySum['revenue'], 'count' => $todaySum['count']];
+$__mine = null;
+try {
+    $__mine = DaySales::open($pdo, (int) TenantContext::tenantId(), (int) TenantContext::userId());
+    $__mineNow = DaySales::totalFor($pdo, (int) TenantContext::tenantId(), DaySales::today(), DaySales::today(), (int) TenantContext::userId());
+    if ($__money) {
+        $__shopToday = DaySales::totalFor($pdo, (int) TenantContext::tenantId(), DaySales::today(), DaySales::today());
+    }
+} catch (\Throwable $e) {
+    error_log('DaySales on dashboard: ' . $e->getMessage());
+    $__mine = null;
+}
 $owed += Models\ManualCreditModel::outstandingFor($pdo, (int) TenantContext::tenantId());
 ?>
+<?php if ($__mine): ?>
 <a class="card border-0 shadow-sm mb-4 text-decoration-none text-reset" style="border-radius:14px;" href="<?php echo public_url('super/day/'); ?>">
   <div class="card-body p-3 d-flex align-items-center gap-3 flex-wrap">
     <span class="dash-ic" style="background:#fff7e6;color:#f59e0b;"><i class="fas fa-sun"></i></span>
@@ -127,18 +141,19 @@ $owed += Models\ManualCreditModel::outstandingFor($pdo, (int) TenantContext::ten
     <span class="btn btn-sm btn-outline-secondary"><i class="fas fa-file-arrow-down me-1"></i>Report</span>
   </div>
 </a>
+<?php endif; ?>
 <?php if ($__money): ?>
 <div class="row g-3 mb-4">
   <div class="col-6 col-lg-3">
     <a class="tk-stat" href="<?php echo public_url('super/sales/'); ?>">
       <div class="tk-stat-icon tk-red"><i class="fas fa-sack-dollar"></i></div>
-      <div class="tk-stat-body"><div class="tk-stat-num"><?php echo $money($todaySum['revenue']); ?></div><div class="tk-stat-label">Revenue today</div></div>
+      <div class="tk-stat-body"><div class="tk-stat-num"><?php echo $money($__shopToday['total']); ?></div><div class="tk-stat-label">Revenue today</div></div>
     </a>
   </div>
   <div class="col-6 col-lg-3">
     <a class="tk-stat" href="<?php echo public_url('super/pos/'); ?>">
       <div class="tk-stat-icon tk-orange"><i class="fas fa-cart-shopping"></i></div>
-      <div class="tk-stat-body"><div class="tk-stat-num"><?php echo number_format($todaySum['count']); ?></div><div class="tk-stat-label">Sales today</div></div>
+      <div class="tk-stat-body"><div class="tk-stat-num"><?php echo number_format($__shopToday['count']); ?></div><div class="tk-stat-label">Sales today</div></div>
     </a>
   </div>
   <div class="col-6 col-lg-3">

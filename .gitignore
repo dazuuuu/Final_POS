@@ -27,3 +27,7 @@ db_sample/
 # PHP development tools
 .phpunit.cache/
 coverage/
+
+# Per-install "already set up" markers: each server makes its own
+app/storage/*.ok
+app/storage/logs/

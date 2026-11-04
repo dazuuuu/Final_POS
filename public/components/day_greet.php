@@ -8,7 +8,7 @@ unset($_SESSION['day_greet']);
 try {
     $__dgDb = Database::pdo();
     $__dgS = DaySales::open($__dgDb, (int) TenantContext::tenantId(), (int) TenantContext::userId());
-    $__dgNow = DaySales::totalFor($__dgDb, (int) TenantContext::tenantId(), date('Y-m-d'), date('Y-m-d'), (int) TenantContext::userId());
+    $__dgNow = DaySales::totalFor($__dgDb, (int) TenantContext::tenantId(), DaySales::today(), DaySales::today(), (int) TenantContext::userId());
     $__dgT = (new Models\TenantModel($__dgDb))->find(TenantContext::tenantId());
 } catch (\Throwable $e) {
     return;

@@ -134,12 +134,11 @@ class ProductFields
     {
         static $done = false;
         if ($done) return;
-        if (is_file(Database::marker('product_fields_col'))) { $done = true; return; }
+        try { Database::pdo()->query('SELECT product_fields FROM tenants LIMIT 0'); $done = true; return; } catch (\Throwable $e) { /* add it below */ }
         $chk = Database::pdo()->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'tenants' AND column_name = 'product_fields'");
         if (!(int) $chk->fetchColumn()) {
             Database::pdo()->exec('ALTER TABLE tenants ADD COLUMN product_fields TEXT NULL');
         }
-        @file_put_contents(Database::marker('product_fields_col'), date('c'));
         $done = true;
     }
 }

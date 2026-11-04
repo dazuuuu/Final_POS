@@ -1,9 +1,9 @@
 <?php
 // app/services/DaySales.php
-// Opening & closing sales. The first time someone (owner, admin or staff)
-// opens the system on a day, their "opening sales" figure is recorded — what
-// they had already sold that day (normally zero). "Closing sales" is what
-// they have sold by now, or by the time they pressed "Close day".
+// Opening & closing sales, by business day (the owner's opening and closing
+// time — see window()). Each person has their own day, which they can close
+// themselves; the shop has its combined day (user_id 0). At closing time
+// every open day closes by itself.
 //
 // Also the one place that gathers sales from every package (shop sales and
 // tabs, restaurant orders, paid service tickets) per person and per product,
@@ -16,9 +16,10 @@ class DaySales
         static $done = false;
         if ($done) return;
         $done = true;
-        $flag = Database::marker('day_sessions_v1');
-        if (is_file($flag)) return;
         $db ??= Database::pdo();
+        // Check the table itself (a near-free query), never only a marker file:
+        // a marker copied from another computer must not skip creating it.
+        try { $db->query('SELECT 1 FROM day_sessions LIMIT 0'); return; } catch (\Throwable $e) { /* create it below */ }
         $db->exec("CREATE TABLE IF NOT EXISTS day_sessions (
             id INT AUTO_INCREMENT PRIMARY KEY,
             tenant_id INT NOT NULL,
@@ -39,29 +40,147 @@ class DaySales
         ] as $table => [$name, $cols]) {
             try { $db->exec("ALTER TABLE `$table` ADD INDEX `$name` $cols"); } catch (\Throwable $e) { /* exists */ }
         }
-        @file_put_contents($flag, date('c'));
     }
 
-    /** Record today's opening for this user (once per day). Returns the session row. */
+    // ---- Business hours (set by the account's primary owner) ----------------
+    //
+    // Business day D runs from the previous day's closing time to D's closing
+    // time, so no sale is ever lost between days:
+    //   opening sales = sold after last night's closing, before D's opening time
+    //   closing sales = everything sold in day D (frozen at closing time)
+    // A closing time at or before the opening time (e.g. 06:00 → 00:00, or a
+    // late bar 10:00 → 02:00) closes on the next calendar date.
+
+    const DEFAULT_OPEN = '06:00';
+    const DEFAULT_CLOSE = '00:00';
+
+    private static array $hours = [];
+
+    /** ['open' => 'HH:MM', 'close' => 'HH:MM'] for a shop (its account's setting). */
+    public static function hours(?int $tenantId = null): array
+    {
+        $tenantId ??= (int) TenantContext::tenantId();
+        $acc = Features::accountId($tenantId);
+        if (isset(self::$hours[$acc])) return self::$hours[$acc];
+        $db = Database::pdo();
+        self::ensureHours($db);
+        $st = $db->prepare('SELECT day_open, day_close FROM tenants WHERE id = ?');
+        $st->execute([$acc]);
+        $r = $st->fetch() ?: [];
+        return self::$hours[$acc] = [
+            'open'  => substr((string) ($r['day_open'] ?? '') ?: self::DEFAULT_OPEN, 0, 5),
+            'close' => substr((string) ($r['day_close'] ?? '') ?: self::DEFAULT_CLOSE, 0, 5),
+        ];
+    }
+
+    /** Owner only: set the account's opening and closing time (every shop, admin and staff). */
+    public static function setHours(int $tenantId, string $open, string $close): bool
+    {
+        $ok = fn($t) => preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $t);
+        if (!$ok($open) || !$ok($close)) return false;
+        $acc = Features::accountId($tenantId);
+        $db = Database::pdo();
+        self::ensureHours($db);
+        $db->prepare('UPDATE tenants SET day_open = ?, day_close = ? WHERE id = ?')->execute([$open, $close, $acc]);
+        unset(self::$hours[$acc]);
+        return true;
+    }
+
+    private static function ensureHours(PDO $db): void
+    {
+        static $done = false;
+        if ($done) return;
+        $done = true;
+        try { $db->query('SELECT day_open, day_close FROM tenants LIMIT 0'); return; } catch (\Throwable $e) { /* add them below */ }
+        foreach (["ADD COLUMN day_open TIME NULL", "ADD COLUMN day_close TIME NULL"] as $alter) {
+            try { $db->exec("ALTER TABLE tenants $alter"); } catch (\Throwable $e) { /* exists */ }
+        }
+    }
+
+    /** Opening / closing moments and the counting range of business day $day. */
+    public static function window(int $tenantId, string $day): array
+    {
+        $h = self::hours($tenantId);
+        $closeOf = function (string $d) use ($h): string {
+            $next = $h['close'] <= $h['open'] ? ' +1 day' : '';
+            return date('Y-m-d', strtotime($d . $next)) . ' ' . $h['close'] . ':00';
+        };
+        return [
+            'day'   => $day,
+            'from'  => $closeOf(date('Y-m-d', strtotime($day . ' -1 day'))), // last night's closing
+            'open'  => $day . ' ' . $h['open'] . ':00',
+            'close' => $closeOf($day),
+        ];
+    }
+
+    /** The business day running now (after closing time: the next day's, which is collecting its opening sales). */
+    public static function today(?int $tenantId = null): string
+    {
+        $tenantId ??= (int) TenantContext::tenantId();
+        $now = date('Y-m-d H:i:s');
+        foreach ([-1, 0, 1] as $off) {
+            $d = date('Y-m-d', strtotime("$off day"));
+            if (self::window($tenantId, $d)['close'] > $now) return $d;
+        }
+        return date('Y-m-d', strtotime('+1 day'));
+    }
+
+    /** Is the shop inside its opening hours right now? */
+    public static function isOpen(int $tenantId): bool
+    {
+        $w = self::window($tenantId, self::today($tenantId));
+        $now = date('Y-m-d H:i:s');
+        return $now >= $w['open'] && $now < $w['close'];
+    }
+
+    // ---- Opening / closing records -------------------------------------------
+    // user_id 0 is the shop's own combined day (everyone's sales together).
+
+    /** Record this business day's opening for a user (once per day). Returns the session row. */
     public static function open(PDO $db, int $tenantId, int $userId): array
     {
         self::ensure($db);
-        $day = date('Y-m-d');
-        $row = self::session($db, $tenantId, $userId, $day);
-        if ($row) return $row;
-        $opening = self::totalFor($db, $tenantId, $day, $day, $userId)['total'];
-        $db->prepare('INSERT IGNORE INTO day_sessions (tenant_id, user_id, day, opened_at, opening_sales) VALUES (?,?,?,?,?)')
-           ->execute([$tenantId, $userId, $day, date('Y-m-d H:i:s'), $opening]);
+        self::autoClose($db, $tenantId);
+        $day = self::today($tenantId);
+        foreach ($userId ? [0, $userId] : [0] as $uid) {
+            if (!self::session($db, $tenantId, $uid, $day)) {
+                $w = self::window($tenantId, $day);
+                $opening = self::sumBetween($db, $tenantId, $w['from'], min($w['open'], date('Y-m-d H:i:s')), $uid ?: null)['total'];
+                $db->prepare('INSERT IGNORE INTO day_sessions (tenant_id, user_id, day, opened_at, opening_sales) VALUES (?,?,?,?,?)')
+                   ->execute([$tenantId, $uid, $day, date('Y-m-d H:i:s'), $opening]);
+            }
+        }
         return self::session($db, $tenantId, $userId, $day) ?: [];
     }
 
-    /** Close the day: freeze what this user sold today. */
+    /** A staff member / admin closes their own day: their figures freeze, the shop's day carries on. */
     public static function close(PDO $db, int $tenantId, int $userId): void
     {
         $s = self::open($db, $tenantId, $userId);
-        $t = self::totalFor($db, $tenantId, $s['day'], $s['day'], $userId);
+        if (!$s || $s['closed_at'] !== null) return;
+        $w = self::window($tenantId, $s['day']);
+        $t = self::sumBetween($db, $tenantId, $w['from'], date('Y-m-d H:i:s'), $userId ?: null);
         $db->prepare('UPDATE day_sessions SET closed_at = ?, closing_sales = ?, closing_count = ? WHERE id = ?')
            ->execute([date('Y-m-d H:i:s'), $t['total'], $t['count'], $s['id']]);
+    }
+
+    /** Closing time has passed: freeze every open day (people and the shop) at the closing figures. */
+    public static function autoClose(PDO $db, int $tenantId): void
+    {
+        static $done = [];
+        if (isset($done[$tenantId])) return;
+        $done[$tenantId] = true;
+        self::ensure($db);
+        $st = $db->prepare('SELECT * FROM day_sessions WHERE tenant_id = ? AND closed_at IS NULL AND day <= ?');
+        $st->execute([$tenantId, date('Y-m-d')]);
+        $now = date('Y-m-d H:i:s');
+        $up = $db->prepare('UPDATE day_sessions SET closed_at = ?, closing_sales = ?, closing_count = ? WHERE id = ? AND closed_at IS NULL');
+        foreach ($st->fetchAll() as $s) {
+            $w = self::window($tenantId, $s['day']);
+            if ($w['close'] > $now) continue;
+            $t = self::sumBetween($db, $tenantId, $w['from'], $w['close'], (int) $s['user_id'] ?: null);
+            $up->execute([$w['close'], $t['total'], $t['count'], $s['id']]);
+        }
     }
 
     public static function session(PDO $db, int $tenantId, int $userId, string $day): ?array
@@ -72,24 +191,31 @@ class DaySales
         return $st->fetch() ?: null;
     }
 
-    /** Every opening/closing row for a shop and date range, with names. */
+    /** Every opening/closing row for a shop and range of business days, with names (the shop's own row first). */
     public static function sessions(PDO $db, int $tenantId, string $from, string $to): array
     {
         self::ensure($db);
-        $st = $db->prepare('SELECT d.*, u.username FROM day_sessions d LEFT JOIN users u ON u.id = d.user_id
-                             WHERE d.tenant_id = ? AND d.day BETWEEN ? AND ? ORDER BY d.day DESC, u.username');
+        self::autoClose($db, $tenantId);
+        $st = $db->prepare("SELECT d.*, IF(d.user_id = 0, 'Whole shop', u.username) AS username FROM day_sessions d LEFT JOIN users u ON u.id = d.user_id
+                             WHERE d.tenant_id = ? AND d.day BETWEEN ? AND ? ORDER BY d.day DESC, d.user_id = 0 DESC, u.username");
         $st->execute([$tenantId, $from, $to]);
         return $st->fetchAll();
     }
 
-    /** Fast total (one query per source) — what the dashboard card needs. */
+    /** Sales from the start of business day $from to the close of business day $to. */
     public static function totalFor(PDO $db, int $tenantId, string $from, string $to, ?int $userId = null): array
+    {
+        return self::sumBetween($db, $tenantId, self::window($tenantId, $from)['from'], self::window($tenantId, $to)['close'], $userId);
+    }
+
+    /** Fast total (one query per source) between two moments. */
+    public static function sumBetween(PDO $db, int $tenantId, string $start, string $end, ?int $userId = null): array
     {
         $total = 0.0; $count = 0;
         foreach (self::sources($db) as $src) {
             $sql = "SELECT COUNT(*) c, COALESCE(SUM({$src['total']}),0) t FROM {$src['table']} x
                      WHERE x.tenant_id = ? AND {$src['where']} AND x.{$src['at']} >= ? AND x.{$src['at']} < ?";
-            $p = [$tenantId, $from . ' 00:00:00', date('Y-m-d', strtotime($to . ' +1 day')) . ' 00:00:00'];
+            $p = [$tenantId, $start, $end];
             if ($userId !== null) { $sql .= " AND {$src['by']} = ?"; $p[] = $userId; }
             try {
                 $st = $db->prepare($sql);
@@ -108,7 +234,7 @@ class DaySales
     public static function sales(PDO $db, int $tenantId, string $from, string $to, ?int $userId = null): array
     {
         $out = [];
-        $range = [$from . ' 00:00:00', date('Y-m-d', strtotime($to . ' +1 day')) . ' 00:00:00'];
+        $range = [self::window($tenantId, $from)['from'], self::window($tenantId, $to)['close']];
         foreach (self::sources($db) as $key => $src) {
             $sql = "SELECT x.id, x.{$src['at']} AS at, {$src['by']} AS user_id, u.username AS staff,
                            {$src['customer']} AS customer, {$src['method']} AS method, {$src['total']} AS total

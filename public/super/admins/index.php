@@ -30,8 +30,8 @@ function admins_unique_username(PDO $pdo, string $email): string
     }
 }
 
-// What the primary owner can switch on/off for each admin. Finances and
-// stock value start OFF for a new admin; everything else starts ON.
+// What the primary owner can switch on/off for each admin. Stock value
+// starts OFF for an admin; everything else (finances included) starts ON.
 $adminToggles = [
     ['key' => 'finance',   'label' => 'Finances, profit & reports', 'desc' => 'Sales totals, profit, statements, reports and every person\'s opening/closing sales.', 'caps' => [Capabilities::FINANCE_VIEW, Capabilities::REPORTS_VIEW]],
     ['key' => 'stock_val', 'label' => 'Stock value & buying prices', 'desc' => 'See the value of stock and what products cost you.', 'caps' => [Capabilities::STOCK_VALUE]],
@@ -183,7 +183,7 @@ ob_start();
     <div class="card border-0 shadow-sm" style="border-radius:12px;">
       <div class="card-body p-4">
         <h2 class="h5 mb-1">Add an admin</h2>
-        <p class="text-muted small mb-3">They'll get access to <?php echo htmlspecialchars($shopName); ?> and their credentials by email. <strong>Finances and stock value start switched off</strong> — use <em>Permissions</em> next to their name to choose exactly what they can do. They can't add other admins.</p>
+        <p class="text-muted small mb-3">They'll get access to <?php echo htmlspecialchars($shopName); ?> and their credentials by email. <strong>Stock value starts switched off</strong> — use <em>Permissions</em> next to their name to choose exactly what they can do. They can't add other admins.</p>
         <?php if ($errors): ?><div class="alert alert-danger py-2"><ul class="mb-0 ps-3"><?php foreach ($errors as $e): ?><li><?php echo htmlspecialchars($e); ?></li><?php endforeach; ?></ul></div><?php endif; ?>
         <?php if ($success): ?><div class="alert alert-success py-2"><?php echo $success; ?></div><?php endif; ?>
         <?php if ($mailResult === 'ok'): ?><div class="alert alert-success py-2">✓ Credentials email sent.</div>

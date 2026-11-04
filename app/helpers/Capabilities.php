@@ -31,8 +31,8 @@ class Capabilities
     const ROOMS_MANAGE     = 'rooms.manage';     // add / edit rooms, prices and the late-checkout fee
     const ROOMS_DESK       = 'rooms.desk';       // book guests in, add room service, check out and take payment
     const TABLE_BOOKINGS   = 'tables.book';      // group / family table bookings with pre-set menus and platters
-    // Money views. The primary owner always holds these; admins they create
-    // start without them and staff never get them.
+    // Money views. The primary owner always holds these; admins have finances
+    // unless the owner switches it off, but start without stock value. Staff never get them.
     const FINANCE_VIEW     = 'finance.view';     // finances, profit, reports, statements, day totals
     const STOCK_VALUE      = 'stock.value';      // stock value and cost (buying) prices
 
@@ -58,10 +58,10 @@ class Capabilities
         ];
     }
 
-    /** Off for a new admin until the primary owner switches them on. */
+    /** Off for an admin until the primary owner switches it on: stock value only. */
     public static function adminDefaultOff(): array
     {
-        return [self::FINANCE_VIEW, self::STOCK_VALUE];
+        return [self::STOCK_VALUE];
     }
 
     /** Is this user the shop's primary owner (tenants.owner_user_id)? */

@@ -95,7 +95,7 @@ if (session_status() === PHP_SESSION_NONE) {
 // simply loads the page normally on click.
 if (preg_match('/prefetch|prerender/i', (string) ($_SERVER['HTTP_SEC_PURPOSE'] ?? $_SERVER['HTTP_PURPOSE'] ?? ''))
     && (!empty($_SESSION['flash']) || !empty($_SESSION['day_greet'])
-        || (!empty($_SESSION['otp_verified']) && ($_SESSION['day_opened'] ?? '') !== date('Y-m-d') . ':' . ($_SESSION['tenant_id'] ?? '')))) {
+        || (!empty($_SESSION['otp_verified']) && time() >= (int) ($_SESSION['day_until'][(int) ($_SESSION['tenant_id'] ?? 0)] ?? 0)))) {
     http_response_code(503);
     header('Cache-Control: no-store');
     exit;
@@ -146,12 +146,14 @@ Signup::usernamesPerShop();
 // Online / offline and sign-in history for the support console.
 UserSessions::touch();
 
-// Opening sales: the first page someone opens each day records their opening figure.
+// Opening sales: the first page someone opens each business day records their opening figure.
 if (!empty($_SESSION['otp_verified']) && TenantContext::userId() && TenantContext::tenantId()
-    && ($_SESSION['day_opened'] ?? '') !== date('Y-m-d') . ':' . TenantContext::tenantId()) {
+    && time() >= (int) ($_SESSION['day_until'][(int) TenantContext::tenantId()] ?? 0)) {
+    // Runs again once the business day's closing time has passed (owner's hours).
     try {
-        DaySales::open(Database::pdo(), (int) TenantContext::tenantId(), (int) TenantContext::userId());
-        $_SESSION['day_opened'] = date('Y-m-d') . ':' . TenantContext::tenantId();
+        $__tid = (int) TenantContext::tenantId();
+        DaySales::open(Database::pdo(), $__tid, (int) TenantContext::userId());
+        $_SESSION['day_until'][$__tid] = strtotime(DaySales::window($__tid, DaySales::today($__tid))['close']);
         $_SESSION['day_greet'] = true; // the layout shows the morning card once
     } catch (\Throwable $e) { /* never block a page over this */ }
 }

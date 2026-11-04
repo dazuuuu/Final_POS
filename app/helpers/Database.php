@@ -43,7 +43,8 @@ class Database
             return;
         }
         $ran[$class] = true;
-        $flag = self::marker('schema_' . preg_replace('/\W+/', '_', $class) . '_' . @filemtime($file));
+        // Install folder in the name: a marker copied from another computer never matches.
+        $flag = self::marker('schema_' . preg_replace('/\W+/', '_', $class) . '_' . @filemtime($file) . '_' . crc32(ROOT_PATH));
         if (is_file($flag)) {
             return;
         }
