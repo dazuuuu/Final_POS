@@ -130,14 +130,16 @@ ob_start();
           </div>
         </div>
 
+        <?php if (PageGuard::seesMoney()): ?>
         <div class="sh-grid my-3">
           <div><span>Sales</span><strong><?php echo $money($r['revenue']); ?></strong></div>
           <div><span>Gross profit</span><strong><?php echo $money($r['gross']); ?></strong></div>
           <div><span>Expenses</span><strong class="text-warning"><?php echo $money($r['expenses']); ?></strong></div>
           <div><span>Net profit</span><strong class="<?php echo $r['net'] < 0 ? 'text-danger' : 'text-success'; ?>"><?php echo $money($r['net']); ?></strong></div>
           <div><span>Owed to shop</span><strong><?php echo $money($r['owed']); ?></strong></div>
-          <div><span>Stock value</span><strong><?php echo $money($R->stockValue($sid)); ?></strong></div>
+          <?php if (PageGuard::seesStockValue()): ?><div><span>Stock value</span><strong><?php echo $money($R->stockValue($sid)); ?></strong></div><?php endif; ?>
         </div>
+        <?php endif; ?>
         <div class="small text-muted mb-1"><?php echo (int) $r['count']; ?> sale<?php echo $r['count'] === 1 ? '' : 's'; ?> · <?php echo $R->staffCount($sid); ?> staff · <?php echo $share; ?>% of all sales</div>
         <div class="progress mb-3" style="height:6px;"><div class="progress-bar bg-success" style="width:<?php echo $share; ?>%"></div></div>
 

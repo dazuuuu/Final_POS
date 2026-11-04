@@ -10,6 +10,7 @@ if (!Features::enabled(Features::SHOP_POS) && Features::enabled(Features::RESTAU
 }
 
 $pdo = Database::pdo();
+$__money = PageGuard::seesMoney(); // admins without finance rights get the dashboard without money
 $__tenant = (new Models\TenantModel($pdo))->find(TenantContext::tenantId());
 $currency = $__tenant['currency'] ?? 'KES';
 
@@ -46,7 +47,7 @@ $todayAttendance = $TL->todaysEvents((int) TenantContext::tenantId());
 
 $profitAvailable = true;
 $todayCogs = 0.0;
-try {
+if ($__money) try {
     $profitRows = $SA->productProfit('today');
     $byProduct = [];
     foreach ($profitRows as $pp) { $byProduct[$pp['product_id']] = $pp; }
@@ -109,12 +110,24 @@ $__report = new ShopReport($pdo);
 $__isOwner = TenantContext::role() === 'tenant_owner';
 $__shops = $__isOwner ? ShopContext::shops(true) : [];
 if (!$__shops) { $__shops = [$__tenant]; }
-$__day = $__report->compare($__shops, date('Y-m-d'), date('Y-m-d'));
+$__day = $__money ? $__report->compare($__shops, date('Y-m-d'), date('Y-m-d')) : ['rows' => [], 'total' => []];
 $__here = null;
 foreach ($__day['rows'] as $__r) { if ((int) $__r['shop']['id'] === (int) TenantContext::tenantId()) { $__here = $__r; } }
-$__here = $__here ?? $__report->forShop((int) TenantContext::tenantId(), date('Y-m-d'), date('Y-m-d'));
+$__here = $__here ?? ($__money ? $__report->forShop((int) TenantContext::tenantId(), date('Y-m-d'), date('Y-m-d')) : []);
+$__mine = DaySales::open($pdo, (int) TenantContext::tenantId(), (int) TenantContext::userId());
+$__mineNow = DaySales::totalFor($pdo, (int) TenantContext::tenantId(), date('Y-m-d'), date('Y-m-d'), (int) TenantContext::userId());
 $owed += Models\ManualCreditModel::outstandingFor($pdo, (int) TenantContext::tenantId());
 ?>
+<a class="card border-0 shadow-sm mb-4 text-decoration-none text-reset" style="border-radius:14px;" href="<?php echo public_url('super/day/'); ?>">
+  <div class="card-body p-3 d-flex align-items-center gap-3 flex-wrap">
+    <span class="dash-ic" style="background:#fff7e6;color:#f59e0b;"><i class="fas fa-sun"></i></span>
+    <div class="fw-semibold me-auto">My day <span class="text-muted small fw-normal">· opened <?php echo date('g:i a', strtotime($__mine['opened_at'])); ?></span></div>
+    <div class="small"><span class="text-muted">Opening</span> <strong><?php echo $money($__mine['opening_sales']); ?></strong></div>
+    <div class="small"><span class="text-muted">Closing<?php echo $__mine['closed_at'] ? '' : ' (so far)'; ?></span> <strong class="text-success"><?php echo $money($__mine['closed_at'] ? $__mine['closing_sales'] : $__mineNow['total']); ?></strong></div>
+    <span class="btn btn-sm btn-outline-secondary"><i class="fas fa-file-arrow-down me-1"></i>Report</span>
+  </div>
+</a>
+<?php if ($__money): ?>
 <div class="row g-3 mb-4">
   <div class="col-6 col-lg-3">
     <a class="tk-stat" href="<?php echo public_url('super/sales/'); ?>">
@@ -208,7 +221,9 @@ $owed += Models\ManualCreditModel::outstandingFor($pdo, (int) TenantContext::ten
   </div>
 </div>
 
+<?php endif; ?>
 <div class="row g-3 mb-4">
+  <?php if ($__money): ?>
   <div class="col-12 col-lg-8">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body p-4">
@@ -217,7 +232,8 @@ $owed += Models\ManualCreditModel::outstandingFor($pdo, (int) TenantContext::ten
       </div>
     </div>
   </div>
-  <div class="col-12 col-lg-4">
+  <?php endif; ?>
+  <div class="col-12 <?php echo $__money ? 'col-lg-4' : ''; ?>">
     <div class="card border-0 shadow-sm h-100">
       <div class="card-body p-4">
         <h2 class="h6 fw-bold mb-3"><i class="fas fa-user-clock me-2 text-primary"></i>Attendance now</h2>
@@ -249,6 +265,7 @@ $owed += Models\ManualCreditModel::outstandingFor($pdo, (int) TenantContext::ten
   </div>
 </div>
 
+<?php if ($__money): ?>
 <div class="card border-0 shadow-sm">
   <div class="card-body p-4">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
@@ -284,6 +301,7 @@ $owed += Models\ManualCreditModel::outstandingFor($pdo, (int) TenantContext::ten
     <?php endif; ?>
   </div>
 </div>
+<?php endif; ?>
 
 <style>
 .dp-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
@@ -299,6 +317,7 @@ $owed += Models\ManualCreditModel::outstandingFor($pdo, (int) TenantContext::ten
   .card .h4{overflow-wrap:anywhere;}
 }
 </style>
+<?php if ($__money): ?>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 new Chart(document.getElementById('salesChart'), {
@@ -313,6 +332,7 @@ new Chart(document.getElementById('salesChart'), {
   }
 });
 </script>
+<?php endif; ?>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/../../templates/tenants/layout.php';

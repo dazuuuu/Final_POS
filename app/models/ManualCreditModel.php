@@ -12,7 +12,7 @@ class ManualCreditModel
     public function __construct(?\PDO $db = null)
     {
         $this->db = $db ?? \Database::pdo();
-        \ShopContext::ensureSchema($this->db);
+        \Database::schemaOnce(static::class, __FILE__, fn() => \ShopContext::ensureSchema($this->db));
     }
 
     private function tid(): int

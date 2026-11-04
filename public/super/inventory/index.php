@@ -41,7 +41,7 @@ $editBase = public_url('super/products/');
 $stockUrl = public_url('super/stock/new.php');
 $groupUrl = fn(string $g) => public_url('super/inventory/') . '?group=' . $g;
 
-$seesMoney = PageGuard::seesMoney();
+$seesMoney = PageGuard::seesStockValue();
 $totals = ['products' => 0, 'stock_value' => 0.0, 'retail_value' => 0.0];
 foreach ($grouped as $items) {
     foreach ($items as $p) {

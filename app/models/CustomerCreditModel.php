@@ -16,7 +16,7 @@ class CustomerCreditModel
     public function __construct(?\PDO $db = null)
     {
         $this->db = $db ?? \Database::pdo();
-        ManualCreditModel::ensureCustomerLink($this->db);
+        \Database::schemaOnce(static::class, __FILE__, fn() => ManualCreditModel::ensureCustomerLink($this->db));
     }
 
     private function tid(): int

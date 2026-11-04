@@ -4,6 +4,7 @@
 // (retail and/or wholesale — at least one) is set at the moment of moving.
 require_once __DIR__ . '/../../../app/app.php';
 PageGuard::tenant(); // owner only
+if (!PageGuard::seesStockValue()) { header("Location: " . public_url("super/dashboard/")); exit; } // buying prices throughout
 if (!ShopContext::isMainShop()) {
     // The warehouse belongs to the Admin portal, not to individual shops.
     $_SESSION['flash']['error'] = 'The warehouse is in the Admin portal. Switch to it from the shop menu at the top.';
@@ -71,7 +72,9 @@ ob_start();
 ?>
 <div class="row g-3 mb-4">
   <div class="col-6 col-lg-4"><div class="tk-stat"><div class="tk-stat-icon tk-blue"><i class="fas fa-boxes-stacked"></i></div><div class="tk-stat-body"><div class="tk-stat-num"><?php echo (int) $totals['items']; ?></div><div class="tk-stat-label">Items in warehouse</div></div></div></div>
+<?php if (PageGuard::seesStockValue()): ?>
   <div class="col-6 col-lg-4"><div class="tk-stat"><div class="tk-stat-icon tk-greenbg"><i class="fas fa-coins"></i></div><div class="tk-stat-body"><div class="tk-stat-num"><?php echo $money($totals['value']); ?></div><div class="tk-stat-label">Stock value (at cost)</div></div></div></div>
+  <?php endif; ?>
   <div class="col-12 col-lg-4"><div class="tk-stat"><div class="tk-stat-icon tk-orange"><i class="fas fa-store"></i></div><div class="tk-stat-body"><div class="tk-stat-num"><?php echo count($shops); ?></div><div class="tk-stat-label">Shops you can supply</div></div></div></div>
 </div>
 

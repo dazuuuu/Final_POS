@@ -89,6 +89,23 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Pages fetched ahead of a click (assets/js/instant-nav.js): if a one-time
+// message is waiting (a "saved" notice, the morning opening-sales card),
+// decline, so it shows on the page the person really opens. The browser then
+// simply loads the page normally on click.
+if (preg_match('/prefetch|prerender/i', (string) ($_SERVER['HTTP_SEC_PURPOSE'] ?? $_SERVER['HTTP_PURPOSE'] ?? ''))
+    && (!empty($_SESSION['flash']) || !empty($_SESSION['day_greet'])
+        || (!empty($_SESSION['otp_verified']) && ($_SESSION['day_opened'] ?? '') !== date('Y-m-d') . ':' . ($_SESSION['tenant_id'] ?? '')))) {
+    http_response_code(503);
+    header('Cache-Control: no-store');
+    exit;
+}
+// An early fetch only reads the session: let go of its lock at once so it
+// never holds up the person's real clicks and saves.
+if (preg_match('/prefetch|prerender/i', (string) ($_SERVER['HTTP_SEC_PURPOSE'] ?? $_SERVER['HTTP_PURPOSE'] ?? ''))) {
+    session_write_close();
+}
+
 // Database check before anything touches it. The setup wizard only opens when
 // there is nothing usable to connect to (no config, wrong credentials, empty
 // database). A stopped MySQL server gets a "start your database" page instead
@@ -128,6 +145,16 @@ Signup::usernamesPerShop();
 
 // Online / offline and sign-in history for the support console.
 UserSessions::touch();
+
+// Opening sales: the first page someone opens each day records their opening figure.
+if (!empty($_SESSION['otp_verified']) && TenantContext::userId() && TenantContext::tenantId()
+    && ($_SESSION['day_opened'] ?? '') !== date('Y-m-d') . ':' . TenantContext::tenantId()) {
+    try {
+        DaySales::open(Database::pdo(), (int) TenantContext::tenantId(), (int) TenantContext::userId());
+        $_SESSION['day_opened'] = date('Y-m-d') . ':' . TenantContext::tenantId();
+        $_SESSION['day_greet'] = true; // the layout shows the morning card once
+    } catch (\Throwable $e) { /* never block a page over this */ }
+}
 
 // Accounts locked by support: only the pages support left open.
 AccountLock::gate();

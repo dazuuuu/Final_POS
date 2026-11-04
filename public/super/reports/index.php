@@ -2,6 +2,7 @@
 // public/super/reports/index.php — daily sales report (view / print / PDF)
 require_once __DIR__ . '/../../../app/app.php';
 PageGuard::money(); // owners/admins only — staff never see finances, profit or day totals
+if (!TenantContext::can(Capabilities::REPORTS_VIEW)) { header("Location: " . public_url("super/dashboard/")); exit; }
 
 $pdo  = Database::pdo();
 $date = preg_replace('/[^0-9-]/', '', $_GET['date'] ?? '') ?: date('Y-m-d');
@@ -41,7 +42,8 @@ include __DIR__ . '/../../components/xsheet.php';
     <button class="btn btn-sm btn-primary" type="submit">View</button>
     <a class="btn btn-sm btn-outline-secondary" href="?date=<?php echo urlencode($prevDate); ?>&type=<?php echo urlencode($type); ?>">Previous day</a>
     <?php if ($canGoNext): ?><a class="btn btn-sm btn-outline-secondary" href="?date=<?php echo urlencode($nextDate); ?>&type=<?php echo urlencode($type); ?>">Next day</a><?php endif; ?>
-    <a class="btn btn-sm btn-outline-secondary" href="download.php?date=<?php echo urlencode($date); ?>&type=<?php echo urlencode($type); ?>"><i class="fas fa-file-pdf me-1"></i>PDF</a>
+    <a class="btn btn-sm btn-success" href="download.php?date=<?php echo urlencode($date); ?>&type=<?php echo urlencode($type); ?>&format=xlsx"><i class="fas fa-file-excel me-1"></i>Excel</a>
+    <a class="btn btn-sm btn-danger" href="download.php?date=<?php echo urlencode($date); ?>&type=<?php echo urlencode($type); ?>"><i class="fas fa-file-pdf me-1"></i>PDF</a>
     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()"><i class="fas fa-print me-1"></i>Print</button>
   </form>
 </div>

@@ -30,6 +30,23 @@ function admins_unique_username(PDO $pdo, string $email): string
     }
 }
 
+// What the primary owner can switch on/off for each admin. Finances and
+// stock value start OFF for a new admin; everything else starts ON.
+$adminToggles = [
+    ['key' => 'finance',   'label' => 'Finances, profit & reports', 'desc' => 'Sales totals, profit, statements, reports and every person\'s opening/closing sales.', 'caps' => [Capabilities::FINANCE_VIEW, Capabilities::REPORTS_VIEW]],
+    ['key' => 'stock_val', 'label' => 'Stock value & buying prices', 'desc' => 'See the value of stock and what products cost you.', 'caps' => [Capabilities::STOCK_VALUE]],
+    ['key' => 'sell',      'label' => 'Make sales',                 'desc' => 'Use the POS, held sales and documents.', 'caps' => [Capabilities::SALES_RECORD]],
+    ['key' => 'credit',    'label' => 'Credit sales & payments',    'desc' => 'Sell on credit, keep the credit book, take payments and returns.', 'caps' => [Capabilities::CREDIT_SALES, Capabilities::PAYMENTS_PROCESS]],
+    ['key' => 'inventory', 'label' => 'Edit inventory & record stock', 'desc' => 'Products, categories, subcategories, suppliers and stock deliveries.', 'caps' => [Capabilities::INVENTORY_EDIT, Capabilities::STOCK_ENTER]],
+    ['key' => 'expenses',  'label' => 'Record expenses',            'desc' => 'Log shop expenses.', 'caps' => [Capabilities::EXPENSES_RECORD]],
+    ['key' => 'customers', 'label' => 'Customers',                  'desc' => 'Manage the customer list.', 'caps' => [Capabilities::CUSTOMERS_MANAGE]],
+    ['key' => 'staff',     'label' => 'Manage staff',               'desc' => 'Add staff, set their permissions and see attendance.', 'caps' => [Capabilities::STAFF_MANAGE]],
+    ['key' => 'settings',  'label' => 'Shop settings',              'desc' => 'Shop details, catalogue sharing.', 'caps' => [Capabilities::SETTINGS_MANAGE, Capabilities::CATALOGUE_SEND]],
+];
+$adminManageable = array_merge(...array_column($adminToggles, 'caps'));
+$adminDefaults = array_values(array_diff(Capabilities::allTenantCaps(), Capabilities::adminDefaultOff()));
+$adminRoleId = (int) $pdo->query("SELECT id FROM roles WHERE role_name = 'tenant_owner' LIMIT 1")->fetchColumn();
+
 $errors = [];
 $success = '';
 $mailResult = null;
@@ -77,6 +94,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         $old = ['name' => '', 'email' => '', 'password' => ''];
     }
 
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'perms') {
+    $id = (int) ($_POST['id'] ?? 0);
+    $chk = $pdo->prepare('SELECT 1 FROM users WHERE id = ? AND tenant_id = ?');
+    $chk->execute([$id, $tenantId]);
+    if ($id !== $primaryId && $chk->fetchColumn()) {
+        $posted = array_keys($_POST['caps'] ?? []);
+        $desired = [];
+        foreach ($adminToggles as $t) {
+            if (in_array($t['key'], $posted, true)) { $desired = array_merge($desired, $t['caps']); }
+        }
+        (new StaffService($pdo))->setCapabilities($tenantId, $id, $desired, $adminManageable, $adminDefaults);
+        $_SESSION['flash']['success'] = 'Admin permissions saved — they apply within a minute.';
+    }
+    header('Location: ' . $base . '?perms=' . $id); exit;
+
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'toggle_active') {
     $id = (int) ($_POST['id'] ?? 0);
     if ($id !== $primaryId) {
@@ -105,15 +137,53 @@ $stmt = $pdo->prepare(
 $stmt->execute([$tenantId, $primaryId]);
 $admins = $stmt->fetchAll();
 
+$permsFor = null;
+foreach ($admins as $a) {
+    if ((int) $a['id'] === (int) ($_GET['perms'] ?? 0) && (int) $a['id'] !== $primaryId) { $permsFor = $a; }
+}
+$permsEff = $permsFor ? Capabilities::effective($pdo, (int) $permsFor['id'], $adminRoleId, $tenantId) : [];
+
 $page_title = 'Admins';
 ob_start();
 ?>
+<?php if (!empty($_SESSION['flash']['success'])): ?>
+  <div class="alert alert-success"><?php echo htmlspecialchars($_SESSION['flash']['success']); unset($_SESSION['flash']['success']); ?></div>
+<?php endif; ?>
+<?php if ($permsFor): ?>
+<div class="card border-0 shadow-sm mb-4" style="border-radius:12px;" id="perms">
+  <div class="card-body p-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+      <h2 class="h5 mb-0">What <?php echo htmlspecialchars($permsFor['username']); ?> can do</h2>
+      <a class="btn btn-sm btn-outline-secondary" href="<?php echo $base; ?>">Close</a>
+    </div>
+    <p class="text-muted small">Switch off anything this admin shouldn't reach. Only you (the primary owner) can change this, and nobody can restrict you.</p>
+    <form method="post">
+      <input type="hidden" name="action" value="perms">
+      <input type="hidden" name="id" value="<?php echo (int) $permsFor['id']; ?>">
+      <div class="row">
+      <?php foreach ($adminToggles as $t): $on = !array_diff($t['caps'], $permsEff); ?>
+        <div class="col-12 col-md-6">
+          <div class="form-check form-switch py-2" style="padding-left:3.2em;">
+            <input class="form-check-input mt-1" type="checkbox" role="switch" id="ap_<?php echo $t['key']; ?>" name="caps[<?php echo $t['key']; ?>]" value="1" <?php echo $on ? 'checked' : ''; ?>>
+            <label class="form-check-label" for="ap_<?php echo $t['key']; ?>">
+              <span class="fw-semibold"><?php echo htmlspecialchars($t['label']); ?></span>
+              <span class="d-block small text-muted"><?php echo htmlspecialchars($t['desc']); ?></span>
+            </label>
+          </div>
+        </div>
+      <?php endforeach; ?>
+      </div>
+      <button class="btn btn-primary mt-2"><i class="fas fa-floppy-disk me-1"></i>Save permissions</button>
+    </form>
+  </div>
+</div>
+<?php endif; ?>
 <div class="row g-4">
   <div class="col-12 col-lg-5">
     <div class="card border-0 shadow-sm" style="border-radius:12px;">
       <div class="card-body p-4">
         <h2 class="h5 mb-1">Add an admin</h2>
-        <p class="text-muted small mb-3">They'll get full owner access to <?php echo htmlspecialchars($shopName); ?> and their credentials by email — but they won't be able to add other admins themselves.</p>
+        <p class="text-muted small mb-3">They'll get access to <?php echo htmlspecialchars($shopName); ?> and their credentials by email. <strong>Finances and stock value start switched off</strong> — use <em>Permissions</em> next to their name to choose exactly what they can do. They can't add other admins.</p>
         <?php if ($errors): ?><div class="alert alert-danger py-2"><ul class="mb-0 ps-3"><?php foreach ($errors as $e): ?><li><?php echo htmlspecialchars($e); ?></li><?php endforeach; ?></ul></div><?php endif; ?>
         <?php if ($success): ?><div class="alert alert-success py-2"><?php echo $success; ?></div><?php endif; ?>
         <?php if ($mailResult === 'ok'): ?><div class="alert alert-success py-2">✓ Credentials email sent.</div>
@@ -160,6 +230,7 @@ ob_start();
                 </td>
                 <td class="text-end" style="white-space:nowrap;">
                   <?php if (!$isPrimary): ?>
+                    <a class="btn btn-sm btn-outline-primary" href="?perms=<?php echo (int) $a['id']; ?>#perms"><i class="fas fa-key me-1"></i>Permissions</a>
                     <form method="post" class="d-inline">
                       <input type="hidden" name="action" value="toggle_active">
                       <input type="hidden" name="id" value="<?php echo (int) $a['id']; ?>">

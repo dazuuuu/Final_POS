@@ -81,6 +81,7 @@ class Features
         '/super/alerts/',    // news & alerts from support
         '/super/statements/', // transaction statement: every package (owners only)
         '/super/api/', // Website API add-on: its own switch (ShopApi), any package
+        '/super/day/', // opening & closing sales: every package, everyone
     ];
 
     /**
@@ -229,15 +230,26 @@ class Features
     {
         static $done = false;
         if ($done) { return; }
+        if (is_file(Database::marker('multi_shop_col'))) { $done = true; return; }
         $chk = Database::pdo()->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'tenants' AND column_name = 'multi_shop'");
         if (!(int) $chk->fetchColumn()) {
             Database::pdo()->exec('ALTER TABLE tenants ADD COLUMN multi_shop TINYINT(1) NOT NULL DEFAULT 1');
         }
+        @file_put_contents(Database::marker('multi_shop_col'), date('c'));
         $done = true;
     }
 
     /** The top-level tenant (account) a shop belongs to. */
     public static function accountId(int $tenantId): int
+    {
+        static $cache = [];
+        if (isset($cache[$tenantId])) {
+            return $cache[$tenantId]; // asked many times per page
+        }
+        return $cache[$tenantId] = self::lookupAccountId($tenantId);
+    }
+
+    private static function lookupAccountId(int $tenantId): int
     {
         $stmt = Database::pdo()->prepare('SELECT parent_tenant_id FROM tenants WHERE id = ? LIMIT 1');
         $stmt->execute([$tenantId]);

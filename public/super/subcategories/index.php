@@ -1,7 +1,7 @@
 <?php
 // public/super/subcategories/index.php
 require_once __DIR__ . '/../../../app/app.php';
-PageGuard::auth();
+PageGuard::capability(Capabilities::INVENTORY_EDIT);
 
 $pdo = Database::pdo();
 $C = new Models\CategoryModel($pdo);
@@ -10,9 +10,68 @@ $S = new Models\SubcategoryModel($pdo);
 $categoryId = (int) ($_GET['category_id'] ?? ($_POST['category_id'] ?? 0));
 $category = $categoryId > 0 ? $C->find($categoryId) : null;
 
-// No valid category selected → send back to categories.
+// No category chosen (the menu link): every category with its subcategories,
+// and one form to add a subcategory under any of them.
+$allCats = $C->all(['type' => 'subject'], 'name ASC');
 if (!$category) {
-    header('Location: ' . public_url('super/categories/'));
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create') {
+        $cid = (int) ($_POST['parent_id'] ?? 0);
+        $res = $S->create($cid, trim($_POST['name'] ?? ''));
+        $_SESSION['flash'][$res['ok'] ? 'success' : 'error'] = $res['ok'] ? 'Subcategory added.' : $res['error'];
+        header('Location: ' . public_url('super/subcategories/') . ($res['ok'] ? '' : '?pick=' . $cid));
+        exit;
+    }
+    $grouped = [];
+    foreach ($S->all([], 'name ASC') as $sub) { $grouped[(int) $sub['category_id']][] = $sub; }
+    $pick = (int) ($_GET['pick'] ?? 0);
+    $page_title = 'Subcategories';
+    ob_start();
+    ?>
+    <?php foreach (['success' => 'success', 'error' => 'danger'] as $k => $cls): if (!empty($_SESSION['flash'][$k])): ?>
+      <div class="alert alert-<?php echo $cls; ?>"><?php echo htmlspecialchars($_SESSION['flash'][$k]); unset($_SESSION['flash'][$k]); ?></div>
+    <?php endif; endforeach; ?>
+    <div class="row g-4">
+      <div class="col-12 col-lg-4">
+        <div class="card border-0 shadow-sm" style="border-radius:12px;"><div class="card-body p-4">
+          <h2 class="h5 mb-1">Add a subcategory</h2>
+          <p class="text-muted small mb-3">E.g. category <em>Drinks</em> → subcategories <em>Sodas</em>, <em>Juices</em>. At the till, tapping a category then shows its subcategories.</p>
+          <?php if (!$allCats): ?>
+            <div class="alert alert-warning py-2 small mb-0">Add a category first on <a href="<?php echo public_url('super/categories/'); ?>">Categories</a>.</div>
+          <?php else: ?>
+          <form method="post">
+            <input type="hidden" name="action" value="create">
+            <div class="mb-3"><label class="form-label">Category</label>
+              <select name="parent_id" class="form-select" required>
+                <?php foreach ($allCats as $c): ?><option value="<?php echo (int) $c['id']; ?>" <?php echo $pick === (int) $c['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($c['name']); ?></option><?php endforeach; ?>
+              </select></div>
+            <div class="mb-3"><label class="form-label">Subcategory name</label>
+              <input name="name" class="form-control" placeholder="e.g. Sodas" required></div>
+            <button class="btn btn-primary">Add subcategory</button>
+          </form>
+          <?php endif; ?>
+        </div></div>
+      </div>
+      <div class="col-12 col-lg-8">
+        <div class="card border-0 shadow-sm" style="border-radius:12px;"><div class="card-body p-4">
+          <h2 class="h5 mb-3">Categories &amp; their subcategories</h2>
+          <?php foreach ($allCats as $c): $subsHere = $grouped[(int) $c['id']] ?? []; ?>
+            <div class="d-flex align-items-start justify-content-between border-bottom py-2 gap-2">
+              <div>
+                <div class="fw-semibold"><?php echo htmlspecialchars($c['name']); ?></div>
+                <div class="small text-muted">
+                  <?php echo $subsHere ? htmlspecialchars(implode(', ', array_column($subsHere, 'name'))) : 'No subcategories'; ?>
+                </div>
+              </div>
+              <a class="btn btn-sm btn-outline-secondary flex-shrink-0" href="<?php echo public_url('super/subcategories/?category_id=' . (int) $c['id']); ?>">Manage</a>
+            </div>
+          <?php endforeach; ?>
+          <?php if (!$allCats): ?><div class="text-muted">No categories yet.</div><?php endif; ?>
+        </div></div>
+      </div>
+    </div>
+    <?php
+    $content = ob_get_clean();
+    include __DIR__ . '/../../templates/' . (TenantContext::role() === 'staff' ? 'staff' : 'tenants') . '/layout.php';
     exit;
 }
 
@@ -49,8 +108,11 @@ $subs = $S->listForCategory($categoryId);
 $page_title = 'Subcategories';
 ob_start();
 ?>
+<?php foreach (['success' => 'success', 'error' => 'danger'] as $k => $cls): if (!empty($_SESSION['flash'][$k])): ?>
+  <div class="alert alert-<?php echo $cls; ?>"><?php echo htmlspecialchars($_SESSION['flash'][$k]); unset($_SESSION['flash'][$k]); ?></div>
+<?php endif; endforeach; ?>
 <div class="mb-3">
-  <a href="<?php echo public_url('super/categories/'); ?>" class="text-decoration-none text-muted">&larr; Categories</a>
+  <a href="<?php echo public_url('super/subcategories/'); ?>" class="text-decoration-none text-muted">&larr; All subcategories</a>
   <h2 class="h4 mt-1 mb-0"><?php echo htmlspecialchars($category['name']); ?> <span class="text-muted fs-6">subcategories</span></h2>
 </div>
 <div class="row g-4">
@@ -113,4 +175,4 @@ ob_start();
 </div>
 <?php
 $content = ob_get_clean();
-include __DIR__ . '/../../templates/tenants/layout.php';
+include __DIR__ . '/../../templates/' . (TenantContext::role() === 'staff' ? 'staff' : 'tenants') . '/layout.php';

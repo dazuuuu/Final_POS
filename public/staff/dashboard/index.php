@@ -70,6 +70,17 @@ $EL = Models\ElectronicsModel::enabled() ? new Models\ElectronicsModel($pdo) : n
 $trackedProducts = $EL ? $EL->trackedProducts() : [];
 $stockSerials = $EL ? $EL->inStockByProduct() : [];
 $categories = $C->all(['type' => 'subject'], 'name ASC');
+// Subcategories that have something to sell, grouped by category: tapping a
+// category at the till then shows these, and a subcategory shows its products.
+$subcats = [];
+if (ProductFields::on('subcategory')) {
+    $inUse = array_flip(array_filter(array_map(fn($p) => (int) ($p['subcategory_id'] ?? 0), $products)));
+    foreach ((new Models\SubcategoryModel($pdo))->all(['status' => 'active'], 'name ASC') as $sc) {
+        if (isset($inUse[(int) $sc['id']])) {
+            $subcats[(int) $sc['category_id']][] = ['id' => (int) $sc['id'], 'name' => $sc['name']];
+        }
+    }
+}
 $byId = [];
 foreach ($products as $p) { $byId[(int) $p['id']] = $p; }
 
@@ -360,6 +371,7 @@ ob_start();
         </button>
       <?php endforeach; ?>
     </div>
+    <div class="pos-cats pos-subcats" id="subRow" style="display:none;"></div>
     <div class="pos-prod-grid" id="productList">
       <?php foreach ($products as $p):
           $price = $unitPrice($p, 'retail');
@@ -371,6 +383,7 @@ ob_start();
         <div class="pos-card<?php echo !empty($p['is_archived']) ? ' pos-card-archived' : ''; ?>" data-id="<?php echo (int) $p['id']; ?>" data-name="<?php echo htmlspecialchars($label, ENT_QUOTES); ?>"
              data-price="<?php echo $price; ?>" data-wholesale-price="<?php echo $wholePrice; ?>" data-stock="<?php echo (float) $p['quantity']; ?>"
              data-category="<?php echo (int) ($p['category_id'] ?? 0); ?>"
+             data-subcategory="<?php echo (int) ($p['subcategory_id'] ?? 0); ?>"
              data-on-offer="<?php echo !empty($p['on_offer']) ? '1' : '0'; ?>"
              data-archived="<?php echo !empty($p['is_archived']) ? '1' : '0'; ?>"
              data-barcode="<?php echo htmlspecialchars($p['barcode'] ?? '', ENT_QUOTES); ?>">
@@ -555,6 +568,9 @@ ob_start();
 .pos-dim{border:1px solid #eef0f4;background:#fff;color:#5b6070;border-radius:999px;padding:8px 14px;font-size:.8rem;font-weight:600;min-height:38px;white-space:nowrap;}
 .pos-dim.active{border-color:var(--pos-green);color:var(--pos-green);background:var(--pos-green-light);}
 .pos-cats{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;margin-bottom:16px;}
+.pos-subcats{margin-top:-8px;gap:8px;}
+.pos-subcats .pos-cat{min-width:0;width:auto;min-height:0;height:auto;padding:6px 14px;border-radius:999px;flex:0 0 auto;}
+.pos-subcats .pos-cat-name{white-space:nowrap;-webkit-line-clamp:unset;}
 .pos-cat{flex:0 0 auto;width:104px;min-height:104px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:8px;border:1px solid #eef0f4;background:#fff;border-radius:14px;padding:12px 8px;font-size:.76rem;font-weight:600;color:#5b6070;}
 /* Long category names wrap inside the box (2 lines max, then …) instead of running into the next one. */
 .pos-cat-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;width:100%;text-align:center;line-height:1.25;word-break:break-word;white-space:normal;}
@@ -910,6 +926,25 @@ cartRows.addEventListener('focusin', function (e) { if (e.target.dataset.qty || 
 
 var searchInput = document.getElementById('search');
 var activeDim = 'category';
+// ---- Subcategories: category → its subcategories → their products ----
+var SUBCATS = <?php echo json_encode($subcats ?: new stdClass()); ?>;
+var subRow = document.getElementById('subRow');
+var activeSub = '';
+function showSubcats(catId) {
+    activeSub = '';
+    var list = (activeDim === 'category' && catId) ? (SUBCATS[catId] || []) : [];
+    if (!list.length) { subRow.style.display = 'none'; subRow.innerHTML = ''; return; }
+    subRow.innerHTML = '<button type="button" class="pos-cat pos-sub active" data-sub=""><span class="pos-cat-name">All</span></button>'
+        + list.map(function (s) { return '<button type="button" class="pos-cat pos-sub" data-sub="' + s.id + '"><span class="pos-cat-name">' + esc(s.name) + '</span></button>'; }).join('');
+    subRow.style.display = 'flex';
+}
+subRow.addEventListener('click', function (e) {
+    var b = e.target.closest('.pos-sub'); if (!b) return;
+    subRow.querySelectorAll('.pos-sub').forEach(function (x) { x.classList.remove('active'); });
+    b.classList.add('active');
+    activeSub = b.dataset.sub;
+    applyFilters();
+});
 function activeCatFor(dim) {
     var row = document.querySelector('.pos-cats[data-dim-row="' + dim + '"]');
     var btn = row && row.querySelector('.pos-cat.active');
@@ -927,7 +962,8 @@ function applyFilters() {
             matchesDim = el.dataset.archived === '1';
         } else {
             var activeCat = activeCatFor(activeDim);
-            matchesDim = el.dataset.archived !== '1' && (activeCat === '' || el.dataset[activeDim] === activeCat);
+            matchesDim = el.dataset.archived !== '1' && (activeCat === '' || el.dataset[activeDim] === activeCat)
+                && (activeDim !== 'category' || activeSub === '' || el.dataset.subcategory === activeSub);
         }
         var show = matchesText && matchesDim;
         el.style.display = show ? '' : 'none';
@@ -944,6 +980,7 @@ function selectDim(dim) {
     document.querySelectorAll('.pos-cats[data-dim-row]').forEach(function (row) {
         row.style.display = row.dataset.dimRow === activeDim ? 'flex' : 'none';
     });
+    showSubcats(dim === 'category' ? activeCatFor('category') : '');
     applyFilters();
 }
 searchInput.addEventListener('input', applyFilters);
@@ -952,6 +989,7 @@ document.querySelectorAll('.pos-cats[data-dim-row]').forEach(function (row) {
         var b = e.target.closest('.pos-cat'); if (!b) return;
         row.querySelectorAll('.pos-cat').forEach(function (x) { x.classList.remove('active'); });
         b.classList.add('active');
+        if (row.dataset.dimRow === 'category') { showSubcats(b.dataset.cat); }
         applyFilters();
     });
 });

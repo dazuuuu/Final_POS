@@ -1,0 +1,29 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor and IDE settings
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+app/storage/logs/
+maintenance/
+db_sample/
+
+
+# PHP development tools
+.phpunit.cache/
+coverage/

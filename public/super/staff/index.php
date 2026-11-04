@@ -1,7 +1,7 @@
 <?php
 // public/super/staff/index.php
 require_once __DIR__ . '/../../../app/app.php';
-PageGuard::auth();
+PageGuard::capability(Capabilities::STAFF_MANAGE);
 
 $pdo = Database::pdo();
 $tenantId = TenantContext::tenantId();

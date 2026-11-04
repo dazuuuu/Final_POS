@@ -6,7 +6,7 @@
 //        repayments, restaurant payments, services paid
 //   Out  expenses (supplier purchases are paid through expenses), refunds on
 //        returns, commission paid out to service staff
-// ?csv=1 downloads the same rows.
+// ?excel=1 / ?pdf=1 download the same rows.
 require_once __DIR__ . '/../../../app/app.php';
 PageGuard::money();
 if (TenantContext::role() !== 'tenant_owner') {
@@ -114,17 +114,21 @@ $rows = array_reverse(array_values(array_filter($rows, function ($r) use ($dir, 
     return $q === '' || stripos($r['what'] . ' ' . $r['ref'] . ' ' . $r['method'] . ' ' . ($r['by'] ?? ''), $q) !== false;
 })));
 
-if (!empty($_GET['csv'])) {
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="statement_' . $from . '_' . $to . '.csv"');
-    $out = fopen('php://output', 'w');
-    fputcsv($out, ['Receipt No.', 'Completion Time', 'Details', 'Method', 'By', 'Paid In', 'Withdrawn', 'Balance']);
-    foreach ($rows as $r) {
-        fputcsv($out, [$r['ref'], $r['at'], $r['what'], $r['method'], $r['by'] ?? '',
-            $r['dir'] === 'in' ? number_format((float) $r['amount'], 2, '.', '') : '',
-            $r['dir'] === 'out' ? number_format((float) $r['amount'], 2, '.', '') : '', number_format($r['balance'], 2, '.', '')]);
+if (!empty($_GET['excel']) || !empty($_GET['pdf'])) {
+    $sheet = ['Statement' => [
+        'headers' => ['Receipt No.', 'Completion Time', 'Details', 'Method', 'By', 'Paid In', 'Withdrawn', 'Balance'],
+        'rows' => array_map(fn($r) => [
+            $r['ref'], $r['at'], $r['what'], $r['method'], $r['by'] ?? '',
+            $r['dir'] === 'in' ? round((float) $r['amount'], 2) : '',
+            $r['dir'] === 'out' ? round((float) $r['amount'], 2) : '', round((float) $r['balance'], 2),
+        ], $rows),
+        'money' => [5, 6, 7], 'totals' => [5, 6],
+    ]];
+    $file = 'statement_' . $from . '_' . $to;
+    if (!empty($_GET['pdf'])) {
+        PdfExport::download($file . '.pdf', 'Transaction statement', date('j M Y', strtotime($from)) . ' – ' . date('j M Y', strtotime($to)), $sheet);
     }
-    exit;
+    ExcelExport::download($file . '.xlsx', $sheet);
 }
 
 $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES);
@@ -153,7 +157,8 @@ ob_start();
     <div><div class="fw-bold fs-5"><?php echo $h($tenant['name'] ?? ''); ?> — Transaction statement</div>
       <div class="small text-muted">Statement period: <?php echo date('j M Y', strtotime($from)); ?> – <?php echo date('j M Y', strtotime($to)); ?> · <?php echo $h($currency); ?></div></div>
     <div class="st-actions d-flex gap-2">
-      <a class="btn btn-sm btn-outline-secondary" href="?<?php echo $h(http_build_query(['from' => $from, 'to' => $to, 'dir' => $dir, 'q' => $q, 'csv' => 1])); ?>"><i class="fas fa-file-csv me-1"></i>CSV</a>
+      <a class="btn btn-sm btn-success" href="?<?php echo $h(http_build_query(['from' => $from, 'to' => $to, 'dir' => $dir, 'q' => $q, 'excel' => 1])); ?>"><i class="fas fa-file-excel me-1"></i>Excel</a>
+      <a class="btn btn-sm btn-danger" href="?<?php echo $h(http_build_query(['from' => $from, 'to' => $to, 'dir' => $dir, 'q' => $q, 'pdf' => 1])); ?>"><i class="fas fa-file-pdf me-1"></i>PDF</a>
       <button class="btn btn-sm btn-outline-secondary" onclick="window.print()"><i class="fas fa-print me-1"></i>Print</button>
     </div>
   </div>

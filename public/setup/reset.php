@@ -35,6 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $dropped++;
                 }
                 $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+                // "Already migrated" markers no longer hold for an empty database.
+                foreach (glob(ROOT_PATH . '/app/storage/*.ok') ?: [] as $f) { @unlink($f); }
             }
             $supportRemoved = false;
             if (!empty($_POST['wipe_support']) && is_file(SupportAccount::configPath())) {

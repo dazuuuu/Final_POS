@@ -89,6 +89,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $categories = $C->listWithCounts($type);
+// Subcategories: once switched on (Product fields), each category links to its own.
+$__subsOn = ProductFields::on('subcategory');
+$__subCounts = [];
+if ($__subsOn) {
+    $st = $pdo->prepare('SELECT category_id, COUNT(*) FROM subcategories WHERE tenant_id = ? GROUP BY category_id');
+    $st->execute([TenantContext::tenantId()]);
+    $__subCounts = array_map('intval', $st->fetchAll(PDO::FETCH_KEY_PAIR));
+}
 $page_title = 'Categories';
 ob_start();
 ?>
@@ -169,7 +177,11 @@ ob_start();
                       <span class="d-inline-flex align-items-center justify-content-center text-muted" style="width:36px;height:36px;border-radius:8px;background:#f1f5f9;"><i class="fas fa-box"></i></span>
                     <?php endif; ?>
                   </td>
-                  <td class="fw-semibold"><?php echo htmlspecialchars($c['name']); ?></td>
+                  <td class="fw-semibold"><?php echo htmlspecialchars($c['name']); ?>
+                    <?php if ($__subsOn): $__n = $__subCounts[(int) $c['id']] ?? 0; ?>
+                      <a class="d-block small fw-normal text-decoration-none" href="<?php echo public_url('super/subcategories/?category_id=' . (int) $c['id']); ?>"><i class="fas fa-sitemap me-1"></i><?php echo $__n ? $__n . ' subcategor' . ($__n === 1 ? 'y' : 'ies') : 'Add subcategories'; ?></a>
+                    <?php endif; ?>
+                  </td>
                   <td><?php echo $c['status'] === 'active' ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Draft</span>'; ?></td>
                   <td class="text-center"><span class="badge bg-light text-dark"><?php echo (int)$c['product_count']; ?></span></td>
                   <td class="text-end">

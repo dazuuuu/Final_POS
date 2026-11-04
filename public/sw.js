@@ -1,7 +1,7 @@
 /* Dazu Modern POS service worker — makes the app installable + fast.
    Pages are always network-first (so live data + auth stay correct);
    only static assets and the login shell are cached. */
-const CACHE = 'dazu-pos-v7';
+const CACHE = 'dazu-pos-v8';
 // Derived from this script's own URL, not hard-coded — works whatever
 // folder the app is deployed under.
 const BASE  = new URL('.', self.location).pathname.replace(/\/$/, '');
@@ -47,8 +47,19 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // No connection: a waiting screen that reloads by itself once the internet
+  // is back, instead of the browser's broken "can't connect" page.
+  const OFFLINE_PAGE = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>Waiting for connection</title><style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;'
+    + 'flex-direction:column;gap:14px;font:500 15px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0f172a;text-align:center;padding:20px}'
+    + '.r{width:56px;height:56px;border-radius:50%;border:6px solid #e2e8f0;border-top-color:#0f766e;animation:s 1s linear infinite}'
+    + '@keyframes s{to{transform:rotate(360deg)}}small{color:#64748b}button{border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:7px 16px;font:inherit}</style></head>'
+    + '<body><div class="r"></div><div>Waiting for your internet connection…</div><small>This page opens by itself as soon as you are back online.</small>'
+    + '<button onclick="location.reload()">Try again</button>'
+    + '<script>function go(){location.reload()}addEventListener("online",go);setInterval(function(){if(navigator.onLine)fetch(location.href,{method:"HEAD",cache:"no-store"}).then(go,function(){})},4000)</script>'
+    + '</body></html>';
   const fallbackResponse = () =>
-    new Response('<!doctype html><html><body>Offline</body></html>', {
+    new Response(OFFLINE_PAGE, {
       status: 503,
       headers: { 'Content-Type': 'text/html; charset=utf-8' }
     });

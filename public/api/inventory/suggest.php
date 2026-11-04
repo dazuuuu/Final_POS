@@ -30,11 +30,18 @@ if ($field === 'subject' || $field === 'category') {
 } elseif ($field === 'supplier') {
     $items = (new Models\SupplierModel($pdo))->suggestions($q);
 } elseif ($field === 'subcategory') {
+    // Only the subcategories of the category typed on the same row/form.
+    $cat = trim((string) ($_GET['category'] ?? ''));
+    $catSql = $cat !== '' ? 'AND c.name = ?' : '';
     $st = $pdo->prepare(
         "SELECT DISTINCT s.id, s.name FROM subcategories s JOIN categories c ON c.id = s.category_id
-          WHERE c.tenant_id = ? AND s.name LIKE ? ORDER BY (s.name LIKE ?) DESC, s.name ASC LIMIT 8"
+          WHERE c.tenant_id = ? AND s.status = 'active' AND s.name LIKE ? $catSql
+       ORDER BY (s.name LIKE ?) DESC, s.name ASC LIMIT 20"
     );
-    $st->execute([TenantContext::tenantId(), '%' . $q . '%', $q . '%']);
+    $params = [TenantContext::tenantId(), '%' . $q . '%'];
+    if ($cat !== '') { $params[] = $cat; }
+    $params[] = $q . '%';
+    $st->execute($params);
     $items = $st->fetchAll();
 } elseif (in_array($field, Models\BookAttributeModel::TYPES, true)) {
     $items = (new Models\BookAttributeModel($pdo))->suggestions($field, $q);

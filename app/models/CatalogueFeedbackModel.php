@@ -13,7 +13,7 @@ class CatalogueFeedbackModel
     public function __construct(?\PDO $db = null)
     {
         $this->db = $db ?? \Database::pdo();
-        $this->ensureSchema();
+        \Database::schemaOnce(static::class, __FILE__, fn() => $this->ensureSchema());
     }
 
     /** Like counts per product, plus which ones this visitor liked. */
