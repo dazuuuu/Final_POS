@@ -46,13 +46,15 @@ class StoreImport
      * Import into the signed-in shop. $zip: path to uploads.zip or null.
      * Returns ['created' => n, 'updated' => n, 'photos' => n, 'errors' => [...]].
      */
-    public static function run(PDO $db, array $parsed, float $rate, ?string $zip): array
+    public static function run(PDO $db, array $parsed, float $rate, ?string $zip, bool $resetPrices = false): array
     {
         $tenantId = (int) TenantContext::tenantId();
         $P = new Models\ProductModel($db);
         $C = new Models\CategoryModel($db);
         $S = new Models\SubcategoryModel($db);
-        $out = ['created' => 0, 'updated' => 0, 'photos' => 0, 'errors' => []];
+        $out = ['created' => 0, 'updated' => 0, 'photos' => 0, 'prices_reset' => 0, 'errors' => []];
+        // "Reset prices": products already here take the file's price × rate, replacing what the POS has.
+        $reset = $db->prepare('UPDATE products SET retail_price = ?, selling_price = ? WHERE id = ? AND tenant_id = ?');
 
         if (array_filter(array_column($parsed['products'], 'subcategory'))) {
             ProductFields::add(Features::accountId($tenantId), ['subcategory']);
@@ -68,10 +70,23 @@ class StoreImport
 
         PhotoImport::ensureColumn($db);
         $remember = $db->prepare('UPDATE products SET source_image = ? WHERE id = ? AND tenant_id = ?');
-        $findByCode = $db->prepare('SELECT id, image_path FROM products WHERE tenant_id = ? AND barcode = ? LIMIT 1');
+        // Products already in the shop (from an earlier import): found once, all together.
+        $existingRows = self::matchExisting($db, $tenantId, $parsed['products']);
+        // Updating one: fill what's missing, never touch stock or prices set in the POS.
+        $fill = $db->prepare(
+            "UPDATE products SET
+                barcode        = IF(barcode IS NULL OR barcode = '', ?, barcode),
+                retail_price   = IF(retail_price IS NULL OR retail_price = 0, ?, retail_price),
+                selling_price  = IF(selling_price IS NULL OR selling_price = 0, ?, selling_price),
+                category_id    = COALESCE(category_id, ?),
+                subcategory_id = COALESCE(subcategory_id, ?),
+                description    = IF(description IS NULL OR description = '', ?, description),
+                image_path     = IF(image_path IS NULL OR image_path = '', ?, image_path)
+              WHERE id = ? AND tenant_id = ?"
+        );
         $findSub = $db->prepare('SELECT id FROM subcategories WHERE tenant_id = ? AND category_id = ? AND name = ? LIMIT 1');
 
-        foreach ($parsed['products'] as $p) {
+        foreach ($parsed['products'] as $idx => $p) {
             $catId = $p['category'] !== '' ? (int) $C->findOrCreate($p['category']) : 0;
             $subId = 0;
             if ($catId && $p['subcategory'] !== '' && $p['subcategory'] !== $p['category']) {
@@ -79,8 +94,7 @@ class StoreImport
                 $subId = (int) $findSub->fetchColumn() ?: (int) ($S->create($catId, $p['subcategory'])['id'] ?? 0);
             }
 
-            $existing = null;
-            if ($p['code'] !== '') { $findByCode->execute([$tenantId, $p['code']]); $existing = $findByCode->fetch() ?: null; }
+            $existing = $existingRows[$idx] ?? null;
 
             $image = $existing['image_path'] ?? '';
             if ($za && $p['image'] !== '' && $image === '') {
@@ -105,7 +119,7 @@ class StoreImport
                 'quantity'       => $p['quantity'],
                 'unit'           => 'piece',
                 'buying_price'   => 0,
-                'retail_price'   => round($p['price'] * $rate),
+                'retail_price'   => round($p['price'] * $rate, 2),
                 'wholesale_price'=> 0,
                 'sizes'          => $p['sizes'],
                 'colors'         => $p['colors'],
@@ -114,9 +128,14 @@ class StoreImport
             ];
             try {
                 if ($existing) {
-                    $res = $P->edit((int) $existing['id'], $in);
-                    $res['ok'] ? $out['updated']++ : $out['errors'][] = $p['name'] . ': ' . implode(' ', $res['errors']);
                     $pid = (int) $existing['id'];
+                    $fill->execute([$p['code'] !== '' ? $p['code'] : null, $in['retail_price'], $in['retail_price'], $catId ?: null, $subId ?: null,
+                                    $p['description'] !== '' ? $p['description'] : null, $image !== '' ? $image : null, $pid, $tenantId]);
+                    $out['updated']++;
+                    if ($resetPrices && $in['retail_price'] > 0) {
+                        $reset->execute([$in['retail_price'], $in['retail_price'], $pid, $tenantId]);
+                        $out['prices_reset']++;
+                    }
                 } else {
                     $res = $P->create($in);
                     $res['ok'] ? $out['created']++ : $out['errors'][] = $p['name'] . ': ' . implode(' ', $res['errors']);
@@ -129,6 +148,47 @@ class StoreImport
             }
         }
         if ($za) $za->close();
+        return $out;
+    }
+
+    /**
+     * Which store products are already in this shop: index in $products =>
+     * product row. Found by store code (barcode), then by the remembered photo
+     * file, then by name — where several share a name (eight "Women dress"),
+     * the 1st in the store pairs with the 1st imported into the POS, and so on.
+     */
+    public static function matchExisting(PDO $db, int $tenantId, array $products): array
+    {
+        PhotoImport::ensureColumn($db);
+        $st = $db->prepare('SELECT id, name, barcode, source_image, image_path, retail_price FROM products WHERE tenant_id = ? ORDER BY id');
+        $st->execute([$tenantId]);
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        $key = fn($v) => preg_replace('/[^a-z0-9]+/', '', strtolower((string) $v));
+        $byCode = $bySource = $byName = [];
+        foreach ($rows as $r) {
+            if ($r['barcode'] !== null && $r['barcode'] !== '') $byCode[$key($r['barcode'])] = $r;
+            if (!empty($r['source_image'])) $bySource[strtolower($r['source_image'])] = $r;
+            $byName[$key($r['name'])][] = $r;
+        }
+        $out = [];
+        $used = [];
+        $pending = [];
+        foreach ($products as $i => $p) {
+            $hit = ($p['code'] !== '' ? $byCode[$key($p['code'])] ?? null : null)
+                ?? ($p['image'] !== '' ? $bySource[strtolower($p['image'])] ?? null : null);
+            if ($hit && !isset($used[$hit['id']])) { $out[$i] = $hit; $used[$hit['id']] = true; }
+            else $pending[] = $i;
+        }
+        // By name, in order, among products not matched above.
+        foreach ($pending as $i) {
+            foreach ($byName[$key($products[$i]['name'])] ?? [] as $r) {
+                if (isset($used[$r['id']])) continue;
+                // Another store code already on it means it's a different product.
+                if ($r['barcode'] !== null && $r['barcode'] !== '' && $products[$i]['code'] !== '' && $key($r['barcode']) !== $key($products[$i]['code'])) continue;
+                $out[$i] = $r; $used[$r['id']] = true;
+                break;
+            }
+        }
         return $out;
     }
 

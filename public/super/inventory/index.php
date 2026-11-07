@@ -48,7 +48,7 @@ foreach ($grouped as $items) {
         $totals['products']++;
         $qty = (float)$p['quantity'];
         $totals['stock_value'] += Models\ProductModel::stockValue((float)$p['buying_price'], $qty);
-        $totals['retail_value'] += $qty * (float)($p['retail_price'] ?? $p['selling_price']);
+        $totals['retail_value'] += $qty * Models\ProductModel::effectivePrice($p)['regular_price'];
     }
 }
 
@@ -162,7 +162,7 @@ ob_start();
               $buy = (float)$p['buying_price'];
               $qty = (float)$p['quantity'];
               $wholesale = (float)($p['wholesale_price'] ?? $p['selling_price']);
-              $retail = (float)($p['retail_price'] ?? $p['selling_price']);
+              $retail = (float) ($p['retail_price'] ?: $p['selling_price']); // empty retail: the product's general price
               $stockVal = Models\ProductModel::stockValue($buy, $qty);
               $low = $qty <= (int)$p['low_stock_threshold'];
               $subline = array_filter([$p['barcode'] ?? null]);

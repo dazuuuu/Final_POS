@@ -7,6 +7,9 @@
  *   - clicking a link / sending a form: shown while the next page is on its way
  *   - slow background requests (fetch): a thin bar along the top
  *   - no internet: "waiting for connection", then carries on by itself
+ *   - forms with files (photos, Excel, zips…): the percentage is the real
+ *     upload progress, and the screen stays until the server has answered —
+ *     it never finishes early or turns into an error while work is still going
  * Opt out on an element with data-no-loader.
  */
 (function () {
@@ -54,7 +57,8 @@
     btn.addEventListener('click', function () { if (retry) retry(); else location.reload(); });
   }
 
-  var pct = 0, timer = null, tick = null, started = 0, retry = null, shown = false;
+  var pct = 0, timer = null, tick = null, started = 0, retry = null, shown = false, mode = 'page';
+  var job = 0; // each start() is a new job; a job only ever finishes itself
 
   function set(p) {
     pct = Math.max(pct, Math.min(100, p));
@@ -79,24 +83,35 @@
   }
   // Creeps toward 95%: quick at first, slower the longer it takes — real
   // progress (the page arriving) then takes it to 100%.
-  function creep() {
+  function creep(cap) {
+    cap = cap || 95;
     clearInterval(tick);
     tick = setInterval(function () {
       var secs = (Date.now() - started) / 1000;
-      set(pct + Math.max(0.15, (95 - pct) * 0.06));
-      if (secs > 12 && navigator.onLine !== false) message('Still loading — your connection seems slow…', true);
-    }, 120);
+      // Slows down as it nears the cap, so it never reaches 100% before the work is done.
+      set(pct + Math.max(0.02, (cap - pct) * 0.04));
+      if (navigator.onLine === false) return;
+      if (mode === 'send') {
+        if (secs > 15) message('Still working — slow connection. Please keep this page open…', false);
+      } else if (secs > 60) {
+        message('This is taking long — your connection seems slow.', true);
+      } else if (secs > 15) {
+        message('Still loading — slow connection, please wait…', false);
+      }
+    }, 150);
   }
 
   /** Start the loader (shown only if this takes longer than SHOW_AFTER). */
-  function start(msg, retryFn) {
-    pct = 0; started = Date.now(); retry = retryFn || null;
+  function start(msg, retryFn, kind) {
+    job++;
+    pct = 0; started = Date.now(); retry = retryFn || null; mode = kind || 'page';
     clearTimeout(timer);
     timer = setTimeout(function () { show(); message(msg || 'Loading…', false); }, SHOW_AFTER);
     creep();
   }
-  /** Finish: run to 100% and fade out. */
-  function done() {
+  /** Finish: run to 100% and fade out. With a job number, only if that job is still the current one. */
+  function done(which) {
+    if (typeof which === 'number' && which !== job) return; // a newer job (e.g. an upload) is running
     clearTimeout(timer); clearInterval(tick);
     if (!shown) { pct = 0; return; }
     set(100);
@@ -114,9 +129,10 @@
     document.addEventListener('readystatechange', function () {
       if (document.readyState === 'interactive') set(70);
     });
-    window.addEventListener('load', done);
+    var firstLoad = job;
+    window.addEventListener('load', function () { done(firstLoad); });
     // Don't hold the page behind slow images: once the content is ready, finish.
-    document.addEventListener('DOMContentLoaded', function () { setTimeout(done, 400); });
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(function () { done(firstLoad); }, 400); });
   }
   // Back/forward cache: the page comes back as it was — no loader.
   window.addEventListener('pageshow', function (e) { if (e.persisted) { shown = true; done(); } });
@@ -158,6 +174,57 @@
     start('Loading…', function () { location.href = url.href; });
   });
 
+  // Forms with files: send them ourselves so the percentage is the real
+  // upload, then show the page the server answers with (exactly as a normal
+  // submit would). Anything unusual falls back to a normal submit.
+  function hasFiles(f) {
+    return (f.enctype || '').toLowerCase() === 'multipart/form-data'
+      && Array.prototype.some.call(f.querySelectorAll('input[type=file]'), function (i) { return i.files && i.files.length; });
+  }
+  function sendWithProgress(f, submitter) {
+    var data = new FormData(f);
+    if (submitter && submitter.name) data.append(submitter.name, submitter.value);
+    var url = f.getAttribute('action') || location.href;
+    var xhr = new XMLHttpRequest();
+    start('Uploading…', null, 'send');
+    clearTimeout(timer); // shown straight away below, so the delayed "show" mustn't overwrite later messages
+    clearInterval(tick); // real progress from here on
+    show();
+    message('Uploading… 0% sent', false);
+    xhr.upload.onprogress = function (ev) {
+      if (!ev.lengthComputable) return;
+      var p = ev.loaded / ev.total;
+      set(Math.max(1, p * 90)); // 0–90%: the upload itself
+      message(p < 1 ? 'Uploading… ' + Math.round(p * 100) + '% sent' : 'Uploaded — processing…', false);
+    };
+    xhr.upload.onload = function () {
+      set(90);
+      message('Uploaded — processing, please wait…', false);
+      creep(99); // 90–99%: the server working on it; 100% only when it answers
+    };
+    xhr.onload = function () {
+      clearInterval(tick);
+      set(100);
+      var finalUrl = xhr.responseURL || url;
+      var type = xhr.getResponseHeader('Content-Type') || '';
+      if (type.indexOf('text/html') === -1) { location.href = finalUrl; return; } // a download or other file
+      // Show the answer page in place (it carries the "saved"/result message).
+      try { history.replaceState(null, '', finalUrl); } catch (e) { /* other origin */ }
+      document.open();
+      document.write(xhr.responseText);
+      document.close();
+    };
+    xhr.onerror = function () {
+      clearInterval(tick);
+      message(navigator.onLine === false
+        ? 'The connection dropped during the upload. Reconnect, then press Try again — nothing was saved yet.'
+        : 'The upload could not finish. Press Try again to send it once more.', true);
+      retry = function () { sendWithProgress(f, submitter); };
+    };
+    xhr.open((f.method || 'post').toUpperCase(), url);
+    xhr.send(data);
+  }
+
   document.addEventListener('submit', function (e) {
     var f = e.target;
     if (e.defaultPrevented || !f || f.closest('[data-no-loader]')) return;
@@ -172,9 +239,15 @@
       offlineThen(function () { f.submit(); });
       return;
     }
-    // Pages with their own submit handling call preventDefault first, so
-    // only real page submissions get here. Re-check once handlers have run.
-    setTimeout(function () { if (!e.defaultPrevented) start(f.enctype === 'multipart/form-data' ? 'Uploading…' : 'Saving…'); }, 0);
+    var submitter = e.submitter || null;
+    // Page handlers on the form itself (validation, confirm…) have already run:
+    // a cancelled submit never gets here (e.defaultPrevented above).
+    if (hasFiles(f) && window.FormData && window.XMLHttpRequest) {
+      e.preventDefault();
+      setTimeout(function () { sendWithProgress(f, submitter); }, 0);
+      return;
+    }
+    setTimeout(function () { if (!e.defaultPrevented) start('Saving…', null, 'send'); }, 0);
   });
 
   // ---- 3. Slow background requests: thin bar at the top ----

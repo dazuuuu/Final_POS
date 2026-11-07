@@ -45,7 +45,7 @@ function audit_product_view(array $r, array $catName): array
         'unit'                => $r['unit'] ?? null,
         'buying_price'        => $r['buying_price'] ?? null,
         'wholesale_price'     => $r['wholesale_price'] ?? null,
-        'retail_price'        => $r['retail_price'] ?? null,
+        'retail_price'        => (float) ($r['retail_price'] ?? 0) > 0 ? $r['retail_price'] : ($r['selling_price'] ?? null), // empty retail: the product's general price
         'offer_price'         => ($r['offer_price'] ?? '') !== '' && $r['offer_price'] !== null ? $r['offer_price'] : null,
         'offer_ends_at'       => $r['offer_ends_at'] ?? null,
         'low_stock_threshold' => $r['low_stock_threshold'] ?? null,

@@ -252,6 +252,20 @@ class ShopApi
         return $k;
     }
 
+    /** Why findKey() refused a key — the message the website should see. */
+    public static function refusal(string $plain): array
+    {
+        if ($plain === '') return [401, 'No API key was sent. Send it in the X-Api-Key header.', 'unauthorized'];
+        if (!preg_match('/^dz_live_[a-f0-9]{40}$/', $plain)) return [401, 'That is not a valid API key — copy it again from the POS (Website API → Keys).', 'unauthorized'];
+        $st = Database::pdo()->prepare('SELECT account_id, revoked_at FROM shop_api_keys WHERE key_hash = ?');
+        $st->execute([hash('sha256', $plain)]);
+        $k = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$k) return [401, 'This API key does not exist — copy it again from the POS (Website API → Keys).', 'unauthorized'];
+        if ($k['revoked_at']) return [401, 'This API key was deleted in the POS. Create a new one under Website API → Keys.', 'key_revoked'];
+        if (AccountLock::isLocked((int) $k['account_id'])) return [403, 'This shop\'s POS account is locked. Contact support.', 'account_locked'];
+        return [403, 'The Website API is not switched on for this shop yet. Ask support to turn it on.', 'api_off'];
+    }
+
     /** Count a request; false when the key is over its per-minute limit. */
     public static function hit(array $key): bool
     {
@@ -270,7 +284,27 @@ class ShopApi
     public static function originAllowed(array $key, string $origin): bool
     {
         if (empty($key['origins']) || $origin === '') return true;
-        return in_array(rtrim(strtolower($origin), '/'), explode(',', $key['origins']), true);
+        $site = self::siteOf($origin);
+        // The POS's own pages (e.g. the API docs' "try it") may always use the key.
+        if ($site !== '' && $site === self::siteOf((string) ($_SERVER['HTTP_HOST'] ?? ''))) return true;
+        foreach (explode(',', $key['origins']) as $allowed) {
+            if ($allowed !== '' && self::siteOf($allowed) === $site) return true;
+        }
+        return false;
+    }
+
+    /**
+     * The website an address belongs to, ignoring http/https, "www." and a
+     * trailing slash — so https://www.shop.com, http://shop.com and shop.com/
+     * all count as the same site.
+     */
+    public static function siteOf(string $url): string
+    {
+        $url = strtolower(trim($url));
+        $host = parse_url(strpos($url, '://') === false ? 'https://' . $url : $url, PHP_URL_HOST) ?: '';
+        $port = parse_url(strpos($url, '://') === false ? 'https://' . $url : $url, PHP_URL_PORT);
+        $host = preg_replace('/^www\./', '', $host);
+        return $host . ($port && !in_array($port, [80, 443], true) ? ':' . $port : '');
     }
 
     // ------------------------------------------------------------- output

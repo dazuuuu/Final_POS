@@ -41,23 +41,28 @@ function api_start(string $scope, array $methods = ['GET']): array
     $origin = (string) ($_SERVER['HTTP_ORIGIN'] ?? '');
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     header('Vary: Origin');
+    // Every answer — refusals included — is readable by the calling website, so
+    // it can show the real reason ("key not allowed here", "orders are off")
+    // instead of the browser hiding it as a failed connection ("POS offline").
+    // The key checks below still decide what the website may do.
+    if ($origin !== '') header('Access-Control-Allow-Origin: ' . $origin);
     header('Access-Control-Allow-Headers: Content-Type, X-Api-Key, Authorization');
     header('Access-Control-Allow-Methods: ' . implode(', ', array_merge($methods, ['OPTIONS'])));
     header('Access-Control-Max-Age: 600');
     if ($method === 'OPTIONS') { // pre-flight: the key is checked on the real request
-        if ($origin !== '') header('Access-Control-Allow-Origin: ' . $origin);
         http_response_code(204);
         exit;
     }
-    $key = ShopApi::findKey(ShopApi::keyFromRequest());
+    $plain = ShopApi::keyFromRequest();
+    $key = ShopApi::findKey($plain);
     if (!$key) {
-        if ($origin !== '') header('Access-Control-Allow-Origin: ' . $origin);
-        api_fail(401, 'Missing or invalid API key. Send it in the X-Api-Key header.', 'unauthorized');
+        [$status, $msg, $code] = ShopApi::refusal($plain);
+        api_fail($status, $msg, $code);
     }
     if (!ShopApi::originAllowed($key, $origin)) {
-        api_fail(403, 'This key is not allowed on ' . $origin . '. Add the website to the key in your POS.', 'origin_not_allowed');
+        api_fail(403, 'This key is not allowed on ' . $origin . '. Add the website to the key in your POS (Website API → Keys).', 'origin_not_allowed');
     }
-    header('Access-Control-Allow-Origin: ' . ($origin !== '' ? $origin : '*'));
+    if ($origin === '') header('Access-Control-Allow-Origin: *');
     if (!in_array($method, $methods, true)) api_fail(405, 'Method not allowed. Use ' . implode(' or ', $methods) . '.', 'method_not_allowed');
     if (!in_array($scope, $key['scope_list'], true)) api_fail(403, "This key does not have the \"$scope\" permission.", 'scope_missing');
     if (!ShopApi::hit($key)) {

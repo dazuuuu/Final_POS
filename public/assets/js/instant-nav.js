@@ -16,7 +16,8 @@
   var SKIP = [
     '/auth/', 'logout', '/switch', 'delete', 'remove', 'cancel', 'void', 'clock',
     'download', 'export', 'excel=', 'pdf=', 'csv=', 'print', 'receipt', '/api/',
-    'action=', 'token=', 'resume=', 'sw.js', 'manifest'
+    'action=', 'token=', 'resume=', 'sw.js', 'manifest',
+    '/import/', '/backup/', '/signup', '/activate' // pages with upload / security forms: always load fresh
   ];
   function skip(url) {
     var s = (url.pathname + url.search).toLowerCase();

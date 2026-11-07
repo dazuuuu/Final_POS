@@ -46,20 +46,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($zip && ($zip['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
                 $errors[] = 'The photos zip did not upload (too large for this server?). You can still import without photos.';
             }
-            $rate = max(0.0001, (float) ($_POST['rate'] ?? 129));
+            $rate = max(0.0001, (float) ($_POST['rate'] ?? 1));
             $parsed = StoreImport::parse((string) file_get_contents($dir . '/dump.sql'));
             if (!$parsed['products']) {
                 $errors[] = 'No products were found in that file. It needs the store\'s `products` table (INSERT INTO `products` …).';
                 array_map('unlink', glob($dir . '/*') ?: []); @rmdir($dir);
             } else {
-                $_SESSION['store_import'] = $job = ['dir' => $dir, 'rate' => $rate];
+                $_SESSION['store_import'] = $job = ['dir' => $dir, 'rate' => $rate, 'reset' => !empty($_POST['reset_prices'])];
             }
         }
     } elseif (($_POST['step'] ?? '') === 'import' && $job) {
         @set_time_limit(300);
         $parsed = StoreImport::parse((string) file_get_contents($job['dir'] . '/dump.sql'));
         $zip = is_file($job['dir'] . '/uploads.zip') ? $job['dir'] . '/uploads.zip' : null;
-        $result = StoreImport::run($pdo, $parsed, (float) $job['rate'], $zip);
+        $result = StoreImport::run($pdo, $parsed, (float) $job['rate'], $zip, !empty($job['reset']));
         array_map('unlink', glob($job['dir'] . '/*') ?: []); @rmdir($job['dir']);
         unset($_SESSION['store_import']);
         $job = null;
@@ -87,7 +87,7 @@ ob_start();
 <?php if ($result): ?>
   <div class="alert alert-success">
     <strong>Done.</strong> <?php echo (int) $result['created']; ?> product<?php echo $result['created'] === 1 ? '' : 's'; ?> added,
-    <?php echo (int) $result['updated']; ?> updated, <?php echo (int) $result['photos']; ?> photo<?php echo $result['photos'] === 1 ? '' : 's'; ?> copied.
+    <?php echo (int) $result['updated']; ?> updated<?php echo !empty($result['prices_reset']) ? ' (' . (int) $result['prices_reset'] . ' prices reset to the store\'s)' : ''; ?>, <?php echo (int) $result['photos']; ?> photo<?php echo $result['photos'] === 1 ? '' : 's'; ?> copied.
     Buying prices were not in the file — set them on each product to see profit.
     <?php if (!$result['photos']): ?>Now add the photos on <a href="<?php echo public_url('super/import/photos.php'); ?>">Import photos</a> — upload the store's uploads.zip and each photo goes to its product.<?php endif; ?>
     <a href="<?php echo public_url('super/inventory/'); ?>">Open inventory →</a>
@@ -106,16 +106,16 @@ ob_start();
       <label class="form-label fw-semibold">1. Store database (.sql)</label>
       <input type="file" name="sql" accept=".sql,text/plain" class="form-control" required>
     </div>
-    <div class="mb-3">
-      <label class="form-label fw-semibold">2. Photos (uploads.zip) <span class="text-muted fw-normal">— optional</span></label>
-      <input type="file" name="zip" accept=".zip" class="form-control">
-      <div class="form-text">Leave this empty to add photos later on <a href="<?php echo public_url('super/import/photos.php'); ?>">Import photos</a> — they find their products by themselves.</div>
-      <div class="form-text">This server accepts uploads up to <?php echo round($maxUpload / 1048576); ?> MB in total.</div>
-    </div>
+    <div class="alert alert-light border small mb-3"><i class="fas fa-images me-1"></i><strong>Photos come next:</strong> after importing, open
+      <a href="<?php echo public_url('super/import/photos.php'); ?>">Import photos</a> and upload the store's <code>uploads.zip</code> — any size; each photo goes to its product by itself.</div>
     <div class="mb-3" style="max-width:260px;">
-      <label class="form-label fw-semibold">3. Exchange rate</label>
-      <div class="input-group"><span class="input-group-text">1 USD =</span><input type="number" step="0.01" min="0.01" name="rate" value="129" class="form-control"><span class="input-group-text"><?php echo $h($cur); ?></span></div>
-      <div class="form-text">Store prices are multiplied by this. Use 1 if the store already prices in <?php echo $h($cur); ?>.</div>
+      <label class="form-label fw-semibold">2. Price conversion</label>
+      <div class="input-group"><span class="input-group-text">Store price ×</span><input type="number" step="0.0001" min="0.0001" name="rate" value="1" class="form-control"><span class="input-group-text">= <?php echo $h($cur); ?></span></div>
+      <div class="form-text">Leave at <strong>1</strong> when the store already prices in <?php echo $h($cur); ?> (most shops). Only change it if the store prices in another currency, e.g. 129 for US dollars.</div>
+    </div>
+    <div class="form-check mb-3">
+      <input class="form-check-input" type="checkbox" name="reset_prices" value="1" id="resetPrices">
+      <label class="form-check-label small" for="resetPrices"><strong>Reset prices to the store file's prices</strong> — for products already imported: their selling price is set to the file's price × the number above, replacing the price in the POS. Use this to undo a wrong conversion.</label>
     </div>
     <button class="btn btn-primary"><i class="fas fa-eye me-1"></i>Preview</button>
   </form>
@@ -127,8 +127,8 @@ ob_start();
       <h2 class="h5 mb-0"><?php echo count($preview['products']); ?> products ready to import</h2>
       <div class="small text-muted"><?php echo count(array_unique(array_column($preview['products'], 'category'))); ?> categories ·
         <?php echo count(array_unique(array_filter(array_column($preview['products'], 'subcategory')))); ?> subcategories ·
-        1 USD = <?php echo $h($job['rate'] . ' ' . $cur); ?> · <?php echo $hasZip ? 'with photos' : '<span class="text-warning">no photos zip</span>'; ?>.
-        Products already imported (same code) are updated, not duplicated.</div>
+        price × <?php echo $h($job['rate']); ?> = <?php echo $h($cur); ?><?php echo !empty($job['reset']) ? ' · <strong>prices of products already here will be reset</strong>' : ''; ?> · <?php echo $hasZip ? 'with photos' : '<span class="text-warning">no photos zip</span>'; ?>.
+        Products already in this shop are updated, never duplicated: a missing price, code, category or photo is filled in, while POS stock and prices you changed in the POS stay as they are.</div>
     </div>
     <div class="d-flex gap-2">
       <form method="post"><input type="hidden" name="csrf" value="<?php echo $h($csrf); ?>"><input type="hidden" name="step" value="cancel"><button class="btn btn-outline-secondary">Cancel</button></form>
@@ -145,7 +145,7 @@ ob_start();
         <td class="small"><?php echo $h($p['category']); ?></td>
         <td class="small"><?php echo $h($p['subcategory']) ?: '—'; ?></td>
         <td class="small text-end"><?php echo number_format($p['price'], 2); ?></td>
-        <td class="small text-end fw-semibold"><?php echo number_format(round($p['price'] * $job['rate'])); ?></td>
+        <td class="small text-end fw-semibold"><?php echo number_format($p['price'] * $job['rate'], 2); ?></td>
         <td class="small text-end"><?php echo rtrim(rtrim(number_format($p['quantity'], 2), '0'), '.'); ?></td>
         <td class="small text-muted"><?php echo $h(implode(', ', array_merge($p['sizes'], $p['colors']))) ?: '—'; ?></td>
       </tr>

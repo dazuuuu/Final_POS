@@ -100,11 +100,6 @@ if (preg_match('/prefetch|prerender/i', (string) ($_SERVER['HTTP_SEC_PURPOSE'] ?
     header('Cache-Control: no-store');
     exit;
 }
-// An early fetch only reads the session: let go of its lock at once so it
-// never holds up the person's real clicks and saves.
-if (preg_match('/prefetch|prerender/i', (string) ($_SERVER['HTTP_SEC_PURPOSE'] ?? $_SERVER['HTTP_PURPOSE'] ?? ''))) {
-    session_write_close();
-}
 
 // Database check before anything touches it. The setup wizard only opens when
 // there is nothing usable to connect to (no config, wrong credentials, empty

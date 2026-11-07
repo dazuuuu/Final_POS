@@ -456,6 +456,13 @@ class ProductModel extends Model
             'brand_id' => "ALTER TABLE `products` ADD COLUMN `brand_id` INT NULL AFTER `edition_id`",
         ];
 
+        // Products saved with only the old single price (selling_price) and an
+        // empty retail price: copy it across, so every screen shows the price
+        // the till and the website already use.
+        try {
+            $this->db->exec('UPDATE products SET retail_price = selling_price WHERE (retail_price IS NULL OR retail_price = 0) AND selling_price > 0');
+        } catch (\PDOException $ignored) {}
+
         foreach ($checks as $column => $sql) {
             try {
                 $this->db->query("SELECT `{$column}` FROM `products` LIMIT 1");
@@ -571,6 +578,8 @@ class ProductModel extends Model
         // other price at sale time only when the chosen one isn't set.
         $retail = (float) ($in['retail_price'] ?? $in['selling_price'] ?? 0);
         $wholesale = (float) ($in['wholesale_price'] ?? 0);
+        // A product that has a price but no retail price: that price is its retail price.
+        if ($retail <= 0 && (float) ($in['selling_price'] ?? 0) > 0) { $retail = (float) $in['selling_price']; }
         $sizeValue = ($in['size_value'] ?? '') !== '' ? (float) $in['size_value'] : null;
         $sizeUnit  = $sizeValue !== null ? ($in['size_unit'] ?? null) : null;
         // Clearing the offer price clears the whole offer (start/end go with it).
