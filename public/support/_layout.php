@@ -43,6 +43,16 @@ if (SupportAccount::isOwner()) { // the support team is managed by the main admi
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="<?php echo htmlspecialchars(Branding::platform()['name']); ?> Support">
+<?php /* Installable as its own app (Support dashboard → Install app). */ ?>
+<link rel="manifest" href="<?php echo public_url('support/manifest.php'); ?>">
+<link rel="apple-touch-icon" href="<?php echo public_url('assets/icons/apple-touch-icon.png'); ?>">
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('<?php echo public_url('sw.js'); ?>', { scope: '<?php echo public_url(); ?>' }).catch(function () {});
+  });
+}
+</script>
 <title><?php echo htmlspecialchars($page_title); ?> · Support</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">

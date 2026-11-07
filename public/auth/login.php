@@ -110,7 +110,7 @@ ob_start();
 .who button.on{background:var(--pos-green);color:#fff;}
 .who button i{margin-right:6px;}
 </style>
-<div class="auth-title">Sign in</div>
+<div class="auth-title"><span class="d-none d-sm-inline">Sign in</span><span class="d-sm-none">User login</span></div>
 <div class="auth-sub" id="whoSub"><?php echo $staffTab ? 'Staff: enter your PIN to sell, clock in or clock out.' : 'Owners and admins: use your email and password.'; ?></div>
 <div class="who" role="tablist">
   <button type="button" class="<?php echo $staffTab ? '' : 'on'; ?>" data-who="owner" role="tab"><i class="fas fa-user-tie"></i>Owner</button>
@@ -123,13 +123,15 @@ ob_start();
   <form method="post" novalidate>
     <div class="mb-3">
       <label class="form-label">E-mail</label>
-      <input name="email" type="email" class="form-control" value="<?php echo htmlspecialchars($email); ?>" placeholder="you@example.com" <?php echo $staffTab ? '' : 'autofocus'; ?>>
+      <div class="lh-field"><span class="lh-ic"><i class="fa-regular fa-user"></i></span>
+      <input name="email" type="email" class="form-control" value="<?php echo htmlspecialchars($email); ?>" placeholder="Email" <?php echo $staffTab ? '' : 'autofocus'; ?>></div>
     </div>
     <div class="mb-4">
       <label class="form-label">Password</label>
-      <input name="password" type="password" class="form-control" placeholder="Your password">
+      <div class="lh-field lh-right"><span class="lh-ic"><i class="fas fa-lock-open"></i></span>
+      <input name="password" type="password" class="form-control" placeholder="Password"></div>
     </div>
-    <button class="btn-auth">Continue</button>
+    <button class="btn-auth"><span class="d-none d-sm-inline">Continue</span><span class="d-sm-none">Login</span></button>
   </form>
   <?php if ($needsConfirm): ?>
     <form method="post" class="mt-2"><input type="hidden" name="resend" value="1"><input type="hidden" name="email" value="<?php echo htmlspecialchars($email); ?>">
@@ -154,5 +156,6 @@ document.querySelectorAll('.who button').forEach(function (b) {
 </script>
 <?php
 $content = ob_get_clean();
+$__authHero = true; // phones: full-screen background login (Support → Settings)
 $__authBelow = Signup::enabled() ? '<div class="auth-foot">New shop? <a href="' . public_url('auth/signup.php') . '">Create your account</a></div>' : '';
 include ROOT_PATH . '/public/templates/auth/layout.php';

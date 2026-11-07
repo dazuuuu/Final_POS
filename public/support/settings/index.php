@@ -108,6 +108,44 @@ if (support_posted()) {
                 support_flash('Branding saved.');
             }
         }
+    } elseif ($action === 'login_bg') {
+        // Background picture of the sign-in screen on phones (Branding::platform()['login_bg']).
+        $pfile = ROOT_PATH . '/app/config/platform.php';
+        $brand = is_file($pfile) ? (include $pfile) : [];
+        $brand = is_array($brand) ? $brand : [];
+        $err = '';
+        $up = $_FILES['login_bg'] ?? null;
+        if (!empty($_POST['login_bg_reset'])) {
+            unset($brand['login_bg']);
+        } elseif ($up && ($up['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            $types = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp'];
+            $mime = $up['error'] === UPLOAD_ERR_OK ? (mime_content_type($up['tmp_name']) ?: '') : '';
+            if (!isset($types[$mime]) || $up['size'] > 6 * 1024 * 1024) {
+                $err = 'The background must be a JPG, PNG or WEBP picture under 6 MB.';
+            } else {
+                $dir = ROOT_PATH . '/public/assets/uploads/platform';
+                if (!is_dir($dir)) @mkdir($dir, 0775, true);
+                $name = 'login_bg_' . bin2hex(random_bytes(4)) . '.' . $types[$mime];
+                if (move_uploaded_file($up['tmp_name'], "$dir/$name")) {
+                    $brand['login_bg'] = 'assets/uploads/platform/' . $name;
+                } else {
+                    $err = 'Could not save the picture — check folder permissions.';
+                }
+            }
+        } else {
+            $err = 'Choose a picture first.';
+        }
+        if ($err) {
+            support_flash($err, 'danger');
+        } else {
+            $php = "<?php\n// app/config/platform.php — platform brand for the login screens. Edited from Support → Settings on " . date('Y-m-d H:i') . ".\n\nreturn " . var_export($brand, true) . ";\n";
+            if (@file_put_contents($pfile, $php, LOCK_EX) === false) {
+                support_flash('Could not write app/config/platform.php — check the folder permissions.', 'danger');
+            } else {
+                if (function_exists('opcache_invalidate')) @opcache_invalidate($pfile, true);
+                support_flash(!empty($_POST['login_bg_reset']) ? 'Login background removed — phones show the dark gradient.' : 'Login background saved. Open the sign-in page on a phone to see it.');
+            }
+        }
     } elseif ($action === 'org_create' && SupportOrg::isPlatformAdmin()) {
         [$org, $err] = SupportOrg::create((string) ($_POST['company'] ?? ''), (string) ($_POST['email'] ?? ''), (string) ($_POST['password'] ?? ''));
         support_flash($err ?? 'Support company created. Sign in at the support login with that email and password — it has its own accounts and team, hidden from every other company.', $err ? 'danger' : 'success');
@@ -177,6 +215,20 @@ ob_start();
         <input class="form-control form-control-sm mb-2" type="file" name="brand_logo" accept="image/png,image/jpeg,image/webp,image/svg+xml">
         <label class="form-check small mb-2"><input class="form-check-input" type="checkbox" name="brand_reset" value="1"><span class="form-check-label">Use the default logo</span></label>
         <button class="btn btn-sm btn-primary">Save branding</button>
+      </form>
+    </div>
+    <div class="s-card mb-3">
+      <h2 class="h6 mb-1">Mobile login background</h2>
+      <p class="small text-muted">The picture behind the sign-in screen on phones (owner login and support login), under a dark tint so the white fields stay readable. A tall photo works best. Computers keep their usual sign-in page.</p>
+      <form method="post" enctype="multipart/form-data">
+        <?php echo support_csrf_field(); ?><input type="hidden" name="action" value="login_bg">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <div style="width:54px;height:96px;border-radius:10px;flex:0 0 auto;background:linear-gradient(135deg,rgba(0,38,40,.82) 50%,rgba(0,26,38,.9) 50%)<?php echo $brand['login_bg'] !== '' ? ', url(' . $h(json_encode($brand['login_bg'])) . ') center/cover' : ''; ?>,#00262c;"></div>
+          <div class="small">Now: <strong><?php echo $brand['login_bg'] !== '' ? 'your picture' : 'dark gradient (no picture)'; ?></strong></div>
+        </div>
+        <input class="form-control form-control-sm mb-2" type="file" name="login_bg" accept="image/jpeg,image/png,image/webp">
+        <?php if ($brand['login_bg'] !== ''): ?><label class="form-check small mb-2"><input class="form-check-input" type="checkbox" name="login_bg_reset" value="1"><span class="form-check-label">Remove the picture</span></label><?php endif; ?>
+        <button class="btn btn-sm btn-primary">Save background</button>
       </form>
     </div>
     <div class="s-card mb-3">

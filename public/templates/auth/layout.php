@@ -104,8 +104,9 @@ $__authText = $__authText ?? $__authBrand['name'] . ' is the point of sale for m
         }
         @media(max-width:520px){ .auth-art{display:none;} .auth-side{padding-top:36px;} .auth-card{padding:24px 18px;box-shadow:none;border:1px solid #eceef1;} }
     </style>
+    <?php if (!empty($__authHero)) include __DIR__ . '/../../components/login_hero.php'; /* last: wins over the page's own styles */ ?>
 </head>
-<body>
+<body class="<?php echo !empty($__authHero) ? 'lh' : ''; ?>">
 <?php include __DIR__ . '/../../components/boot_splash.php'; ?>
 <div class="auth-split">
   <section class="auth-art" aria-hidden="true">

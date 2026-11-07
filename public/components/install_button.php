@@ -1,11 +1,13 @@
 <?php
-// public/components/install_button.php — "Install app" in the owner / staff top bar.
+// public/components/install_button.php — "Install app" in the owner / staff top bar,
+// and on the support dashboard (set $__installWhat = 'support console' first).
 // Chrome / Edge / Android: opens the browser's own install prompt (the POS is a PWA:
 // manifest + service worker from pwa_head.php). iPhone / iPad have no prompt —
 // a short "Share → Add to Home Screen" guide shows instead. Hidden once installed
 // or when already running as the installed app.
 ?>
-<button type="button" class="btn btn-sm btn-success" id="dzInstall" style="display:none;white-space:nowrap" title="Install this POS on this device">
+<?php $__installWhat = $__installWhat ?? 'POS'; ?>
+<button type="button" class="btn btn-sm btn-success" id="dzInstall" style="display:none;white-space:nowrap" title="Install the <?php echo htmlspecialchars($__installWhat); ?> on this device">
   <i class="fas fa-download me-1"></i><span>Install app</span>
 </button>
 <div id="dzInstallHelp" style="display:none;position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,.45);align-items:flex-end;justify-content:center;padding:16px">
@@ -14,7 +16,7 @@
     <ol style="margin:12px 0 16px;padding-left:20px">
       <li>Tap the <b>Share</b> button <i class="fas fa-arrow-up-from-bracket"></i> at the bottom of Safari.</li>
       <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li>
-      <li>Open the POS from its new icon — it runs full screen like an app.</li>
+      <li>Open the <?php echo htmlspecialchars($__installWhat); ?> from its new icon — it runs full screen like an app.</li>
     </ol>
     <button type="button" class="btn btn-success w-100" onclick="document.getElementById('dzInstallHelp').style.display='none'">Got it</button>
   </div>

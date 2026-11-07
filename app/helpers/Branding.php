@@ -70,6 +70,8 @@ class Branding
             // Start-up sound on the sign-in pages (Support → Settings): on by default with the built-in chime.
             'boot_on' => !array_key_exists('boot_on', $cfg) || !empty($cfg['boot_on']),
             'boot_sound' => !empty($cfg['boot_sound']) ? public_url(self::normalizeStoredPath($cfg['boot_sound'])) : '',
+            // Background picture of the sign-in screen on phones (Support → Settings). Empty: a dark gradient.
+            'login_bg' => !empty($cfg['login_bg']) ? public_url(self::normalizeStoredPath($cfg['login_bg'])) : '',
         ];
     }
 

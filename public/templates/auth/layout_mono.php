@@ -94,8 +94,9 @@ if (class_exists('ShopUrl', false) && ShopUrl::requestSlug() !== null
           .auth-body{padding-left:16px;padding-right:16px;}
         }
     </style>
+    <?php if (!empty($__authHero)) include __DIR__ . '/../../components/login_hero.php'; /* last: wins over the page's own styles */ ?>
 </head>
-<body class="<?php echo !empty($__authMono) ? 'mono' : ''; ?>">
+<body class="<?php echo trim((!empty($__authMono) ? 'mono' : '') . (!empty($__authHero) ? ' lh' : '')); ?>">
     <?php if (empty($__authMono)) include __DIR__ . '/../../components/boot_splash.php'; ?>
     <div class="auth-card">
         <div class="auth-head">

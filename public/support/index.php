@@ -199,7 +199,8 @@ ob_start();
 </style>
 
 <div class="db">
-<div class="d-flex justify-content-end gap-2 mb-3">
+<div class="d-flex justify-content-end align-items-center gap-2 mb-3 flex-wrap">
+  <?php $__installWhat = 'support console'; include __DIR__ . '/../components/install_button.php'; /* shows only where the browser can install it */ ?>
   <a class="btn-x" href="<?php echo public_url('support/tickets/'); ?>"><i class="fas fa-bell me-1"></i>Tickets<?php echo $newTickets ? ' · ' . $newTickets . ' new' : ''; ?></a>
   <a class="btn btn-sm btn-primary px-3" href="<?php echo public_url('support/accounts/?new=1'); ?>"><i class="fas fa-plus me-1"></i>New account</a>
 </div>
