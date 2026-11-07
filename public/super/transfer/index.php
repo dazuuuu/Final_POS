@@ -1,6 +1,6 @@
 <?php
-// public/super/transfer/index.php — Admin portal: send products from this
-// shop's inventory to any of the owner's other shops. Pick a quantity for
+// public/super/transfer/index.php — send products from the shop you're in to
+// any of your other shops (main → branch, branch → main, branch → branch). Pick a quantity for
 // each product (serial-tracked phones are picked unit by unit), choose the
 // shop, and transfer. New products are created in that shop automatically.
 require_once __DIR__ . '/../../../app/app.php';
@@ -14,7 +14,7 @@ $targets = array_values(array_filter(ShopContext::shops(true), fn($s) => (int) $
 $EL = Models\ElectronicsModel::enabled() ? new Models\ElectronicsModel($pdo) : null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $res = $T->transfer($fromTid, (int) ($_POST['to_shop'] ?? 0), (array) ($_POST['qty'] ?? []), (array) ($_POST['serial_ids'] ?? []), (string) ($_POST['notes'] ?? ''));
+    $res = $T->transfer($fromTid, (int) ($_POST['to_shop'] ?? 0), (array) ($_POST['qty'] ?? []), (array) ($_POST['serial_ids'] ?? []), (string) ($_POST['notes'] ?? ''), !empty($_POST['with_prices']));
     if ($res['ok']) {
         $to = '';
         foreach ($targets as $t) { if ((int) $t['id'] === (int) $_POST['to_shop']) { $to = $t['name']; } }
@@ -44,12 +44,12 @@ $history = $T->recent(array_column(ShopContext::shops(), 'id'), 20);
 $__tenant = (new Models\TenantModel($pdo))->find($fromTid);
 $qtyFmt = fn($q) => rtrim(rtrim(number_format((float) $q, 2), '0'), '.');
 
-$page_title = 'Transfer to shops';
+$page_title = 'Transfer stock';
 ob_start();
 ?>
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
   <div>
-    <h1 class="h5 fw-bold mb-0"><i class="fas fa-right-left me-2 text-success"></i>Transfer to shops</h1>
+    <h1 class="h5 fw-bold mb-0"><i class="fas fa-right-left me-2 text-success"></i>Transfer stock <span class="text-muted fw-normal small">from <?php echo htmlspecialchars($__tenant['name'] ?? 'this shop'); ?></span></h1>
     <div class="small text-muted">From <strong><?php echo htmlspecialchars($__tenant['name'] ?? 'this shop'); ?></strong>'s inventory. Products new to that shop are created there with the same details and prices.</div>
   </div>
 </div>
@@ -65,12 +65,18 @@ ob_start();
       <div class="col-12 col-md-5">
         <label class="form-label small fw-semibold mb-1">Send to</label>
         <select name="to_shop" class="form-select" required>
-          <?php foreach ($targets as $t): ?><option value="<?php echo (int) $t['id']; ?>"><?php echo htmlspecialchars($t['name']); ?></option><?php endforeach; ?>
+          <?php foreach ($targets as $t): ?><option value="<?php echo (int) $t['id']; ?>"><?php echo htmlspecialchars($t['name']); ?><?php echo empty($t['parent_tenant_id']) ? ' (main shop)' : ''; ?></option><?php endforeach; ?>
         </select>
       </div>
       <div class="col-12 col-md-7">
         <label class="form-label small fw-semibold mb-1">Note <span class="text-muted fw-normal">(optional)</span></label>
         <input name="notes" class="form-control" maxlength="255" placeholder="e.g. weekly restock, sent with Brian">
+      </div>
+      <div class="col-12">
+        <div class="form-check mt-1">
+          <input class="form-check-input" type="checkbox" name="with_prices" value="1" id="withPrices" checked>
+          <label class="form-check-label small" for="withPrices">Bring the selling prices along (the other shop sells at the same price). The stock just moves — it is not a sale or credit.</label>
+        </div>
       </div>
     </div>
   </div></div>

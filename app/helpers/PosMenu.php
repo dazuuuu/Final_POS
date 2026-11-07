@@ -143,10 +143,12 @@ class PosMenu
             ['Products', 'fa-box', 'super/products/', $shop && !$staff && $invEdit],
             ['Categories', 'fa-tags', 'super/categories/', $shop && !$staff && $invEdit],
             ['Suppliers', 'fa-truck-field', "$a/suppliers/", $shop && $invEdit],
+            ['Import products', 'fa-file-import', 'super/import/store.php', $common && $owner && $invEdit],
+            ['Import photos', 'fa-images', 'super/import/photos.php', $common && $owner && $invEdit],
             ...self::fieldLinks($shop && !$staff && $invEdit),
             ['Purchases', 'fa-cart-flatbed', 'super/purchases/', $shop && $money, $pro],
             ['Warehouse', 'fa-building', 'super/warehouse/', $shop && $main, $pro],
-            ['Transfer to shops', 'fa-right-left', 'super/transfer/', $shop && $main, $pro],
+            ['Transfer stock', 'fa-right-left', 'super/transfer/', $shop && $owner && $invEdit, $pro], // any shop → any of the owner's other shops
             ['Devices & serials', 'fa-mobile-screen', 'super/electronics/', $elec && $can(Capabilities::INVENTORY_VIEW)],
             ['Warranty & repairs', 'fa-screwdriver-wrench', 'super/electronics/repairs.php', $elec && $can(Capabilities::SALES_RECORD)],
         ]];

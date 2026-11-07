@@ -3,6 +3,7 @@
 // Each call counts as a view (send ?view=0 to read without counting, e.g. from your own server).
 require __DIR__ . '/_api.php';
 [$key, $tid] = api_start('products');
+if ((int) ($_GET['id'] ?? 0) <= 0) api_fail(400, 'Add the product id, e.g. product.php?id=12 (ids come from products.php).', 'missing_id');
 $p = api_product($tid, (int) ($_GET['id'] ?? 0));
 if (!$p) api_fail(404, 'No such product in this shop.', 'not_found');
 $pdo = Database::pdo();

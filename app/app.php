@@ -153,7 +153,7 @@ if (!empty($_SESSION['otp_verified']) && TenantContext::userId() && TenantContex
     try {
         $__tid = (int) TenantContext::tenantId();
         DaySales::open(Database::pdo(), $__tid, (int) TenantContext::userId());
-        $_SESSION['day_until'][$__tid] = strtotime(DaySales::window($__tid, DaySales::today($__tid))['close']);
+        $_SESSION['day_until'][$__tid] = strtotime(DaySales::window($__tid, DaySales::today($__tid))['end']);
         $_SESSION['day_greet'] = true; // the layout shows the morning card once
     } catch (\Throwable $e) { /* never block a page over this */ }
 }

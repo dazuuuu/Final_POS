@@ -1,9 +1,12 @@
 <?php
 // app/services/DaySales.php
-// Opening & closing sales, by business day (the owner's opening and closing
-// time — see window()). Each person has their own day, which they can close
-// themselves; the shop has its combined day (user_id 0). At closing time
-// every open day closes by itself.
+// Opening & closing sales. A day is the calendar day, 00:00 to 23:59: at
+// midnight a new day starts and the finished day's figures are finalised from
+// every sale made in it, so no sale is ever left out. The owner's opening and
+// closing time only say when the shop is open: opening sales = sold between
+// midnight and opening time, and at closing time the day shows as closed.
+// Each person has their own day (they may close it themselves); the shop has
+// its combined day (user_id 0).
 //
 // Also the one place that gathers sales from every package (shop sales and
 // tabs, restaurant orders, paid service tickets) per person and per product,
@@ -19,7 +22,7 @@ class DaySales
         $db ??= Database::pdo();
         // Check the table itself (a near-free query), never only a marker file:
         // a marker copied from another computer must not skip creating it.
-        try { $db->query('SELECT 1 FROM day_sessions LIMIT 0'); return; } catch (\Throwable $e) { /* create it below */ }
+        try { $db->query('SELECT final FROM day_sessions LIMIT 0'); return; } catch (\Throwable $e) { /* create / upgrade it below */ }
         $db->exec("CREATE TABLE IF NOT EXISTS day_sessions (
             id INT AUTO_INCREMENT PRIMARY KEY,
             tenant_id INT NOT NULL,
@@ -30,9 +33,12 @@ class DaySales
             closed_at DATETIME NULL,
             closing_sales DECIMAL(12,2) NULL,
             closing_count INT NULL,
+            final TINYINT(1) NOT NULL DEFAULT 0,
             UNIQUE KEY uq_day_user (tenant_id, user_id, day),
             KEY idx_day (tenant_id, day)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        // Tables made before days were finalised at midnight.
+        try { $db->exec('ALTER TABLE day_sessions ADD COLUMN final TINYINT(1) NOT NULL DEFAULT 0'); } catch (\Throwable $e) { /* exists */ }
         // Speeds up the per-day / per-person lookups this page and the dashboards do.
         foreach ([
             'sales'  => ['idx_sales_day', '(tenant_id, created_at)'],
@@ -97,32 +103,25 @@ class DaySales
         }
     }
 
-    /** Opening / closing moments and the counting range of business day $day. */
+    /** Counting range of day $day (00:00 → next 00:00), and its opening / closing moments. */
     public static function window(int $tenantId, string $day): array
     {
         $h = self::hours($tenantId);
-        $closeOf = function (string $d) use ($h): string {
-            $next = $h['close'] <= $h['open'] ? ' +1 day' : '';
-            return date('Y-m-d', strtotime($d . $next)) . ' ' . $h['close'] . ':00';
-        };
+        $next = date('Y-m-d', strtotime($day . ' +1 day'));
+        $close = $h['close'] <= $h['open'] ? $next . ' 00:00:00' : $day . ' ' . $h['close'] . ':00'; // closing after midnight: the day still ends at 23:59
         return [
             'day'   => $day,
-            'from'  => $closeOf(date('Y-m-d', strtotime($day . ' -1 day'))), // last night's closing
+            'from'  => $day . ' 00:00:00',
             'open'  => $day . ' ' . $h['open'] . ':00',
-            'close' => $closeOf($day),
+            'close' => $close,
+            'end'   => $next . ' 00:00:00',
         ];
     }
 
-    /** The business day running now (after closing time: the next day's, which is collecting its opening sales). */
+    /** Today (the calendar date). */
     public static function today(?int $tenantId = null): string
     {
-        $tenantId ??= (int) TenantContext::tenantId();
-        $now = date('Y-m-d H:i:s');
-        foreach ([-1, 0, 1] as $off) {
-            $d = date('Y-m-d', strtotime("$off day"));
-            if (self::window($tenantId, $d)['close'] > $now) return $d;
-        }
-        return date('Y-m-d', strtotime('+1 day'));
+        return date('Y-m-d');
     }
 
     /** Is the shop inside its opening hours right now? */
@@ -145,7 +144,7 @@ class DaySales
         foreach ($userId ? [0, $userId] : [0] as $uid) {
             if (!self::session($db, $tenantId, $uid, $day)) {
                 $w = self::window($tenantId, $day);
-                $opening = self::sumBetween($db, $tenantId, $w['from'], min($w['open'], date('Y-m-d H:i:s')), $uid ?: null)['total'];
+                $opening = self::sumBetween($db, $tenantId, $w['from'], min($w['open'], date('Y-m-d H:i:s')), $uid ?: null)['total']; // sold after midnight, before opening
                 $db->prepare('INSERT IGNORE INTO day_sessions (tenant_id, user_id, day, opened_at, opening_sales) VALUES (?,?,?,?,?)')
                    ->execute([$tenantId, $uid, $day, date('Y-m-d H:i:s'), $opening]);
             }
@@ -160,26 +159,36 @@ class DaySales
         if (!$s || $s['closed_at'] !== null) return;
         $w = self::window($tenantId, $s['day']);
         $t = self::sumBetween($db, $tenantId, $w['from'], date('Y-m-d H:i:s'), $userId ?: null);
+        // Their figures now; at midnight the day is finalised with anything they sold after closing.
         $db->prepare('UPDATE day_sessions SET closed_at = ?, closing_sales = ?, closing_count = ? WHERE id = ?')
            ->execute([date('Y-m-d H:i:s'), $t['total'], $t['count'], $s['id']]);
     }
 
-    /** Closing time has passed: freeze every open day (people and the shop) at the closing figures. */
+    /**
+     * Past days are finalised from every sale made in them (00:00–23:59), so
+     * nothing sold after someone closed their day is left out. Today's open
+     * days show as closed once closing time passes (figures stay live).
+     */
     public static function autoClose(PDO $db, int $tenantId): void
     {
         static $done = [];
         if (isset($done[$tenantId])) return;
         $done[$tenantId] = true;
         self::ensure($db);
-        $st = $db->prepare('SELECT * FROM day_sessions WHERE tenant_id = ? AND closed_at IS NULL AND day <= ?');
-        $st->execute([$tenantId, date('Y-m-d')]);
+        $today = date('Y-m-d');
         $now = date('Y-m-d H:i:s');
-        $up = $db->prepare('UPDATE day_sessions SET closed_at = ?, closing_sales = ?, closing_count = ? WHERE id = ? AND closed_at IS NULL');
+        $st = $db->prepare('SELECT * FROM day_sessions WHERE tenant_id = ? AND (final = 0 AND day < ? OR closed_at IS NULL AND day = ?)');
+        $st->execute([$tenantId, $today, $today]);
+        $fin = $db->prepare('UPDATE day_sessions SET closed_at = COALESCE(closed_at, ?), closing_sales = ?, closing_count = ?, final = 1 WHERE id = ?');
+        $shut = $db->prepare('UPDATE day_sessions SET closed_at = ? WHERE id = ? AND closed_at IS NULL');
         foreach ($st->fetchAll() as $s) {
             $w = self::window($tenantId, $s['day']);
-            if ($w['close'] > $now) continue;
-            $t = self::sumBetween($db, $tenantId, $w['from'], $w['close'], (int) $s['user_id'] ?: null);
-            $up->execute([$w['close'], $t['total'], $t['count'], $s['id']]);
+            if ($s['day'] < $today) {
+                $t = self::sumBetween($db, $tenantId, $w['from'], $w['end'], (int) $s['user_id'] ?: null);
+                $fin->execute([$w['close'], $t['total'], $t['count'], $s['id']]);
+            } elseif ($w['close'] <= $now) {
+                $shut->execute([$w['close'], $s['id']]);
+            }
         }
     }
 
@@ -205,7 +214,7 @@ class DaySales
     /** Sales from the start of business day $from to the close of business day $to. */
     public static function totalFor(PDO $db, int $tenantId, string $from, string $to, ?int $userId = null): array
     {
-        return self::sumBetween($db, $tenantId, self::window($tenantId, $from)['from'], self::window($tenantId, $to)['close'], $userId);
+        return self::sumBetween($db, $tenantId, $from . ' 00:00:00', date('Y-m-d', strtotime($to . ' +1 day')) . ' 00:00:00', $userId);
     }
 
     /** Fast total (one query per source) between two moments. */
@@ -234,7 +243,7 @@ class DaySales
     public static function sales(PDO $db, int $tenantId, string $from, string $to, ?int $userId = null): array
     {
         $out = [];
-        $range = [self::window($tenantId, $from)['from'], self::window($tenantId, $to)['close']];
+        $range = [$from . ' 00:00:00', date('Y-m-d', strtotime($to . ' +1 day')) . ' 00:00:00'];
         foreach (self::sources($db) as $key => $src) {
             $sql = "SELECT x.id, x.{$src['at']} AS at, {$src['by']} AS user_id, u.username AS staff,
                            {$src['customer']} AS customer, {$src['method']} AS method, {$src['total']} AS total
@@ -304,6 +313,164 @@ class DaySales
         return array_values($out);
     }
 
+    // ---- The sales report (Excel / PDF) --------------------------------------
+
+    /**
+     * Everything for one report: every sale in the range across $shops
+     * (id => name), optionally one person's only, and — for the owner — the
+     * money summary: cost of goods (capital back), profit and expenses.
+     */
+    public static function report(PDO $db, array $shops, string $from, string $to, ?int $userId, bool $money): array
+    {
+        $sales = [];
+        foreach ($shops as $tid => $name) {
+            foreach (self::sales($db, (int) $tid, $from, $to, $userId) as $s) {
+                $s['shop'] = $name;
+                $s['cost'] = array_sum(array_map(fn($i) => (float) ($i['cost'] ?? 0), $s['items']));
+                $sales[] = $s;
+            }
+        }
+        usort($sales, fn($a, $b) => strcmp($a['at'], $b['at']));
+        $sum = ['count' => count($sales), 'total' => 0.0, 'cost' => 0.0, 'methods' => []];
+        foreach ($sales as $s) {
+            $sum['total'] += (float) $s['total'];
+            $sum['cost'] += $s['cost'];
+            $m = ucfirst((string) ($s['method'] ?: 'cash'));
+            $sum['methods'][$m] = ($sum['methods'][$m] ?? 0) + (float) $s['total'];
+        }
+        $expenses = [];
+        if ($money && $shops) {
+            $in = implode(',', array_fill(0, count($shops), '?'));
+            try {
+                $st = $db->prepare("SELECT e.expense_date, e.title, e.amount, e.payment_method, e.tenant_id FROM finance_expenses e
+                                     WHERE e.tenant_id IN ($in) AND e.expense_date BETWEEN ? AND ? ORDER BY e.expense_date, e.id");
+                $st->execute(array_merge(array_map('intval', array_keys($shops)), [$from, $to]));
+                foreach ($st->fetchAll() as $e) { $e['shop'] = $shops[(int) $e['tenant_id']] ?? ''; $expenses[] = $e; }
+            } catch (\Throwable $e) { /* no expenses table yet */ }
+        }
+        $sum['expenses'] = array_sum(array_map(fn($e) => (float) $e['amount'], $expenses));
+        $sum['gross'] = $sum['total'] - $sum['cost'];
+        $sum['net'] = $sum['gross'] - $sum['expenses'];
+        return ['sales' => $sales, 'expenses' => $expenses, 'sum' => $sum, 'money' => $money, 'multi' => count($shops) > 1];
+    }
+
+    /** Excel: the sales sheet, then the summary (and expenses for the owner). */
+    public static function reportSheets(array $r, string $cur): array
+    {
+        $q = fn($n) => (float) rtrim(rtrim(number_format((float) $n, 2, '.', ''), '0'), '.');
+        $head = array_merge(['Date & time', 'Receipt'], $r['multi'] ? ['Shop'] : [], ['Sold by', 'Customer', 'Payment', 'Items sold', 'Amount']);
+        $rows = array_map(fn($s) => array_merge(
+            [$s['at'], '#' . $s['id']], $r['multi'] ? [$s['shop']] : [],
+            [$s['staff'] ?? '', $s['customer'] ?? '', ucfirst((string) ($s['method'] ?: 'cash')),
+             implode(', ', array_map(fn($i) => $q($i['qty']) . ' × ' . $i['product'], $s['items'])), round((float) $s['total'], 2)]
+        ), $r['sales']);
+        $sheets = ['Sales' => ['headers' => $head, 'rows' => $rows, 'money' => [count($head) - 1], 'totals' => [count($head) - 1]]];
+        $sum = [['Number of sales', $r['sum']['count']], ['Total sales', round($r['sum']['total'], 2)]];
+        foreach ($r['sum']['methods'] as $m => $v) { $sum[] = ['Received by ' . $m, round($v, 2)]; }
+        if ($r['money']) {
+            $sum[] = ['Capital (cost of the goods sold)', round($r['sum']['cost'], 2)];
+            $sum[] = ['Profit on sales', round($r['sum']['gross'], 2)];
+            $sum[] = ['Expenses', round($r['sum']['expenses'], 2)];
+            $sum[] = ['Net profit (after expenses)', round($r['sum']['net'], 2)];
+        }
+        $sheets['Summary'] = ['headers' => ['', $cur], 'rows' => $sum, 'money' => [1]];
+        if ($r['money'] && $r['expenses']) {
+            $sheets['Expenses'] = [
+                'headers' => array_merge(['Date'], $r['multi'] ? ['Shop'] : [], ['Expense', 'Paid by', 'Amount']),
+                'rows' => array_map(fn($e) => array_merge([$e['expense_date']], $r['multi'] ? [$e['shop']] : [], [$e['title'], ucfirst((string) $e['payment_method']), round((float) $e['amount'], 2)]), $r['expenses']),
+                'money' => [$r['multi'] ? 4 : 3], 'totals' => [$r['multi'] ? 4 : 3],
+            ];
+        }
+        return $sheets;
+    }
+
+    /** PDF: plain black and white, the shop's name on top, every sale, then the totals. */
+    public static function reportPdf(array $r, string $shopName, string $title, string $period, string $cur): string
+    {
+        if (!class_exists('FPDF')) require_once APP_ROOT . '/vendor/fpdf/fpdf.php';
+        $t = fn($x) => iconv('UTF-8', 'windows-1252//TRANSLIT//IGNORE', (string) $x);
+        $m = fn($v) => number_format((float) $v, 2);
+        $q = fn($n) => rtrim(rtrim(number_format((float) $n, 2), '0'), '.');
+        $pdf = new class('P', 'mm', 'A4') extends \FPDF {
+            public function Footer(): void
+            {
+                $this->SetY(-10);
+                $this->SetFont('Arial', '', 7);
+                $this->Cell(0, 4, 'Page ' . $this->PageNo() . ' of {nb}', 0, 0, 'C');
+            }
+        };
+        $pdf->SetMargins(12, 12, 12);
+        $pdf->SetAutoPageBreak(true, 14);
+        $pdf->AliasNbPages();
+        $pdf->AddPage();
+        $pdf->SetTextColor(0, 0, 0);
+        $pdf->SetDrawColor(0, 0, 0);
+        $W = 186;
+        $pdf->SetFont('Arial', 'B', 16); $pdf->Cell($W, 8, $t($shopName), 0, 1, 'C');
+        $pdf->SetFont('Arial', 'B', 12); $pdf->Cell($W, 6, $t($title), 0, 1, 'C');
+        $pdf->SetFont('Arial', '', 9);
+        $pdf->Cell($W, 5, $t($period . '  |  Printed ' . date('j M Y, g:i a') . ' by ' . ($_SESSION['username'] ?? '')), 0, 1, 'C');
+        $pdf->Ln(3);
+
+        // Sales table
+        $cols = $r['multi']
+            ? [['Time', 26], ['Receipt', 16], ['Shop', 26], ['Sold by', 22], ['Items', 70], ['Amount', 26]]
+            : [['Time', 28], ['Receipt', 18], ['Sold by', 26], ['Payment', 18], ['Items', 70], ['Amount', 26]];
+        $pdf->SetFont('Arial', 'B', 8.5);
+        foreach ($cols as [$h, $w]) $pdf->Cell($w, 7, $t($h), 1, 0, $h === 'Amount' ? 'R' : 'L');
+        $pdf->Ln();
+        $pdf->SetFont('Arial', '', 8);
+        $fit = function (string $s, float $w) use ($pdf, $t) {
+            $s = $t($s);
+            while ($s !== '' && $pdf->GetStringWidth($s) > $w - 2) $s = substr($s, 0, -2) . '.';
+            return $s;
+        };
+        foreach ($r['sales'] as $s) {
+            $items = implode(', ', array_map(fn($i) => $q($i['qty']) . ' x ' . $i['product'], $s['items']));
+            $vals = $r['multi']
+                ? [date('d/m H:i', strtotime($s['at'])), '#' . $s['id'], $s['shop'], $s['staff'] ?? '', $items, $m($s['total'])]
+                : [date('d/m H:i', strtotime($s['at'])), '#' . $s['id'], $s['staff'] ?? '', ucfirst((string) ($s['method'] ?: 'cash')), $items, $m($s['total'])];
+            foreach ($cols as $k => [$h, $w]) $pdf->Cell($w, 6, $fit((string) $vals[$k], $w), 1, 0, $h === 'Amount' ? 'R' : 'L');
+            $pdf->Ln();
+        }
+        if (!$r['sales']) { $pdf->Cell($W, 7, 'No sales in this period.', 1, 1, 'C'); }
+        $pdf->SetFont('Arial', 'B', 9);
+        $pdf->Cell($W - 26, 7, 'TOTAL SALES (' . $r['sum']['count'] . ')', 1, 0, 'R');
+        $pdf->Cell(26, 7, $m($r['sum']['total']), 1, 1, 'R');
+        $pdf->Ln(5);
+
+        // Summary
+        $line = function (string $label, $value, bool $bold = false) use ($pdf, $t, $m, $cur) {
+            $pdf->SetFont('Arial', $bold ? 'B' : '', 10);
+            $pdf->Cell(120, 7, $t($label), 'B', 0);
+            $pdf->Cell(66, 7, $t($cur . ' ' . $m($value)), 'B', 1, 'R');
+        };
+        $pdf->SetFont('Arial', 'B', 11); $pdf->Cell($W, 7, 'SUMMARY', 0, 1);
+        $line('Total sales (' . $r['sum']['count'] . ' sales)', $r['sum']['total'], true);
+        foreach ($r['sum']['methods'] as $mth => $v) $line('   Received by ' . $mth, $v);
+        if ($r['money']) {
+            $line('Capital (cost of the goods sold)', $r['sum']['cost']);
+            $line('Profit on sales', $r['sum']['gross'], true);
+            $line('Expenses', $r['sum']['expenses']);
+            $line('Net profit (after expenses)', $r['sum']['net'], true);
+            if ($r['expenses']) {
+                $pdf->Ln(5);
+                $pdf->SetFont('Arial', 'B', 11); $pdf->Cell($W, 7, 'EXPENSES', 0, 1);
+                $pdf->SetFont('Arial', 'B', 8.5);
+                foreach ([['Date', 26], ['Expense', 100], ['Paid by', 30], ['Amount', 30]] as [$h, $w]) $pdf->Cell($w, 7, $h, 1, 0, $h === 'Amount' ? 'R' : 'L');
+                $pdf->Ln();
+                $pdf->SetFont('Arial', '', 8);
+                foreach ($r['expenses'] as $e) {
+                    $pdf->Cell(26, 6, date('d/m/Y', strtotime($e['expense_date'])), 1);
+                    $pdf->Cell(100, 6, $fit(($r['multi'] ? $e['shop'] . ': ' : '') . $e['title'], 100), 1);
+                    $pdf->Cell(30, 6, $t(ucfirst((string) $e['payment_method'])), 1);
+                    $pdf->Cell(30, 6, $m($e['amount']), 1, 1, 'R');
+                }
+            }
+        }
+        return $pdf->Output('S');
+    }
+
     /** Workbook sheets shared by the Excel and PDF downloads. */
     public static function sheets(array $sales, array $sessions, bool $everyone): array
     {
@@ -360,26 +527,26 @@ class DaySales
             'sale' => [
                 'label' => 'Sale', 'table' => 'sales', 'at' => 'created_at', 'by' => 'x.staff_id', 'where' => "x.status = 'completed'",
                 'total' => 'x.total', 'customer' => 'x.customer_name', 'method' => 'x.payment_method',
-                'items' => 'SELECT sale_id AS parent, product_id, product_name AS product, quantity AS qty, line_total AS amount FROM sale_items WHERE sale_id IN (%s) AND quantity > 0',
+                'items' => 'SELECT sale_id AS parent, product_id, product_name AS product, quantity AS qty, line_total AS amount, unit_cost * quantity AS cost FROM sale_items WHERE sale_id IN (%s) AND quantity > 0',
             ],
             'order' => [
                 'label' => 'Sale', 'table' => 'orders', 'at' => 'paid_at', 'by' => 'x.opened_by', 'where' => "x.status = 'paid'",
                 'total' => 'x.total', 'customer' => 'x.table_name', 'method' => 'x.payment_method',
-                'items' => 'SELECT order_id AS parent, product_id, product_name AS product, quantity AS qty, line_total AS amount FROM order_items WHERE order_id IN (%s) AND quantity > 0',
+                'items' => 'SELECT i.order_id AS parent, i.product_id, i.product_name AS product, i.quantity AS qty, i.line_total AS amount, COALESCE(p.buying_price, 0) * i.quantity AS cost FROM order_items i LEFT JOIN products p ON p.id = i.product_id WHERE i.order_id IN (%s) AND i.quantity > 0',
             ],
         ];
         if ($exists('rest_orders')) {
             $src['rest'] = [
                 'label' => 'Restaurant', 'table' => 'rest_orders', 'at' => 'paid_at', 'by' => 'COALESCE(x.paid_by, x.user_id)', 'where' => "x.status = 'paid'",
                 'total' => 'x.total', 'customer' => "COALESCE(x.customer_name, x.table_label)", 'method' => "'paid'",
-                'items' => 'SELECT order_id AS parent, ref_id AS product_id, name AS product, quantity AS qty, line_total AS amount FROM rest_order_items WHERE order_id IN (%s)',
+                'items' => 'SELECT order_id AS parent, ref_id AS product_id, name AS product, quantity AS qty, line_total AS amount, 0 AS cost FROM rest_order_items WHERE order_id IN (%s)',
             ];
         }
         if ($exists('svc_tickets')) {
             $src['svc'] = [
                 'label' => 'Services', 'table' => 'svc_tickets', 'at' => 'paid_at', 'by' => 'COALESCE(x.paid_by, x.created_by)', 'where' => "x.status = 'paid'",
                 'total' => 'x.total', 'customer' => 'x.customer_name', 'method' => "COALESCE(x.payment_method, 'paid')",
-                'items' => 'SELECT ticket_id AS parent, COALESCE(product_id, service_id) AS product_id, service_name AS product, quantity AS qty, price * quantity AS amount FROM svc_ticket_items WHERE ticket_id IN (%s)',
+                'items' => 'SELECT ticket_id AS parent, COALESCE(product_id, service_id) AS product_id, service_name AS product, quantity AS qty, price * quantity AS amount, 0 AS cost FROM svc_ticket_items WHERE ticket_id IN (%s)',
             ];
         }
         return $cache = $src;

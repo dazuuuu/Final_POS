@@ -1,7 +1,8 @@
 <?php
 // app/models/ShopTransferModel.php
-// Move products from one of the owner's shops into another (usually from the
-// Admin portal / main shop out to the branches). Each line takes stock off
+// Move products from one of the owner's shops into any other — main shop to a
+// branch, a branch back to the main shop, or branch to branch. Stock simply
+// leaves one shop and arrives in the other with its prices (no sale, no credit). Each line takes stock off
 // the source product and adds it to the same product in the target shop —
 // matched by name, or created there as a copy (same prices, photo, colours…).
 // Serial-tracked units move by serial / IMEI. Every transfer is logged.
@@ -60,7 +61,7 @@ class ShopTransferModel
      * $lines: product_id => quantity. $serialIds: product_id => [device_serials.id]
      * — for a serial-tracked product the units picked ARE the quantity.
      */
-    public function transfer(int $fromTid, int $toTid, array $lines, array $serialIds = [], string $notes = ''): array
+    public function transfer(int $fromTid, int $toTid, array $lines, array $serialIds = [], string $notes = '', bool $withPrices = true): array
     {
         if (!\ShopContext::canAccess($fromTid) || !\ShopContext::canAccess($toTid)) {
             return ['ok' => false, 'error' => 'Choose one of your shops.'];
@@ -136,6 +137,11 @@ class ShopTransferModel
                     $buy = ($oldQty + $qty) > 0 ? (($oldQty * (float) $dst['buying_price']) + ($qty * (float) $src['buying_price'])) / ($oldQty + $qty) : (float) $src['buying_price'];
                     $db->prepare("UPDATE products SET quantity = quantity + ?, buying_price = ?, status = IF(status = 'draft', status, 'active') WHERE id = ?")
                        ->execute([$qty, round($buy, 2), $dst['id']]);
+                    // The selling prices travel with the stock (unless the sender chose to keep the other shop's own).
+                    if ($withPrices && ((float) $src['retail_price'] > 0 || (float) $src['wholesale_price'] > 0)) {
+                        $db->prepare('UPDATE products SET retail_price = ?, wholesale_price = ?, selling_price = ? WHERE id = ?')
+                           ->execute([(float) $src['retail_price'], (float) $src['wholesale_price'], (float) $src['selling_price'], $dst['id']]);
+                    }
                     $toPid = (int) $dst['id'];
                     if (!empty($src['is_serialized']) && empty($dst['is_serialized'])) {
                         $db->prepare('UPDATE products SET is_serialized = 1, warranty_months = COALESCE(warranty_months, ?) WHERE id = ?')->execute([$src['warranty_months'], $toPid]);

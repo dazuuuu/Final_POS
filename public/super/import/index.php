@@ -13,6 +13,7 @@ ob_start();
 ?>
 <h1 class="h4 mb-1">Import your shop</h1>
 <p class="text-muted mb-4">Move your inventory, sales, reports history and staff from your old POS into this one.</p>
+<div class="alert alert-light border small mb-4"><i class="fas fa-store me-1"></i>Products from your <strong>online store / website</strong> instead? <a href="<?php echo public_url('super/import/store.php'); ?>">Import from online store →</a></div>
 <?php include __DIR__ . '/../../components/shop_import.php'; ?>
 <?php
 $content = ob_get_clean();

@@ -1,7 +1,7 @@
 /* Dazu Modern POS service worker — makes the app installable + fast.
    Pages are always network-first (so live data + auth stay correct);
    only static assets and the login shell are cached. */
-const CACHE = 'dazu-pos-v8';
+const CACHE = 'dazu-pos-v9';
 // Derived from this script's own URL, not hard-coded — works whatever
 // folder the app is deployed under.
 const BASE  = new URL('.', self.location).pathname.replace(/\/$/, '');
@@ -41,6 +41,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // API calls (the website API, the app's own data calls) always go straight
+  // to the server: their answers, including errors like 400/404, must reach
+  // the caller exactly as sent — never a cached copy or the offline page.
+  if (url.pathname.indexOf('/api/') !== -1) {
+    return;
+  }
+
   // Let redirects pass through normally; the browser rejects a redirected response
   // when the service worker tries to handle it with a non-follow mode.
   if (req.redirect === 'manual' || req.redirect === 'error') {
@@ -67,8 +74,9 @@ self.addEventListener('fetch', (event) => {
   const networkThenCache = (request) =>
     fetch(request, { redirect: 'follow' })
       .then((response) => {
+        // Errors (404, 500…) are passed on as they are; only good answers are kept.
         if (!response || !response.ok) {
-          throw new Error('Bad response');
+          return response;
         }
         // Never keep a page (HTML) — only files and data. A stored page could
         // come back later in place of the login screen.
@@ -79,11 +87,9 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE).then((cache) => cache.put(request, copy));
         return response;
       })
+      // Only a real network failure (no connection) falls back to the cache.
       .catch(() =>
-        caches.match(request).then((hit) => {
-          if (hit) return hit;
-          return fallbackResponse();
-        })
+        caches.match(request).then((hit) => hit || new Response('', { status: 503, statusText: 'Offline' }))
       );
 
   // Page navigations: always the network, whatever its status (a login error,

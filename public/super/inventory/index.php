@@ -62,6 +62,10 @@ ob_start();
   </div>
   <?php if ($canEdit): ?>
     <a href="<?php echo $stockUrl; ?>" class="btn btn-primary btn-sm"><i class="fas fa-truck-loading me-1"></i>Record stock</a>
+    <?php if (TenantContext::role() === 'tenant_owner' && TenantContext::can(Capabilities::INVENTORY_EDIT)): ?>
+    <a href="<?php echo public_url('super/import/store.php'); ?>" class="btn btn-outline-secondary btn-sm"><i class="fas fa-file-import me-1"></i>Import from online store</a>
+    <a href="<?php echo public_url('super/import/photos.php'); ?>" class="btn btn-outline-secondary btn-sm"><i class="fas fa-images me-1"></i>Import photos</a>
+    <?php endif; ?>
   <?php endif; ?>
 </div>
 

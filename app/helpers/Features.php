@@ -94,6 +94,7 @@ class Features
         '/super/orders/', '/staff/orders/', '/super/credits/', '/staff/credits/',
         '/super/printer/', '/staff/printer/', '/super/inventory/', '/staff/inventory/',
         '/super/stock/', '/staff/stock/',
+        '/super/import/store.php', '/super/import/photos.php', // bulk products & photos
         '/super/settings/', '/super/backup/', // shop details, navigation menu, export & import
     ];
 
