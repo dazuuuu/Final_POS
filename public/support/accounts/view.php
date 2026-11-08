@@ -339,8 +339,11 @@ echo $__css;
   <div class="col-lg-5">
     <?php $shopUrl = Signup::shopUrl($acct['slug']); ?>
     <div class="s-card mb-3" style="border-color:#93c5fd">
-      <h2 class="h6 mb-1"><i class="fas fa-store me-1 text-primary"></i>Shop address</h2>
-      <?php if (!$acct['owner_id']): ?>
+      <?php $__isStock = Features::isStockControl((int) $acct['id']); ?>
+      <h2 class="h6 mb-1"><i class="fas fa-<?php echo $__isStock ? 'boxes-stacked' : 'store'; ?> me-1 text-primary"></i><?php echo $__isStock ? 'Stock Control sign-in address' : 'Shop address'; ?></h2>
+      <?php if ($__isStock): ?>
+        <p class="small text-muted mb-2">This organisation's own Stock Control sign-in page, with its name and logo. Everyone signs in here with email, password and a code emailed to them.</p>
+      <?php elseif (!$acct['owner_id']): ?>
         <p class="small text-muted mb-2">Waiting for the owner to sign up. Send them this link — it opens signup with <strong><?php echo htmlspecialchars($acct['name']); ?></strong> filled in.
           After signing up it becomes their POS address. (Or share the general signup page: <code><?php echo htmlspecialchars(Signup::signupUrl()); ?></code>)</p>
       <?php else: ?>

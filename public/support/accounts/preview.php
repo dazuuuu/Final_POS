@@ -15,7 +15,9 @@ if (isset($_GET['exit'])) {
     $back = (int) ($_SESSION['support_preview']['account'] ?? 0);
     unset($_SESSION['support_preview'], $_SESSION['logged_in'], $_SESSION['otp_verified'], $_SESSION['user_id'],
           $_SESSION['tenant_id'], $_SESSION['role'], $_SESSION['capabilities'], $_SESSION['username'],
-          $_SESSION['must_reset'], $_SESSION['home_tenant_id'], $_SESSION['shop_slug'], $_SESSION['first_login']);
+          $_SESSION['must_reset'], $_SESSION['home_tenant_id'], $_SESSION['shop_slug'], $_SESSION['first_login'],
+          $_SESSION['stock_verified'], $_SESSION['stock_slug'], $_SESSION['stock_home'], $_SESSION['stock_rights'],
+          $_SESSION['stock_pending'], $_SESSION['stock_csrf']);
     TenantContext::reset();
     setcookie('shop_slug', '', ['expires' => time() - 3600, 'path' => '/']);
     header('Location: ' . public_url($back ? 'support/accounts/view.php?id=' . $back : 'support/accounts/'));
@@ -61,5 +63,15 @@ $_SESSION['support_preview'] = [
     'role'    => $user['role_name'] === 'staff' ? 'staff' : 'owner',
     'started' => date('Y-m-d H:i:s'),
 ];
+// Stock Control accounts have their own app: skip the password and the emailed code
+// (support previews are trusted) and open it at the organisation's own address.
+if (Features::isStockControl($id)) {
+    $_SESSION['stock_verified'] = true;
+    $_SESSION['stock_slug'] = $_SESSION['shop_slug'];
+    $_SESSION['stock_home'] = (int) $user['tenant_id'];
+    $_SESSION['stock_rights'] = $user['role_name'] === 'staff' ? StockControl::rightsOf((int) $user['id']) : [];
+    header('Location: ' . rtrim((string) BASE_URL, '/') . '/' . $_SESSION['shop_slug'] . '/stock/');
+    exit;
+}
 header('Location: ' . public_url($user['role_name'] === 'staff' ? 'staff/dashboard/' : 'super/dashboard/'));
 exit;

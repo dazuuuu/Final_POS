@@ -46,7 +46,7 @@ class Quote
         $package = (string) ($in['package'] ?? '');
         $shop = trim((string) ($in['shop_name'] ?? ''));
         $business = trim((string) ($in['business'] ?? ''));
-        $catalog = Features::catalog() + self::EXTRAS;
+        $catalog = Features::publicCatalog() + self::EXTRAS;
         if ($name === '') { return 'Enter your name.'; }
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) { return 'Enter a valid email address.'; }
         if (!isset($catalog[$package])) { return 'Choose a package.'; }

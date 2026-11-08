@@ -12,7 +12,7 @@
 require_once ROOT_PATH . '/app/helpers/uploads.php'; // csrf_token() / csrf_field() / csrf_verify()
 
 $brand = Branding::platform();
-$catalog = Features::catalog();
+$catalog = Features::publicCatalog(); // hidden packages (Stock Control) are never advertised
 $demoPackages = Demo::packages();
 $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES);
 $lpUrl = public_url('');

@@ -38,6 +38,12 @@ class Features
     // badge and open the upgrade page (super/upgrade.php).
     const SHOP_BASIC     = 'shop_basic_20k';
     const SERVICES_BASIC = 'services_basic_20k';
+    // Stock Control: a separate, unadvertised system for stock only (no
+    // selling). Its own login, look and pages under /stock/ — see app/stock/.
+    // Set up by support on request; never listed on the website.
+    const STOCK_CONTROL  = 'stock_control';
+    /** Packages support can assign but the website never lists, demos or quotes. */
+    const HIDDEN = [self::STOCK_CONTROL];
     const BASIC_STAFF_LIMIT = 3;
 
     /** Pages that are Pro-only: path fragment => feature name shown on the upgrade page. */
@@ -59,8 +65,22 @@ class Features
             self::RESTAURANT_POS => ['Restaurant POS', 30000, 'Restaurant & bar POS: store stock, stock moved to the kitchen and to the counter or bar, menu with recipes, table and takeaway orders, bills and payments, online menu and deliveries, and several restaurants or bars each with its own prices. (Pro.)', 'fa-utensils'],
             self::RESTAURANT_ROOMS => ['Restaurant + Rooms', 40000, 'Everything in the Restaurant POS, plus Rooms & Accommodation (rooms, guest bookings, invoices, check-out with late fees, receipts) and table bookings with pre-set group menus and family platters.', 'fa-hotel'],
             self::SERVICES => ['Services', 30000, 'Everything in the Shop POS, plus for service businesses: a price list of services, walk-in clients and bookings, assigning staff, invoices and receipts, and staff commissions.', 'fa-user-gear'],
+            self::STOCK_CONTROL => ['Stock Control', 0, 'Separate stock-management system (not advertised): its own login with two-step sign-in, stores, stock receiving, transfers between stores, stock counts and corrections, stock value, administrators and staff. No selling.', 'fa-boxes-stacked'],
             self::ELECTRONICS => ['Electronics', 30000, 'Everything in the Shop POS, plus for phone & electronics shops: serial number / IMEI for every unit, warranties that start at sale, and warranty / repair returns.', 'fa-mobile-screen'],
         ];
+    }
+
+    /** The packages shown to the public (landing page, demos, quotes). */
+    public static function publicCatalog(): array
+    {
+        return array_diff_key(self::catalog(), array_flip(self::HIDDEN));
+    }
+
+    /** Is this account a Stock Control account (the separate stock system)? */
+    public static function isStockControl(?int $tenantId = null): bool
+    {
+        $tenantId ??= TenantContext::tenantId();
+        return $tenantId !== null && !empty(self::forAccount(self::accountId($tenantId))[self::STOCK_CONTROL]);
     }
 
     /**
@@ -287,6 +307,11 @@ class Features
             return;
         }
         $account = self::accountId(TenantContext::tenantId());
+        // Stock Control organisations live in their own system under /stock/.
+        if (self::isStockControl(TenantContext::tenantId())) {
+            header('Location: ' . public_url('stock/'));
+            exit;
+        }
 
         $stmt = Database::pdo()->prepare('SELECT status FROM tenants WHERE id = ? LIMIT 1');
         $stmt->execute([$account]);

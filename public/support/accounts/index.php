@@ -122,7 +122,11 @@ if (support_posted()) {
         }
         if (!$errors) {
             Features::setForAccount($tenantId, $in['packages']);
-            $cf = EmailConfirm::start('user', $newOwner, $in['email'], $in['username'], $password, EmailConfirm::absolute('admin/'), $tenantId);
+            // Stock Control organisations sign in at their own address.
+            $isStock = in_array(Features::STOCK_CONTROL, $in['packages'], true);
+            $slug = (string) $pdo->query('SELECT slug FROM tenants WHERE id = ' . (int) $tenantId)->fetchColumn();
+            $loginUrl = $isStock ? Signup::shopUrl($slug) . '/' : EmailConfirm::absolute('admin/'); // Stock Control: the organisation's own sign-in address
+            $cf = EmailConfirm::start('user', $newOwner, $in['email'], $in['username'], $password, $loginUrl, $tenantId);
             if (!empty($_POST['skip_activation'])) {
                 License::waive($tenantId);
                 $pdo->prepare('UPDATE users SET email_verified = 0 WHERE id = ?')->execute([$newOwner]); // still waits for "Confirm your email"

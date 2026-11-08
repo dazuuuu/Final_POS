@@ -60,7 +60,7 @@ class Demo
     /** Packages that can be tried: all of them. */
     public static function packages(): array
     {
-        return Features::catalog();
+        return Features::publicCatalog();
     }
 
     private static function isRestaurant(string $package): bool

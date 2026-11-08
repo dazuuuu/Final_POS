@@ -4,6 +4,15 @@
 // domain/<shop-slug>/<page> lands here (no such file) — run that page.
 require_once __DIR__ . '/../app/helpers/ShopUrl.php';
 if ($__shopPage = ShopUrl::dispatch()) {
+    // A Stock Control organisation's address (domain/<slug>/) opens its own sign-in / overview.
+    if (realpath($__shopPage) === realpath(__FILE__)) {
+        require_once __DIR__ . '/../app/app.php';
+        $__acct = Signup::findBySlug((string) ShopUrl::requestSlug());
+        if ($__acct && Features::isStockControl((int) $__acct['id'])) {
+            header('Location: ' . rtrim((string) BASE_URL, '/') . '/' . $__acct['slug'] . '/stock/');
+            exit;
+        }
+    }
     require $__shopPage;
     exit;
 }
