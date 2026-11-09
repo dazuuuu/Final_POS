@@ -42,9 +42,9 @@ $lastM = $flow($pStart, date('Y-m-t', strtotime($pStart)));
 $since = $flow($mStart, date('Y-m-d'));
 $valueStart = $now['value'] - (float) $since['vnet'];
 $pct = function ($a, $b): array {
-    if ((float) $b == 0.0) return (float) $a > 0 ? ['up', 'new'] : ['eq', '0%'];
+    if ((float) $b < 1) return (float) $a > 0 ? ['up', 'new'] : ['eq', '0%']; // nothing to compare with yet
     $p = ((float) $a - (float) $b) / abs((float) $b) * 100;
-    return [$p > 0.05 ? 'up' : ($p < -0.05 ? 'dn' : 'eq'), ($p > 0 ? '↑ ' : ($p < 0 ? '↓ ' : '')) . round(abs($p), 1) . '%'];
+    return [$p > 0.05 ? 'up' : ($p < -0.05 ? 'dn' : 'eq'), ($p > 0 ? '↑ ' : ($p < 0 ? '↓ ' : '')) . (abs($p) > 999 ? '999+' : round(abs($p), 1)) . '%'];
 };
 
 // Heat-map: units moved per day and time-of-day band.
@@ -87,16 +87,16 @@ ob_start();
 
 <div class="grid g3" style="margin-bottom:18px">
   <?php if ($value): [$c, $t] = $pct($now['value'], $valueStart); ?>
-  <div class="kpi"><div class="hd">Stock value <i class="fas fa-ellipsis"></i></div><b><?php echo stock_money($now['value']); ?></b>
+  <div class="kpi" style="--c:#16a34a"><div class="hd"><span>Stock value</span><i class="ic fas fa-coins"></i></div><b><?php echo stock_money($now['value']); ?></b>
     <span class="trend <?php echo $c; ?>"><?php echo $t; ?></span><span class="vs">vs start of month</span></div>
   <?php else: ?>
-  <div class="kpi"><div class="hd">Units in stock <i class="fas fa-ellipsis"></i></div><b><?php echo stock_qty($now['units']); ?></b>
+  <div class="kpi" style="--c:#3b82f6"><div class="hd"><span>Units in stock</span><i class="ic fas fa-boxes-stacked"></i></div><b><?php echo stock_qty($now['units']); ?></b>
     <span class="trend eq"><?php echo number_format($now['items']); ?> items</span><span class="vs">in <?php echo count($stores); ?> store<?php echo count($stores) === 1 ? '' : 's'; ?></span></div>
   <?php endif; [$c, $t] = $pct($thisM['uin'], $lastM['uin']); ?>
-  <div class="kpi"><div class="hd">Stock in <i class="fas fa-ellipsis"></i></div><b><?php echo stock_qty($thisM['uin']); ?> <small style="font-size:.9rem;color:var(--mute);font-weight:500">units</small></b>
+  <div class="kpi" style="--c:#10b981"><div class="hd"><span>Stock in</span><i class="ic fas fa-arrow-trend-up"></i></div><b><?php echo stock_qty($thisM['uin']); ?> <small style="font-size:.9rem;color:var(--mute);font-weight:500">units</small></b>
     <span class="trend <?php echo $c; ?>"><?php echo $t; ?></span><span class="vs">vs last month</span></div>
   <?php [$c, $t] = $pct($thisM['uout'], $lastM['uout']); $c = $c === 'up' ? 'dn' : ($c === 'dn' ? 'up' : $c); ?>
-  <div class="kpi"><div class="hd">Stock out <i class="fas fa-ellipsis"></i></div><b><?php echo stock_qty($thisM['uout']); ?> <small style="font-size:.9rem;color:var(--mute);font-weight:500">units</small></b>
+  <div class="kpi" style="--c:#f97316"><div class="hd"><span>Stock out</span><i class="ic fas fa-arrow-trend-down"></i></div><b><?php echo stock_qty($thisM['uout']); ?> <small style="font-size:.9rem;color:var(--mute);font-weight:500">units</small></b>
     <span class="trend <?php echo $c; ?>"><?php echo $t; ?></span><span class="vs">vs last month</span></div>
 </div>
 
@@ -144,9 +144,6 @@ ob_start();
 </div>
 
 <style>
-.seg{display:flex;background:#f3f4f6;border:1px solid var(--line);border-radius:10px;padding:3px;}
-.seg a{padding:6px 16px;border-radius:8px;text-decoration:none;color:var(--mute);font-weight:500;font-size:.85rem;}
-.seg a.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);}
 .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:.76rem;color:var(--ink2);margin-bottom:12px;}
 .legend span{display:flex;align-items:center;gap:6px;} .legend i{width:9px;height:9px;border-radius:2px;display:inline-block;}
 .heat-wrap{overflow-x:auto;}
@@ -154,8 +151,8 @@ table.heat{border-collapse:separate;border-spacing:5px;width:100%;}
 .heat th{font-weight:400;color:var(--mute);font-size:.72rem;text-align:left;white-space:nowrap;padding-right:6px;}
 .heat td{padding:0;} .heat td i{display:block;min-width:16px;height:22px;border-radius:5px;}
 .heat .days td{text-align:center;color:var(--mute);font-size:.7rem;}
-.l0{background:#f3f4f6;} .l1{background:#dcfce7;} .l2{background:#a7f3c0;} .l3{background:#4ade80;} .l4{background:#16a34a;}
-.bar{height:12px;background:#f1f3f5;border-radius:4px;overflow:hidden;} .bar i{display:block;height:100%;border-radius:4px;}
+.l0{background:var(--h0);} .l1{background:var(--h1);} .l2{background:var(--h2);} .l3{background:var(--h3);} .l4{background:var(--h4);}
+.bar{height:12px;background:var(--hov);border-radius:6px;overflow:hidden;} .bar i{display:block;height:100%;border-radius:6px;}
 @media(max-width:900px){.grid[style*="1.5fr"]{grid-template-columns:1fr!important;}}
 </style>
 <?php

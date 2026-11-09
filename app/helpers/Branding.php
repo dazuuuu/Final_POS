@@ -72,6 +72,9 @@ class Branding
             'boot_sound' => !empty($cfg['boot_sound']) ? public_url(self::normalizeStoredPath($cfg['boot_sound'])) : '',
             // Background picture of the sign-in screen on phones (Support → Settings). Empty: a dark gradient.
             'login_bg' => !empty($cfg['login_bg']) ? public_url(self::normalizeStoredPath($cfg['login_bg'])) : '',
+            // Stock Control sign-in page (Support → Settings → Login forms): the big picture and its welcome word.
+            'stock_login_img' => !empty($cfg['stock_login_img']) ? public_url(self::normalizeStoredPath($cfg['stock_login_img'])) : '',
+            'stock_welcome' => trim((string) ($cfg['stock_welcome'] ?? '')) !== '' ? trim((string) $cfg['stock_welcome']) : 'Welcome',
         ];
     }
 

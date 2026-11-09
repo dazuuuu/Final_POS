@@ -70,10 +70,10 @@ ob_start();
 </form>
 
 <div class="grid g4" style="margin-bottom:18px">
-  <div class="kpi"><div class="hd">Money in</div><b style="color:#15803d"><?php echo $m2($F['income']); ?></b><span class="vs">income recorded</span></div>
-  <div class="kpi"><div class="hd">Money out</div><b style="color:#b91c1c"><?php echo $m2($F['money_out']); ?></b><span class="vs">stock <?php echo $m2($F['purchases']); ?> · expenses <?php echo $m2($F['expenses']); ?></span></div>
-  <div class="kpi"><div class="hd">Cash flow</div><b style="color:<?php echo $F['cash_flow'] < 0 ? '#b91c1c' : '#15803d'; ?>"><?php echo $m2($F['cash_flow']); ?></b><span class="vs">in − out</span></div>
-  <div class="kpi"><div class="hd">Profit</div><b style="color:<?php echo $F['profit'] < 0 ? '#b91c1c' : '#15803d'; ?>"><?php echo $m2($F['profit']); ?></b><span class="vs">after cost of stock out</span></div>
+  <div class="kpi" style="--c:#16a34a"><div class="hd"><span>Money in</span><i class="ic fas fa-arrow-down-long"></i></div><b style="color:#16a34a"><?php echo $m2($F['income']); ?></b><span class="vs">income recorded</span></div>
+  <div class="kpi" style="--c:#ef4444"><div class="hd"><span>Money out</span><i class="ic fas fa-arrow-up-long"></i></div><b style="color:#ef4444"><?php echo $m2($F['money_out']); ?></b><span class="vs">stock <?php echo $m2($F['purchases']); ?> · expenses <?php echo $m2($F['expenses']); ?></span></div>
+  <div class="kpi" style="--c:#3b82f6"><div class="hd"><span>Cash flow</span><i class="ic fas fa-water"></i></div><b style="color:<?php echo $F['cash_flow'] < 0 ? '#ef4444' : '#16a34a'; ?>"><?php echo $m2($F['cash_flow']); ?></b><span class="vs">in − out</span></div>
+  <div class="kpi" style="--c:#8b5cf6"><div class="hd"><span>Profit</span><i class="ic fas fa-chart-line"></i></div><b style="color:<?php echo $F['profit'] < 0 ? '#ef4444' : '#16a34a'; ?>"><?php echo $m2($F['profit']); ?></b><span class="vs">after cost of stock out</span></div>
 </div>
 <p class="small mute" style="margin:-6px 0 18px"><i class="fas fa-circle-info"></i> Profit = income − cost of the stock that went out (at its buying price) − expenses. Stock purchases count as money out when you give a buying price while receiving stock. Clearing stock with a selling price records the income for you.</p>
 
@@ -134,7 +134,7 @@ ob_start();
 </div>
 <style>
 .seg2{display:flex;gap:8px;margin-bottom:12px;} .seg2 label{flex:1;border:1px solid var(--line);border-radius:9px;padding:8px 12px;cursor:pointer;font-weight:500;}
-.seg2 label:has(input:checked){border-color:var(--g);background:#f0fdf4;}
+.seg2 label:has(input:checked){border-color:var(--g);background:var(--gl);}
 @media(max-width:900px){.grid[style*="1.5fr"]{grid-template-columns:1fr!important}}
 </style>
 <?php

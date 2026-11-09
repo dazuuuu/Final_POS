@@ -102,11 +102,7 @@ document.getElementById('trf').addEventListener('submit', function (e) {
 });
 </script>
 <?php endif; ?>
-<style>
-.seg{display:flex;background:#f3f4f6;border:1px solid var(--line);border-radius:10px;padding:3px;flex-wrap:wrap;}
-.seg a{padding:7px 14px;border-radius:8px;text-decoration:none;color:var(--mute);font-weight:500;font-size:.85rem;display:flex;gap:6px;align-items:center;}
-.seg a.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);}
-</style>
+
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/_layout.php';

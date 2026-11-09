@@ -10,6 +10,11 @@
  *   - forms with files (photos, Excel, zips…): the percentage is the real
  *     upload progress, and the screen stays until the server has answered —
  *     it never finishes early or turns into an error while work is still going
+ * The percentage follows the connection: the loader remembers how long pages
+ * usually take on this device (and starts from the connection type), so on a
+ * fast line it fills quickly, and on a slow one it fills slowly — and it
+ * always waits for the page to really arrive before reaching 100%.
+ * Colours: --dz-accent (default teal) and html[data-theme=dark] are respected.
  * Opt out on an element with data-no-loader.
  */
 (function () {
@@ -24,11 +29,13 @@
     + '#dzLoad .dzl-ring{position:relative;width:86px;height:86px}'
     + '#dzLoad svg{width:86px;height:86px;transform:rotate(-90deg)}'
     + '#dzLoad circle{fill:none;stroke-width:7}#dzLoad .dzl-bg{stroke:#e2e8f0}'
-    + '#dzLoad .dzl-fg{stroke:#0f766e;stroke-linecap:round;transition:stroke-dashoffset .25s ease}'
+    + '#dzLoad .dzl-fg{stroke:var(--dz-accent,#0f766e);stroke-linecap:round;transition:stroke-dashoffset .25s ease}'
     + '#dzLoad .dzl-pct{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px}'
     + '#dzLoad .dzl-msg{color:#64748b;font-size:13px;text-align:center;max-width:260px}'
     + '#dzLoad .dzl-btn{display:none;border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:6px 14px;font:inherit;cursor:pointer}'
-    + '#dzTopBar{position:fixed;top:0;left:0;height:3px;width:0;z-index:99991;background:#0f766e;transition:width .3s ease,opacity .3s ease;opacity:0;pointer-events:none}';
+    + '#dzTopBar{position:fixed;top:0;left:0;height:3px;width:0;z-index:99991;background:var(--dz-accent,#0f766e);transition:width .3s ease,opacity .3s ease;opacity:0;pointer-events:none}'
+    + 'html[data-theme=dark] #dzLoad{background:rgba(7,12,24,.94);color:#e8eefb}html[data-theme=dark] #dzLoad .dzl-bg{stroke:#1f2a44}'
+    + 'html[data-theme=dark] #dzLoad .dzl-msg{color:#8d9bb5}html[data-theme=dark] #dzLoad .dzl-btn{background:#121b30;border-color:#2a3856;color:#e8eefb}';
   var style = document.createElement('style');
   style.textContent = css;
   (document.head || document.documentElement).appendChild(style);
@@ -83,13 +90,30 @@
   }
   // Creeps toward 95%: quick at first, slower the longer it takes — real
   // progress (the page arriving) then takes it to 100%.
+  // How long a page usually takes here: learned from earlier loads, else guessed
+  // from the connection type. It sets how fast the percentage climbs.
+  function expectedMs() {
+    try { var v = parseFloat(localStorage.getItem('dz-lt')); if (v > 0) return v; } catch (e) {}
+    var c = navigator.connection || {}, t = c.effectiveType || '';
+    return t === 'slow-2g' ? 9000 : t === '2g' ? 6000 : t === '3g' ? 2500 : t === '4g' ? 900 : 1200;
+  }
+  function learn(ms) {
+    if (!(ms > 100 && ms < 30000)) return;
+    try { var old = parseFloat(localStorage.getItem('dz-lt')); localStorage.setItem('dz-lt', String(Math.round(old > 0 ? old * 0.6 + ms * 0.4 : ms))); } catch (e) {}
+  }
   function creep(cap) {
     cap = cap || 95;
     clearInterval(tick);
+    var tau = Math.max(250, expectedMs() / 2.5); // ≈ 92% of the way by the time a page normally arrives
     tick = setInterval(function () {
       var secs = (Date.now() - started) / 1000;
-      // Slows down as it nears the cap, so it never reaches 100% before the work is done.
-      set(pct + Math.max(0.02, (cap - pct) * 0.04));
+      if (mode === 'send') {
+        // Sends: slow, steady, never reaching the cap before the server answers.
+        set(pct + Math.max(0.02, (cap - pct) * 0.04));
+      } else {
+        // Pages: follows the connection (see expectedMs); never reaches the cap by itself.
+        set(cap * (1 - Math.exp(-(Date.now() - started) / tau)));
+      }
       if (navigator.onLine === false) return;
       if (mode === 'send') {
         if (secs > 15) message('Still working — slow connection. Please keep this page open…', false);
@@ -130,7 +154,10 @@
       if (document.readyState === 'interactive') set(70);
     });
     var firstLoad = job;
-    window.addEventListener('load', function () { done(firstLoad); });
+    window.addEventListener('load', function () {
+      setTimeout(function () { try { var n = performance.getEntriesByType('navigation')[0]; learn(n ? n.loadEventEnd : performance.now()); } catch (e) {} }, 0);
+      done(firstLoad);
+    });
     // Don't hold the page behind slow images: once the content is ready, finish.
     document.addEventListener('DOMContentLoaded', function () { setTimeout(function () { done(firstLoad); }, 400); });
   }

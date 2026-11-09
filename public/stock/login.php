@@ -51,19 +51,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$title = 'Sign in';
+$title = 'Login';
+$__authLogin = true; // the picture-and-form sign-in layout (labels become placeholders)
 ob_start();
 ?>
-<h2>Welcome back</h2>
-<p class="sub">Sign in with your email and password. We'll email you a code to confirm it's you.</p>
+<h1 class="big">Login</h1>
 <form method="post" novalidate>
   <label for="em">Email</label>
-  <div class="fld"><i class="far fa-envelope"></i><input class="in" id="em" name="email" type="email" value="<?php echo sh($email); ?>" placeholder="you@company.com" autocomplete="username" autofocus required></div>
+  <div class="fld"><input class="in" id="em" name="email" type="email" value="<?php echo sh($email); ?>" placeholder="Email" autocomplete="username" autofocus required></div>
   <label for="pw">Password</label>
-  <div class="fld"><i class="fas fa-lock"></i><input class="in" id="pw" name="password" type="password" placeholder="Your password" autocomplete="current-password" required></div>
-  <button class="btn">Continue</button>
+  <div class="fld pw"><input class="in" id="pw" name="password" type="password" placeholder="Password" autocomplete="current-password" required>
+    <a class="flink" href="<?php echo stock_url('forgot.php'); ?>">Forgot password?</a></div>
+  <button class="btn">Login</button>
 </form>
-<div class="alt"><a class="link" href="<?php echo stock_url('forgot.php'); ?>">Forgot password?</a></div>
 <?php
 $content = ob_get_clean();
 include __DIR__ . '/_auth.php';

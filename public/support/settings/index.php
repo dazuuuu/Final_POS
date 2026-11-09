@@ -108,6 +108,43 @@ if (support_posted()) {
                 support_flash('Branding saved.');
             }
         }
+    } elseif ($action === 'stock_login') {
+        // Picture + welcome word of the Stock Control sign-in page (Branding::platform()).
+        $pfile = ROOT_PATH . '/app/config/platform.php';
+        $brand = is_file($pfile) ? (include $pfile) : [];
+        $brand = is_array($brand) ? $brand : [];
+        $err = '';
+        $brand['stock_welcome'] = mb_substr(trim((string) ($_POST['stock_welcome'] ?? '')), 0, 24);
+        $up = $_FILES['stock_login_img'] ?? null;
+        if (!empty($_POST['stock_login_reset'])) {
+            unset($brand['stock_login_img']);
+        } elseif ($up && ($up['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            $types = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp'];
+            $mime = $up['error'] === UPLOAD_ERR_OK ? (mime_content_type($up['tmp_name']) ?: '') : '';
+            if (!isset($types[$mime]) || $up['size'] > 8 * 1024 * 1024) {
+                $err = 'The picture must be a JPG, PNG or WEBP under 8 MB.';
+            } else {
+                $dir = ROOT_PATH . '/public/assets/uploads/platform';
+                if (!is_dir($dir)) @mkdir($dir, 0775, true);
+                $name = 'stock_login_' . bin2hex(random_bytes(4)) . '.' . $types[$mime];
+                if (move_uploaded_file($up['tmp_name'], "$dir/$name")) {
+                    $brand['stock_login_img'] = 'assets/uploads/platform/' . $name;
+                } else {
+                    $err = 'Could not save the picture — check folder permissions.';
+                }
+            }
+        }
+        if ($err) {
+            support_flash($err, 'danger');
+        } else {
+            $php = "<?php\n// app/config/platform.php — platform brand for the login screens. Edited from Support → Settings on " . date('Y-m-d H:i') . ".\n\nreturn " . var_export($brand, true) . ";\n";
+            if (@file_put_contents($pfile, $php, LOCK_EX) === false) {
+                support_flash('Could not write app/config/platform.php — check the folder permissions.', 'danger');
+            } else {
+                if (function_exists('opcache_invalidate')) @opcache_invalidate($pfile, true);
+                support_flash('Stock Control sign-in page saved.');
+            }
+        }
     } elseif ($action === 'login_bg') {
         // Background picture of the sign-in screen on phones (Branding::platform()['login_bg']).
         $pfile = ROOT_PATH . '/app/config/platform.php';
@@ -215,6 +252,22 @@ ob_start();
         <input class="form-control form-control-sm mb-2" type="file" name="brand_logo" accept="image/png,image/jpeg,image/webp,image/svg+xml">
         <label class="form-check small mb-2"><input class="form-check-input" type="checkbox" name="brand_reset" value="1"><span class="form-check-label">Use the default logo</span></label>
         <button class="btn btn-sm btn-primary">Save branding</button>
+      </form>
+    </div>
+    <div class="s-card mb-3">
+      <h2 class="h6 mb-1"><i class="fas fa-boxes-stacked me-1 text-primary"></i>Login forms — Stock Control</h2>
+      <p class="small text-muted">The big picture on the left of every Stock Control organisation's sign-in page, with a welcome word over it. Each organisation's own name and logo appear on the form beside it. A tall picture (about 3:4) works best.</p>
+      <form method="post" enctype="multipart/form-data">
+        <?php echo support_csrf_field(); ?><input type="hidden" name="action" value="stock_login">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <div style="width:72px;height:96px;border-radius:10px;flex:0 0 auto;background:<?php echo $brand['stock_login_img'] !== '' ? 'url(' . $h(json_encode($brand['stock_login_img'])) . ') center/cover' : 'linear-gradient(160deg,#0b1650,#1d4ed8 60%,#22c55e)'; ?>;display:flex;align-items:center;justify-content:center;color:#fff;font-size:.55rem;letter-spacing:.2em;font-weight:600"><?php echo $h(strtoupper($brand['stock_welcome'])); ?></div>
+          <div class="small">Now: <strong><?php echo $brand['stock_login_img'] !== '' ? 'your picture' : 'the built-in artwork (no picture uploaded)'; ?></strong></div>
+        </div>
+        <input class="form-control form-control-sm mb-2" type="file" name="stock_login_img" accept="image/jpeg,image/png,image/webp">
+        <label class="form-label small mb-0">Welcome word over the picture</label>
+        <input class="form-control form-control-sm mb-2" name="stock_welcome" maxlength="24" value="<?php echo $h($brand['stock_welcome']); ?>" placeholder="Welcome">
+        <?php if ($brand['stock_login_img'] !== ''): ?><label class="form-check small mb-2"><input class="form-check-input" type="checkbox" name="stock_login_reset" value="1"><span class="form-check-label">Remove the picture (use the built-in artwork)</span></label><?php endif; ?>
+        <button class="btn btn-sm btn-primary">Save sign-in page</button>
       </form>
     </div>
     <div class="s-card mb-3">
