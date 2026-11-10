@@ -6,6 +6,16 @@
 
 require_once __DIR__ . '/helpers/PathConfig.php';
 
+// Same log as the front controller (index.php): all PHP errors → app/storage/logs/php-errors.log.
+// If that folder can't be written, fall back to the system temp folder so a crash is never silent.
+(function () {
+    $dir = ROOT_PATH . '/app/storage/logs';
+    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+    $file = is_dir($dir) && is_writable($dir) ? $dir . '/php-errors.log' : rtrim(sys_get_temp_dir(), '/\\') . '/dazu-php-errors.log';
+    @ini_set('log_errors', '1');
+    @ini_set('error_log', $file);
+})();
+
 // The shop is in Kenya — fix this explicitly rather than trusting the host's
 // OS timezone (which PHP defaults to UTC from anyway when unset). Offers,
 // attendance day-boundaries, and every other "is this timestamp now/today"
@@ -31,9 +41,12 @@ if (PHP_SAPI !== 'cli') {
     $__failPage = function (string $detail = '') {
         if ($detail !== '') {
             $dir = ROOT_PATH . '/app/storage/logs';
-            if (!is_dir($dir)) { @mkdir($dir, 0750, true); }
-            @file_put_contents($dir . '/errors.log', '[' . date('Y-m-d H:i:s') . '] ' . ($_SERVER['REQUEST_METHOD'] ?? '') . ' '
-                . (parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '') . ' — ' . $detail . "\n", FILE_APPEND | LOCK_EX);
+            if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+            $line = '[' . date('Y-m-d H:i:s') . '] ' . ($_SERVER['REQUEST_METHOD'] ?? '') . ' '
+                . (parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '') . ' — ' . $detail . "\n";
+            if (@file_put_contents($dir . '/errors.log', $line, FILE_APPEND | LOCK_EX) === false) { // folder not writable: never lose the error
+                @file_put_contents(rtrim(sys_get_temp_dir(), '/\\') . '/dazu-errors.log', $line, FILE_APPEND | LOCK_EX);
+            }
             if (class_exists('Telemetry', false)) { Telemetry::error($detail); }
         }
         while (ob_get_level() > 0) { @ob_end_clean(); }

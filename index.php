@@ -14,6 +14,20 @@
 //
 // Only files inside public/ are ever served or run.
 
+// Every PHP error — warnings, fatal errors, even syntax errors in the files this
+// request loads — is written to app/storage/logs/php-errors.log (open it from the
+// hosting file manager, or use public/diagnose.php). This is the first PHP that
+// runs on every request, so a crash anywhere below leaves a trace there instead
+// of a bare "500" with nothing to read. (Never shown to visitors.)
+(function () {
+    $dir = __DIR__ . '/app/storage/logs';
+    if (!is_dir($dir)) { @mkdir($dir, 0775, true); }
+    if (is_dir($dir) && is_writable($dir)) {
+        @ini_set('log_errors', '1');
+        @ini_set('error_log', $dir . '/php-errors.log');
+    }
+})();
+
 $root = str_replace('\\', '/', __DIR__);
 $public = $root . '/public';
 
