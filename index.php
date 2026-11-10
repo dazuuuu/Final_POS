@@ -66,6 +66,13 @@ if (strpos($rel, '..') !== false || strpos($rel, "\0") !== false
     $home();
 }
 
+// Search engines: robots.txt and sitemap.xml are generated (public/seo.php).
+if ($rel === 'robots.txt' || $rel === 'sitemap.xml') {
+    $__seoFile = $rel;
+    require $public . '/seo.php';
+    exit;
+}
+
 // Old /public/… links → the same page without /public.
 if ($rel === 'public' || strpos($rel, 'public/') === 0) {
     header('Location: ' . $base . '/' . substr($rel, strlen('public/')) . $qs, true, 301);
@@ -125,7 +132,32 @@ if (strtolower(pathinfo($file, PATHINFO_EXTENSION)) !== 'php') {
         http_response_code(304);
         exit;
     }
-    header('Content-Length: ' . filesize($file));
+    // Video / audio: answer byte-range requests (Safari and iOS will not play a video without them).
+    $size = filesize($file);
+    if (in_array($ext, ['mp4', 'webm', 'mp3', 'wav'], true)) {
+        header('Accept-Ranges: bytes');
+        if (preg_match('/^bytes=(\d*)-(\d*)$/', trim($_SERVER['HTTP_RANGE'] ?? ''), $m) && ($m[1] !== '' || $m[2] !== '')) {
+            $from = $m[1] === '' ? max(0, $size - (int) $m[2]) : (int) $m[1];
+            $to = ($m[1] === '' || $m[2] === '') ? $size - 1 : min((int) $m[2], $size - 1);
+            if ($from > $to || $from >= $size) {
+                http_response_code(416);
+                header('Content-Range: bytes */' . $size);
+                exit;
+            }
+            http_response_code(206);
+            header('Content-Range: bytes ' . $from . '-' . $to . '/' . $size);
+            header('Content-Length: ' . ($to - $from + 1));
+            $fh = fopen($file, 'rb');
+            fseek($fh, $from);
+            for ($left = $to - $from + 1; $left > 0 && !feof($fh); $left -= 65536) {
+                echo fread($fh, (int) min(65536, $left));
+                flush();
+            }
+            fclose($fh);
+            exit;
+        }
+    }
+    header('Content-Length: ' . $size);
     readfile($file);
     exit;
 }

@@ -3,7 +3,7 @@
 // The mock-ups are built in HTML (no screenshots), styled like the real dashboard.
 ?>
 <section class="hero">
-  <div class="hero-bg"><span class="deco d1"></span><span class="deco d2"></span><span class="deco tri"></span></div>
+  <div class="hero-bg"<?php echo $heroStyle; ?>><?php echo $heroMedia; ?><span class="deco d1"></span><span class="deco d2"></span><span class="deco tri"></span></div>
   <div class="wrap">
     <div class="hero-in">
       <div class="kicker">Sell faster · Count stock right · Close the day on time</div>

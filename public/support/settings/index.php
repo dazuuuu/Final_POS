@@ -183,6 +183,105 @@ if (support_posted()) {
                 support_flash(!empty($_POST['login_bg_reset']) ? 'Login background removed — phones show the dark gradient.' : 'Login background saved. Open the sign-in page on a phone to see it.');
             }
         }
+    } elseif ($action === 'seo') {
+        // Website sharing & search wording (Branding::platform()['seo_*'], used by Seo).
+        $pfile = ROOT_PATH . '/app/config/platform.php';
+        $brand = is_file($pfile) ? (include $pfile) : [];
+        $brand = is_array($brand) ? $brand : [];
+        $err = '';
+        $brand['seo_title'] = mb_substr(trim((string) ($_POST['seo_title'] ?? '')), 0, 70);
+        $brand['seo_description'] = mb_substr(trim((string) ($_POST['seo_description'] ?? '')), 0, 200);
+        $url = rtrim(trim((string) ($_POST['seo_url'] ?? '')), '/');
+        if ($url !== '' && !preg_match('#^https?://[a-z0-9.-]+(:\d+)?$#i', $url)) {
+            $err = 'Website address must look like https://pos.dazuhub.com (no path).';
+        }
+        $brand['seo_url'] = $url;
+        $up = $_FILES['seo_image'] ?? null;
+        if (!empty($_POST['seo_image_reset'])) {
+            unset($brand['seo_image']);
+        } elseif (!$err && $up && ($up['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            $types = ['image/png' => 'png', 'image/jpeg' => 'jpg'];
+            $mime = $up['error'] === UPLOAD_ERR_OK ? (mime_content_type($up['tmp_name']) ?: '') : '';
+            if (!isset($types[$mime]) || $up['size'] > 5 * 1024 * 1024) {
+                $err = 'The share picture must be a JPG or PNG under 5 MB (1200 × 630 is ideal).';
+            } else {
+                $dir = ROOT_PATH . '/public/assets/uploads/platform';
+                if (!is_dir($dir)) @mkdir($dir, 0775, true);
+                $name = 'share_' . bin2hex(random_bytes(4)) . '.' . $types[$mime];
+                if (move_uploaded_file($up['tmp_name'], "$dir/$name")) {
+                    $brand['seo_image'] = 'assets/uploads/platform/' . $name;
+                } else {
+                    $err = 'Could not save the picture — check folder permissions.';
+                }
+            }
+        }
+        if ($err) {
+            support_flash($err, 'danger');
+        } else {
+            $php = "<?php\n// app/config/platform.php — platform brand for the login screens. Edited from Support → Settings on " . date('Y-m-d H:i') . ".\n\nreturn " . var_export($brand, true) . ";\n";
+            if (@file_put_contents($pfile, $php, LOCK_EX) === false) {
+                support_flash('Could not write app/config/platform.php — check the folder permissions.', 'danger');
+            } else {
+                if (function_exists('opcache_invalidate')) @opcache_invalidate($pfile, true);
+                support_flash('Website sharing & search details saved.');
+            }
+        }
+    } elseif ($action === 'look') {
+        // Landing hero colour / background and the side picture of the sign-in pages (Branding hero_*, login_media).
+        $pfile = ROOT_PATH . '/app/config/platform.php';
+        $brand = is_file($pfile) ? (include $pfile) : [];
+        $brand = is_array($brand) ? $brand : [];
+        $err = '';
+        $color = strtolower(trim((string) ($_POST['hero_color'] ?? '')));
+        if (!empty($_POST['hero_color_reset']) || $color === '') {
+            unset($brand['hero_color']);
+        } elseif (preg_match('/^#[0-9a-f]{6}$/', $color)) {
+            $brand['hero_color'] = $color;
+        } else {
+            $err = 'Pick the hero colour with the colour box.';
+        }
+        $types = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp', 'video/mp4' => 'mp4', 'video/webm' => 'webm', 'video/quicktime' => 'mp4'];
+        foreach (['hero_media' => 'hero', 'login_media' => 'login'] as $key => $pre) {
+            if ($err) break;
+            $link = trim((string) ($_POST[$key . '_link'] ?? ''));
+            $up = $_FILES[$key] ?? null;
+            if (!empty($_POST[$key . '_reset'])) {
+                unset($brand[$key]);
+            } elseif ($up && ($up['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+                $mime = $up['error'] === UPLOAD_ERR_OK ? (mime_content_type($up['tmp_name']) ?: '') : '';
+                if ($up['error'] === UPLOAD_ERR_INI_SIZE || $up['error'] === UPLOAD_ERR_FORM_SIZE) {
+                    $err = 'That file is bigger than the server allows (' . ini_get('upload_max_filesize') . '). Use a shorter / smaller video, or paste a YouTube link instead.';
+                } elseif (!isset($types[$mime]) || $up['size'] > 80 * 1024 * 1024) {
+                    $err = 'Upload a JPG, PNG, WEBP picture or an MP4 / WEBM video under 80 MB — or paste a link.';
+                } else {
+                    $dir = ROOT_PATH . '/public/assets/uploads/platform';
+                    if (!is_dir($dir)) @mkdir($dir, 0775, true);
+                    $name = $pre . '_media_' . bin2hex(random_bytes(4)) . '.' . $types[$mime];
+                    if (move_uploaded_file($up['tmp_name'], "$dir/$name")) {
+                        $brand[$key] = 'assets/uploads/platform/' . $name;
+                    } else {
+                        $err = 'Could not save the file — check folder permissions.';
+                    }
+                }
+            } elseif ($link !== '') {
+                if (!preg_match('#^https://[^\s<>"\']+$#i', $link)) {
+                    $err = 'Paste a full https:// link (YouTube, a .mp4 / .webm video, or a picture).';
+                } else {
+                    $brand[$key] = $link;
+                }
+            }
+        }
+        if ($err) {
+            support_flash($err, 'danger');
+        } else {
+            $php = "<?php\n// app/config/platform.php — platform brand for the login screens. Edited from Support → Settings on " . date('Y-m-d H:i') . ".\n\nreturn " . var_export($brand, true) . ";\n";
+            if (@file_put_contents($pfile, $php, LOCK_EX) === false) {
+                support_flash('Could not write app/config/platform.php — check the folder permissions.', 'danger');
+            } else {
+                if (function_exists('opcache_invalidate')) @opcache_invalidate($pfile, true);
+                support_flash('Look saved — open the landing page and the sign-in pages to see it.');
+            }
+        }
     } elseif ($action === 'org_create' && SupportOrg::isPlatformAdmin()) {
         [$org, $err] = SupportOrg::create((string) ($_POST['company'] ?? ''), (string) ($_POST['email'] ?? ''), (string) ($_POST['password'] ?? ''));
         support_flash($err ?? 'Support company created. Sign in at the support login with that email and password — it has its own accounts and team, hidden from every other company.', $err ? 'danger' : 'success');
@@ -268,6 +367,56 @@ ob_start();
         <input class="form-control form-control-sm mb-2" name="stock_welcome" maxlength="24" value="<?php echo $h($brand['stock_welcome']); ?>" placeholder="Welcome">
         <?php if ($brand['stock_login_img'] !== ''): ?><label class="form-check small mb-2"><input class="form-check-input" type="checkbox" name="stock_login_reset" value="1"><span class="form-check-label">Remove the picture (use the built-in artwork)</span></label><?php endif; ?>
         <button class="btn btn-sm btn-primary">Save sign-in page</button>
+      </form>
+    </div>
+    <div class="s-card mb-3">
+      <h2 class="h6 mb-1">Look — landing hero &amp; sign-in pictures</h2>
+      <p class="small text-muted">Make the public page and the owner / staff sign-in pages match the season. A picture or video can be uploaded or linked (YouTube plays muted, in a loop, behind the text). Leave a box empty to keep what is there now.</p>
+      <form method="post" enctype="multipart/form-data">
+        <?php echo support_csrf_field(); ?><input type="hidden" name="action" value="look">
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <label class="small mb-0">Hero colour</label>
+          <input type="color" name="hero_color" value="<?php echo $h($brand['hero_color'] !== '' ? $brand['hero_color'] : '#167d4c'); ?>" style="width:48px;height:32px;padding:0;border:0">
+          <?php if ($brand['hero_color'] !== ''): ?><label class="small"><input type="checkbox" name="hero_color_reset" value="1"> back to green</label><?php else: ?><span class="small text-muted">(green until you save)</span><?php endif; ?>
+        </div>
+        <div class="border rounded p-2 mb-3">
+          <div class="fw-semibold small mb-1">Landing hero background</div>
+          <div class="small text-muted mb-2">Behind the headline at the top of the public page (over the colour). A video should be short, 1080p or less, and under about 15 MB so it loads fast.</div>
+          <?php if ($brand['hero_media'] !== ''): ?><div class="small mb-2">Now: <strong><?php echo ['youtube' => 'YouTube video', 'video' => 'video', 'image' => 'picture'][SiteMedia::kind($brand['hero_media'])] ?? ''; ?></strong>
+            — <a href="<?php echo $h($brand['hero_media']); ?>" target="_blank" rel="noopener">view</a>
+            <label class="ms-2"><input type="checkbox" name="hero_media_reset" value="1"> remove</label></div><?php endif; ?>
+          <input class="form-control form-control-sm mb-1" type="file" name="hero_media" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm">
+          <input class="form-control form-control-sm" name="hero_media_link" placeholder="…or paste a link: https://youtu.be/…  or  https://…/video.mp4  or a picture link">
+        </div>
+        <div class="border rounded p-2 mb-3">
+          <div class="fw-semibold small mb-1">Side picture — owner / admin login and staff terminal</div>
+          <div class="small text-muted mb-2">Fills the left panel on computers and tablets; the sign-in form is not touched. (On phones the “Mobile login background” below is used.)</div>
+          <?php if ($brand['login_media'] !== ''): ?><div class="small mb-2">Now: <strong><?php echo ['youtube' => 'YouTube video', 'video' => 'video', 'image' => 'picture'][SiteMedia::kind($brand['login_media'])] ?? ''; ?></strong>
+            — <a href="<?php echo $h($brand['login_media']); ?>" target="_blank" rel="noopener">view</a>
+            <label class="ms-2"><input type="checkbox" name="login_media_reset" value="1"> remove</label></div><?php endif; ?>
+          <input class="form-control form-control-sm mb-1" type="file" name="login_media" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm">
+          <input class="form-control form-control-sm" name="login_media_link" placeholder="…or paste a link: https://youtu.be/…  or  https://…/video.mp4  or a picture link">
+        </div>
+        <button class="btn btn-sm btn-primary">Save look</button>
+      </form>
+    </div>
+    <div class="s-card mb-3">
+      <h2 class="h6 mb-1">Website sharing &amp; SEO</h2>
+      <p class="small text-muted">What Google shows and what WhatsApp / Facebook / X display when the link is shared. Leave a box empty to use the built-in wording and picture. After saving, test the link at the Facebook Sharing Debugger.</p>
+      <form method="post" enctype="multipart/form-data">
+        <?php echo support_csrf_field(); ?><input type="hidden" name="action" value="seo">
+        <label class="form-label small mb-0">Page title (max 70)</label>
+        <input class="form-control form-control-sm mb-2" name="seo_title" maxlength="70" value="<?php echo $h($brand['seo_title']); ?>" placeholder="<?php echo $h(Seo::title()); ?>">
+        <label class="form-label small mb-0">Description (max 200 — about 155 shows in Google)</label>
+        <textarea class="form-control form-control-sm mb-2" name="seo_description" rows="3" maxlength="200" placeholder="<?php echo $h(Seo::description()); ?>"><?php echo $h($brand['seo_description']); ?></textarea>
+        <label class="form-label small mb-0">Website address</label>
+        <input class="form-control form-control-sm mb-2" name="seo_url" value="<?php echo $h($brand['seo_url']); ?>" placeholder="<?php echo $h(Seo::origin()); ?>">
+        <label class="form-label small mb-0">Share picture (JPG/PNG, 1200 × 630)</label>
+        <div class="mb-2"><img src="<?php echo $h(Seo::image()[0]); ?>" alt="" style="max-width:240px;border-radius:8px;border:1px solid #ddd"></div>
+        <input class="form-control form-control-sm mb-2" type="file" name="seo_image" accept="image/jpeg,image/png">
+        <?php if ($brand['seo_image'] !== ''): ?><label class="form-check small mb-2"><input class="form-check-input" type="checkbox" name="seo_image_reset" value="1"><span class="form-check-label">Go back to the built-in picture</span></label><?php endif; ?>
+        <button class="btn btn-sm btn-primary">Save</button>
+        <a class="btn btn-sm btn-outline-secondary" href="<?php echo $h(Seo::abs('sitemap.xml')); ?>" target="_blank" rel="noopener">View sitemap</a>
       </form>
     </div>
     <div class="s-card mb-3">

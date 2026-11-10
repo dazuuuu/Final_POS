@@ -73,29 +73,39 @@ $bullets = function (string $desc): array {
 $tierOf = fn(string $desc) => preg_match('/\(([^)]*)\)/', $desc, $m) && strlen($m[1]) <= 24 ? rtrim($m[1], '.') : 'Pro';
 $demoEmail = (string) ($old['email'] ?? $_GET['email'] ?? ($demoDone['email'] ?? ''));
 $C = __DIR__;
+// Hero look (Support → Settings → Look): own colour and/or a background picture or video.
+$heroStyle = '';
+if ($brand['hero_color'] !== '') {
+    $heroStyle = ' style="background:linear-gradient(135deg,' . SiteMedia::shade($brand['hero_color'], -0.55) . ' 0%,' . SiteMedia::shade($brand['hero_color'], -0.25) . ' 48%,' . $brand['hero_color'] . ' 100%)"';
+}
+$heroMedia = SiteMedia::layer($brand['hero_media'], $brand['hero_color'] !== '' ? 'linear-gradient(135deg,' . $brand['hero_color'] . 'b3,' . SiteMedia::shade($brand['hero_color'], -0.55) . 'cc)' : 'linear-gradient(135deg,rgba(8,48,29,.62),rgba(17,97,59,.45))');
+$faq = Seo::faq($brand, $catalog);
 ?><!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title><?php echo $h($brand['name']); ?> — Point of sale for Kenyan shops, salons and electronics stores</title>
-<meta name="description" content="<?php echo $h($brand['name']); ?>: sell, track stock, give credit, pay commissions and print receipts. Try a live demo with your email.">
+<?php echo Seo::landing($brand, $catalog, $faq); ?>
 <meta name="theme-color" content="#0c3d26">
 <link rel="icon" type="image/png" href="<?php echo $h(public_url('assets/icons/favicon-32.png')); ?>">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <link rel="stylesheet" href="<?php echo $h(public_url('assets/css/landing.css')); ?>">
+<style><?php echo SiteMedia::css(); ?></style>
 </head>
 <body class="lp">
 <?php
 include $C . '/header.php';
+echo '<main id="main">';
 include $C . '/hero.php';
 include $C . '/features.php';
 include $C . '/showcase.php';
 include $C . '/packages.php';
 include $C . '/demo.php';
 include $C . '/start.php';
+include $C . '/faq.php';
+echo '</main>';
 include $C . '/footer.php';
 ?>
 <script>

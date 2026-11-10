@@ -3,7 +3,7 @@
 ?>
 <header class="lp-head">
   <div class="wrap">
-    <a class="brand" href="<?php echo $h($lpUrl); ?>"><img src="<?php echo $h($brand['logo']); ?>" alt=""><span class="nm"><?php echo $h($brand['name']); ?></span></a>
+    <a class="brand" href="<?php echo $h($lpUrl); ?>"><img src="<?php echo $h($brand['logo']); ?>" alt="<?php echo $h($brand['name']); ?> logo" width="36" height="36"><span class="nm"><?php echo $h($brand['name']); ?></span></a>
     <ul class="nav">
       <li><a href="#features">Features</a></li>
       <li><a href="#tour">How it looks</a></li>

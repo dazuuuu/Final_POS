@@ -28,7 +28,7 @@ $__authText = $__authText ?? $__authBrand['name'] . ' is the point of sale for m
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title><?php echo htmlspecialchars($page_title ?? 'Sign in'); ?> — <?php echo htmlspecialchars($__authShop); ?></title>
+    <?php echo Seo::auth((string) ($page_title ?? 'Sign in'), (string) $__authShop); ?>
     <?php include __DIR__ . '/../../components/pwa_head.php'; ?>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -103,13 +103,21 @@ $__authText = $__authText ?? $__authBrand['name'] . ' is the point of sale for m
           .form-control{font-size:16px!important;min-height:46px;}
         }
         @media(max-width:520px){ .auth-art{display:none;} .auth-side{padding-top:36px;} .auth-card{padding:24px 18px;box-shadow:none;border:1px solid #eceef1;} }
+        /* picture / video chosen in Support → Settings → Look: fills the left panel only, the form is untouched */
+        .auth-art.has-media{background:#0c3d26;}
+        .auth-art.has-media .art{display:none;}
+        .auth-art.has-media h2,.auth-art.has-media p{position:relative;z-index:1;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.45);margin-top:auto;}
+        .auth-art.has-media h2{margin-top:auto;} .auth-art.has-media p{color:#e8f3ec;margin-bottom:0;}
+        <?php echo SiteMedia::css(); ?>
     </style>
     <?php if (!empty($__authHero)) include __DIR__ . '/../../components/login_hero.php'; /* last: wins over the page's own styles */ ?>
 </head>
 <body class="<?php echo !empty($__authHero) ? 'lh' : ''; ?>">
 <?php include __DIR__ . '/../../components/boot_splash.php'; ?>
 <div class="auth-split">
-  <section class="auth-art" aria-hidden="true">
+  <?php $__authMedia = SiteMedia::layer($__authBrand['login_media'] ?? '', 'linear-gradient(180deg,rgba(6,24,15,.15),rgba(6,24,15,.6))'); ?>
+  <section class="auth-art<?php echo $__authMedia !== '' ? ' has-media' : ''; ?>" aria-hidden="true">
+    <?php echo $__authMedia; ?>
     <div class="art">
       <span class="dot"></span><span class="sq a"></span><span class="sq b"></span>
       <div class="screen"><div class="screen-in">

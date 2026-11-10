@@ -72,6 +72,16 @@ class Branding
             'boot_sound' => !empty($cfg['boot_sound']) ? public_url(self::normalizeStoredPath($cfg['boot_sound'])) : '',
             // Background picture of the sign-in screen on phones (Support → Settings). Empty: a dark gradient.
             'login_bg' => !empty($cfg['login_bg']) ? public_url(self::normalizeStoredPath($cfg['login_bg'])) : '',
+            // Landing hero colour + background and the side picture of the owner / staff sign-in pages
+            // (Support → Settings → Look). media = a picture or video: an uploaded file or a link (see SiteMedia).
+            'hero_color' => preg_match('/^#[0-9a-f]{6}$/i', (string) ($cfg['hero_color'] ?? '')) ? strtolower($cfg['hero_color']) : '',
+            'hero_media' => SiteMedia::resolve((string) ($cfg['hero_media'] ?? '')),
+            'login_media' => SiteMedia::resolve((string) ($cfg['login_media'] ?? '')),
+            // Website sharing & search (Support → Settings → Website sharing & SEO). Empty = built-in defaults (see Seo).
+            'seo_title' => trim((string) ($cfg['seo_title'] ?? '')),
+            'seo_description' => trim((string) ($cfg['seo_description'] ?? '')),
+            'seo_url' => rtrim(trim((string) ($cfg['seo_url'] ?? '')), '/'),
+            'seo_image' => !empty($cfg['seo_image']) ? public_url(self::normalizeStoredPath($cfg['seo_image'])) : '',
             // Stock Control sign-in page (Support → Settings → Login forms): the big picture and its welcome word.
             'stock_login_img' => !empty($cfg['stock_login_img']) ? public_url(self::normalizeStoredPath($cfg['stock_login_img'])) : '',
             'stock_welcome' => trim((string) ($cfg['stock_welcome'] ?? '')) !== '' ? trim((string) $cfg['stock_welcome']) : 'Welcome',
@@ -84,7 +94,7 @@ class Branding
      * prefix). Strip that down to a path relative to the public root so it
      * can be safely passed through public_url().
      */
-    private static function normalizeStoredPath(string $path): string
+    public static function normalizeStoredPath(string $path): string
     {
         $path = ltrim($path, '/');
         if (strpos($path, 'public/') === 0) {

@@ -11,7 +11,7 @@
   <div class="wrap">
     <div class="cols">
       <div>
-        <a class="brand" href="<?php echo $h($lpUrl); ?>"><img src="<?php echo $h($brand['logo']); ?>" alt=""><span><?php echo $h($brand['name']); ?></span></a>
+        <a class="brand" href="<?php echo $h($lpUrl); ?>"><img src="<?php echo $h($brand['logo']); ?>" alt="<?php echo $h($brand['name']); ?> logo" width="36" height="36"><span><?php echo $h($brand['name']); ?></span></a>
         <p style="max-width:300px">Point of sale for shops, salons and electronics stores — sales, stock, credit, staff and receipts in one place.</p>
       </div>
       <div><h4>Product</h4><a href="#features">Features</a><a href="#tour">How it looks</a><a href="#packages">Packages</a><a href="#demo">Live demo</a></div>
