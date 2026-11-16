@@ -50,6 +50,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'settl
 $items = $order ? $O->items((int) $order['id']) : [];
 $payments = $order ? $O->payments((int) $order['id']) : [];
 $openOrders = $order ? [] : $O->openOrders();
+$creditsUrl = public_url($area . '/credits/');
+$nameKey = fn($n) => mb_strtolower(trim((string) $n));
+
+// Everything this customer currently owes (all their open credit sales), with the items on each —
+// shown with the invoice being paid, and as one block per customer in the list.
+$custOpen = [];
+if ($order) {
+    foreach ($O->openOrders() as $o2) {
+        if ((int) $o2['id'] === (int) $order['id']) continue;
+        if (($order['customer_id'] && (int) $o2['customer_id'] === (int) $order['customer_id']) || $nameKey($o2['table_name']) === $nameKey($order['table_name'])) { $custOpen[] = $o2; }
+    }
+}
+$itemsBy = $O->itemsForMany(array_merge(array_column($custOpen, 'id'), array_column($openOrders, 'id')));
+$groups = [];
+foreach ($openOrders as $o2) {
+    $k = $o2['customer_id'] ? 'c' . $o2['customer_id'] : 'n' . $nameKey($o2['table_name']);
+    $groups[$k]['rows'][] = $o2;
+    $groups[$k]['owed'] = ($groups[$k]['owed'] ?? 0) + Models\OrderModel::balanceDue($o2);
+}
+uasort($groups, fn($a, $b) => $b['owed'] <=> $a['owed']);
 $page_title = 'Payments';
 ob_start();
 ?>
@@ -79,23 +99,36 @@ ob_start();
       <?php if (!$openOrders): ?>
         <div class="text-muted small">No unpaid credit sales. 🎉</div>
       <?php else: ?>
-      <div class="table-responsive">
+      <?php foreach ($groups as $g): $first = $g['rows'][0]; $many = count($g['rows']) > 1; ?>
+      <div class="border rounded mb-3" style="overflow:hidden;">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 px-3 py-2" style="background:#f8faf9;">
+          <div>
+            <div class="fw-bold"><?php echo htmlspecialchars($first['table_name']); ?></div>
+            <div class="text-muted" style="font-size:.74rem;"><?php echo !empty($first['customer_phone']) ? htmlspecialchars($first['customer_phone']) . ' · ' : ''; ?><?php echo count($g['rows']); ?> unpaid invoice<?php echo $many ? 's' : ''; ?></div>
+          </div>
+          <div class="text-end">
+            <div class="text-muted" style="font-size:.7rem;">OWES IN TOTAL</div>
+            <div class="fw-bold text-danger fs-5"><?php echo number_format($g['owed'], 0); ?></div>
+            <?php if (!empty($first['customer_id'])): ?><a class="small" href="<?php echo $creditsUrl . '?tab=customers&customer=' . (int) $first['customer_id']; ?>">Full account · pay across invoices</a><?php endif; ?>
+          </div>
+        </div>
+        <div class="table-responsive">
         <table class="table table-sm align-middle mb-0">
-          <thead><tr class="small text-muted text-uppercase"><th>Customer</th><th>Invoice</th><th class="text-end">Total</th><th class="text-end">Paid</th><th class="text-end">Balance</th><th></th></tr></thead>
           <tbody>
-          <?php foreach ($openOrders as $o): $bal = Models\OrderModel::balanceDue($o); ?>
+          <?php foreach ($g['rows'] as $o): $bal = Models\OrderModel::balanceDue($o); ?>
             <tr>
-              <td class="fw-semibold small"><?php echo htmlspecialchars($o['table_name']); ?><div class="text-muted" style="font-size:.72rem;"><?php echo date('j M Y', strtotime($o['created_at'])); ?><?php echo !empty($o['customer_phone']) ? ' · ' . htmlspecialchars($o['customer_phone']) : ''; ?></div></td>
-              <td class="small"><?php echo htmlspecialchars($o['receipt_number']); ?></td>
-              <td class="small text-end"><?php echo number_format((float) $o['total'], 0); ?></td>
-              <td class="small text-end text-success"><?php echo number_format((float) $o['amount_paid'], 0); ?></td>
+              <td class="small" style="min-width:150px;"><b><?php echo htmlspecialchars($o['receipt_number']); ?></b><div class="text-muted" style="font-size:.72rem;"><?php echo date('j M Y', strtotime($o['created_at'])); ?></div></td>
+              <td class="small text-muted"><?php echo Models\SaleModel::itemsSummaryHtml($itemsBy[(int) $o['id']] ?? [], 4); ?></td>
+              <td class="small text-end text-nowrap">Total <?php echo number_format((float) $o['total'], 0); ?><br><span class="text-success">Paid <?php echo number_format((float) $o['amount_paid'], 0); ?></span></td>
               <td class="small text-end fw-bold text-danger"><?php echo number_format($bal, 0); ?></td>
               <td class="text-end"><a class="btn btn-sm btn-success" href="<?php echo $selfUrl . '?receipt=' . urlencode($o['receipt_number']); ?>">Receive</a></td>
             </tr>
           <?php endforeach; ?>
           </tbody>
         </table>
+        </div>
       </div>
+      <?php endforeach; ?>
       <?php endif; ?>
     </div>
   </div>
@@ -120,6 +153,20 @@ ob_start();
         <a data-receipt-popup class="btn btn-sm btn-outline-secondary" href="<?php echo public_url($area . '/orders/receipt.php?id=' . (int) $order['id']); ?>"><i class="fas fa-receipt me-1"></i>Receipt</a>
       </div>
     </div>
+
+    <?php if ($custOpen): $custOwed = $balanceNow = 0; foreach ($custOpen as $o2) { $custOwed += Models\OrderModel::balanceDue($o2); } ?>
+      <div class="rounded p-3 mb-3" style="background:#fff7f7;border:1px solid #fecaca;">
+        <div class="d-flex justify-content-between fw-bold text-danger mb-1"><span><?php echo htmlspecialchars($order['table_name']); ?> has other unpaid credits</span><span>KES <?php echo number_format($custOwed, 0); ?></span></div>
+        <?php foreach ($custOpen as $o2): ?>
+          <div class="d-flex justify-content-between gap-2 border-top py-1 small">
+            <div><a href="<?php echo $selfUrl . '?receipt=' . urlencode($o2['receipt_number']); ?>"><b><?php echo htmlspecialchars($o2['receipt_number']); ?></b></a> · <?php echo date('j M Y', strtotime($o2['created_at'])); ?>
+              <div class="text-muted"><?php echo Models\SaleModel::itemsSummaryHtml($itemsBy[(int) $o2['id']] ?? [], 6); ?></div></div>
+            <div class="fw-semibold text-danger text-nowrap">KES <?php echo number_format(Models\OrderModel::balanceDue($o2), 0); ?></div>
+          </div>
+        <?php endforeach; ?>
+        <?php if (!empty($order['customer_id'])): ?><div class="mt-1 small"><a href="<?php echo $creditsUrl . '?tab=customers&customer=' . (int) $order['customer_id']; ?>">Pay across all their invoices →</a></div><?php endif; ?>
+      </div>
+    <?php endif; ?>
 
     <?php foreach ($items as $it): ?>
       <div class="d-flex justify-content-between border-bottom py-2">

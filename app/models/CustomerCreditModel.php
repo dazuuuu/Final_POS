@@ -24,9 +24,23 @@ class CustomerCreditModel
         return (int) \TenantContext::tenantId();
     }
 
+    /**
+     * Open credit sales typed with the name of a saved customer but not linked to them (a name typed
+     * in full instead of picked from the list) join that customer's balance.
+     */
+    public function linkOpenOrders(): void
+    {
+        try {
+            $this->db->prepare("UPDATE orders o JOIN customers c ON c.tenant_id = o.tenant_id AND LOWER(TRIM(c.name)) = LOWER(TRIM(o.table_name))
+                                   SET o.customer_id = c.id WHERE o.tenant_id = ? AND o.status = 'open' AND o.customer_id IS NULL")
+                     ->execute([$this->tid()]);
+        } catch (\Throwable $e) { /* orders.customer_id not there yet */ }
+    }
+
     /** Customers who owe, with their total balance, newest debt first. */
     public function owing(string $q = ''): array
     {
+        $this->linkOpenOrders();
         $tid = $this->tid();
         $sql = "SELECT c.id, c.name, c.phone,
                        COALESCE(m.bal, 0) AS book, COALESCE(o.bal, 0) AS sales, COALESCE(m.n, 0) + COALESCE(o.n, 0) AS invoices,
@@ -47,6 +61,7 @@ class CustomerCreditModel
     /** Every open invoice of a customer (oldest first): ['key' => 'm:ID'|'o:ID', 'label', 'date', 'total', 'paid', 'balance']. */
     public function openInvoices(int $customerId): array
     {
+        $this->linkOpenOrders();
         $tid = $this->tid();
         $out = [];
         $m = $this->db->prepare("SELECT id, amount, amount_paid, notes, credit_date, created_at FROM manual_credits WHERE tenant_id = ? AND customer_id = ? AND status = 'open'");

@@ -100,6 +100,11 @@ class OrderModel extends Model
 
             $discountIn = round((float) ($in['discount_amount'] ?? 0), 2);
             $customerId = (int) ($in['customer_id'] ?? 0) ?: null;
+            if (!$customerId && $channel === 'tab') { // a credit tab typed with a saved customer's name belongs to that customer
+                $cu = $db->prepare('SELECT id FROM customers WHERE tenant_id = ? AND LOWER(TRIM(name)) = LOWER(?) LIMIT 1');
+                $cu->execute([$tid, $tableName]);
+                $customerId = (int) $cu->fetchColumn() ?: null;
+            }
             $company = trim((string) ($in['customer_company'] ?? ''));
             $location = trim((string) ($in['customer_location'] ?? ''));
             $deliveryPerson = trim((string) ($in['delivery_person'] ?? ''));

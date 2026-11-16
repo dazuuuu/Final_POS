@@ -60,6 +60,11 @@ $userFilter = $everyone ? $staffFilter : $me; // others: only their own sales
 
 $mine = DaySales::open($pdo, $tenantId, $me);
 $mineNow = DaySales::totalFor($pdo, $tenantId, $bizDay, $bizDay, $me);
+// Opening sales = everything sold today so far. Closing sales = what yesterday closed with,
+// shown until 12:00 noon and then dropped, leaving just today's sales.
+$showClosing = DaySales::showClosing();
+$mineYest = $showClosing ? DaySales::yesterday($pdo, $tenantId, $me) : null;
+$shopYest = ['total' => 0.0, 'count' => 0];
 
 // Today, all shops in scope together.
 $shopNow = ['total' => 0.0, 'count' => 0];
@@ -71,8 +76,10 @@ foreach ($scope as $sid => $sname) {
     if ($everyone) {
         $t = DaySales::totalFor($pdo, $sid, $bizDay, $bizDay);
         $shopNow['total'] += $t['total']; $shopNow['count'] += $t['count'];
-        $sd = DaySales::session($pdo, $sid, 0, $bizDay);
-        $shopOpening += (float) ($sd['opening_sales'] ?? 0);
+        if ($showClosing) {
+            $y = DaySales::yesterday($pdo, $sid);
+            $shopYest['total'] += $y['total']; $shopYest['count'] += $y['count'];
+        }
         foreach (DaySales::sessions($pdo, $sid, $bizDay, $bizDay) as $r) {
             if ((int) $r['user_id'] === 0) continue;
             $r['shop'] = $sname;
@@ -81,7 +88,8 @@ foreach ($scope as $sid => $sname) {
         }
     }
     foreach (DaySales::sales($pdo, $sid, $from, $to, $userFilter) as $r) { $r['shop'] = $sname; $sales[] = $r; }
-    foreach (DaySales::sessions($pdo, $sid, $from, $to) as $r) {
+    // History: the last 30 days (or the chosen range if it reaches further back), saved automatically each evening.
+    foreach (DaySales::sessions($pdo, $sid, min($from, date('Y-m-d', strtotime('-30 day'))), max($to, $bizDay)) as $r) {
         if (!$everyone && (int) $r['user_id'] !== $me) continue;
         if ($everyone && $staffFilter && (int) $r['user_id'] !== $staffFilter) continue;
         $r['shop'] = $sname;
@@ -167,21 +175,20 @@ ob_start();
     <h2 class="h5 fw-bold mb-3"><i class="fas fa-store me-2 text-primary"></i><?php echo $multi ? 'All shops' : 'Whole shop'; ?> <span class="text-muted fw-normal small">· today, <?php echo date('l j M', strtotime($bizDay)); ?></span>
       <?php if (!$shopOpen): ?><span class="badge bg-secondary ms-1">Closed</span><?php endif; ?></h2>
     <div class="ds-tiles mb-3">
-      <div><span>Opening sales</span><strong><?php echo $money($shopOpening); ?></strong></div>
-      <div><span>Closing sales (so far)</span><strong class="text-success"><?php echo $money($shopNow['total']); ?></strong></div>
-      <div><span>Sales made</span><strong><?php echo (int) $shopNow['count']; ?></strong></div>
+      <div><span>Opening sales · today so far</span><strong class="text-success"><?php echo $money($shopNow['total']); ?></strong></div>
+      <?php if ($showClosing): ?><div><span>Closing sales · <?php echo date('D j M', strtotime('-1 day')); ?></span><strong><?php echo $money($shopYest['total']); ?></strong><small class="text-muted"><?php echo (int) $shopYest['count']; ?> sales · shown until 12:00 pm</small></div><?php endif; ?>
+      <div><span>Sales made today</span><strong><?php echo (int) $shopNow['count']; ?></strong></div>
       <div><span>People working</span><strong><?php echo count($staffToday); ?></strong></div>
     </div>
     <?php if ($staffToday): ?>
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-      <thead><tr class="text-muted small text-uppercase"><th>Person</th><?php if ($multi): ?><th>Shop</th><?php endif; ?><th>Started</th><th class="text-end">Opening</th><th class="text-end">Closing</th><th>Their day</th></tr></thead>
+      <thead><tr class="text-muted small text-uppercase"><th>Person</th><?php if ($multi): ?><th>Shop</th><?php endif; ?><th>Started</th><th class="text-end">Sold today</th><th>Their day</th></tr></thead>
       <tbody>
       <?php foreach ($staffToday as $r): ?>
         <tr>
           <td class="small fw-semibold"><a href="<?php echo $h($qs(['staff' => $r['user_id']])); ?>"><?php echo $h($r['username'] ?? '—'); ?></a></td>
           <?php if ($multi): ?><td class="small text-muted"><?php echo $h($r['shop']); ?></td><?php endif; ?>
           <td class="small text-muted"><?php echo date('g:i a', strtotime($r['opened_at'])); ?></td>
-          <td class="small text-end"><?php echo $money($r['opening_sales']); ?></td>
           <td class="small text-end fw-semibold"><?php echo $money($r['now']); ?></td>
           <td class="small"><?php echo $r['closed_at'] ? 'Closed ' . date('g:i a', strtotime($r['closed_at'])) : '<span class="text-success">Open</span>'; ?></td>
         </tr>
@@ -208,9 +215,9 @@ ob_start();
     </div>
     <div class="ds-tiles">
       <div><span>Opened at</span><strong><?php echo date('g:i a', strtotime($mine['opened_at'])); ?></strong></div>
-      <div><span>Opening sales</span><strong><?php echo $money($mine['opening_sales']); ?></strong></div>
-      <div><span>Closing sales (so far)</span><strong class="text-success"><?php echo $money($mineNow['total']); ?></strong></div>
-      <div><span>Sales made</span><strong><?php echo (int) $mineNow['count']; ?></strong></div>
+      <div><span>Opening sales · today so far</span><strong class="text-success"><?php echo $money($mineNow['total']); ?></strong></div>
+      <?php if ($mineYest): ?><div><span>Closing sales · <?php echo date('D j M', strtotime('-1 day')); ?></span><strong><?php echo $money($mineYest['total']); ?></strong><small class="text-muted"><?php echo (int) $mineYest['count']; ?> sales · until 12:00 pm</small></div><?php endif; ?>
+      <div><span>Sales made today</span><strong><?php echo (int) $mineNow['count']; ?></strong></div>
     </div>
   </div>
 </div>
@@ -241,19 +248,21 @@ ob_start();
 <?php if ($sessions): ?>
 <div class="card border-0 shadow-sm mb-4" style="border-radius:14px;">
   <div class="card-body p-4">
-    <h2 class="h6 fw-bold mb-3">Opening &amp; closing<?php echo $everyone ? ' — every person' : ''; ?></h2>
+    <h2 class="h6 fw-bold mb-1">Sales history<?php echo $everyone ? ' — every person' : ''; ?></h2>
+    <div class="small text-muted mb-3">Each evening the day's sales report is saved here by itself (the last 30 days).</div>
     <div class="table-responsive"><table class="table table-sm align-middle mb-0">
-      <thead><tr class="text-muted small text-uppercase"><th>Date</th><th>Person</th><?php if ($multi): ?><th>Shop</th><?php endif; ?><th>Opened</th><th class="text-end">Opening</th><th>Closed</th><th class="text-end">Closing</th></tr></thead>
+      <thead><tr class="text-muted small text-uppercase"><th>Date</th><th>Person</th><?php if ($multi): ?><th>Shop</th><?php endif; ?><th class="text-end">Sales</th><th class="text-end">Total sold</th><th>Status</th><th></th></tr></thead>
       <tbody>
-      <?php foreach ($sessions as $s): ?>
+      <?php foreach ($sessions as $s):
+          $cnt = $s['day'] === $bizDay ? DaySales::totalFor($pdo, (int) ($s['tenant_id'] ?? $tenantId), $s['day'], $s['day'], (int) $s['user_id'] ?: null)['count'] : (int) $s['closing_count']; ?>
         <tr>
           <td class="small"><?php echo date('D j M', strtotime($s['day'])); ?></td>
           <td class="small fw-semibold"><?php echo $h($s['username'] ?? '—'); ?></td>
           <?php if ($multi): ?><td class="small text-muted"><?php echo $h($s['shop']); ?></td><?php endif; ?>
-          <td class="small text-muted"><?php echo date('g:i a', strtotime($s['opened_at'])); ?></td>
-          <td class="small text-end"><?php echo $money($s['opening_sales']); ?></td>
-          <td class="small"><?php echo $s['closed_at'] ? date('g:i a', strtotime($s['closed_at'])) : '<span class="badge bg-success-subtle text-success">Open</span>'; ?></td>
+          <td class="small text-end"><?php echo $cnt; ?></td>
           <td class="small text-end fw-semibold"><?php echo $money($s['shown']); ?></td>
+          <td class="small"><?php echo $s['day'] === $bizDay ? '<span class="badge bg-success-subtle text-success">Today</span>' : '<span class="text-muted">Saved</span>'; ?></td>
+          <td class="small text-end"><?php if ((int) $s['user_id'] === 0 || !$everyone): ?><a href="<?php echo $h('?' . http_build_query(['from' => $s['day'], 'to' => $s['day'], 'pdf' => 1] + (count($allShops) > 1 ? ['shop' => $shopParam] : []))); ?>" title="PDF">PDF</a> · <a href="<?php echo $h('?' . http_build_query(['from' => $s['day'], 'to' => $s['day'], 'excel' => 1] + (count($allShops) > 1 ? ['shop' => $shopParam] : []))); ?>" title="Excel">Excel</a><?php endif; ?></td>
         </tr>
       <?php endforeach; ?>
       </tbody>
@@ -308,7 +317,8 @@ ob_start();
 </div>
 
 <style>
-.ds-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.ds-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
+.ds-tiles small{display:block;font-size:.7rem;}
 .ds-tiles>div{background:#f7f9f8;border-radius:10px;padding:12px;}
 .ds-tiles span{display:block;font-size:.7rem;color:#8a8f96;text-transform:uppercase;letter-spacing:.04em;}
 .ds-tiles strong{font-size:1.1rem;overflow-wrap:anywhere;}

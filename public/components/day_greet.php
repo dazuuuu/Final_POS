@@ -23,9 +23,12 @@ $__dgHello = $__dgH < 12 ? 'Good morning' : ($__dgH < 17 ? 'Good afternoon' : 'G
     <h2 id="dgTitle" class="h5 fw-bold mb-1"><?php echo $__dgHello; ?>, <?php echo htmlspecialchars($_SESSION['username'] ?? ''); ?></h2>
     <div class="text-muted small mb-3"><?php echo date('l, j F Y'); ?> · day opened at <?php echo date('g:i a', strtotime($__dgS['opened_at'])); ?></div>
     <div class="dg-tiles">
-      <div><span>Opening sales</span><strong><?php echo $__dgCur . ' ' . number_format((float) $__dgS['opening_sales'], 0); ?></strong></div>
-      <div><span>Closing sales (so far)</span><strong class="text-success"><?php echo $__dgCur . ' ' . number_format($__dgNow['total'], 0); ?></strong>
-        <small><?php echo (int) $__dgNow['count']; ?> sale<?php echo $__dgNow['count'] === 1 ? '' : 's'; ?> today</small></div>
+      <div><span>Opening sales · today</span><strong class="text-success"><?php echo $__dgCur . ' ' . number_format($__dgNow['total'], 0); ?></strong>
+        <small><?php echo (int) $__dgNow['count']; ?> sale<?php echo $__dgNow['count'] === 1 ? '' : 's'; ?> so far</small></div>
+      <?php if (DaySales::showClosing()): $__dgY = DaySales::yesterday($__dgDb, (int) TenantContext::tenantId(), (int) TenantContext::userId()); ?>
+      <div><span>Closing sales · yesterday</span><strong><?php echo $__dgCur . ' ' . number_format($__dgY['total'], 0); ?></strong>
+        <small><?php echo (int) $__dgY['count']; ?> sale<?php echo $__dgY['count'] === 1 ? '' : 's'; ?></small></div>
+      <?php endif; ?>
     </div>
     <div class="d-flex gap-2 mt-3">
       <a class="btn btn-outline-secondary flex-fill" href="<?php echo public_url('super/day/'); ?>"><i class="fas fa-file-arrow-down me-1"></i>Day report</a>

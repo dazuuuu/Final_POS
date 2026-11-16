@@ -56,7 +56,10 @@ class Database
     {
         static $db = null;
         $db ??= preg_replace('/\W/', '_', (string) self::pdo()->query('SELECT DATABASE()')->fetchColumn());
-        return ROOT_PATH . '/app/storage/' . $name . '_' . $db . '.ok';
+        // If app/storage can't be written (a permissions slip on the host), keep the marker in the system temp
+        // folder instead — otherwise the once-only table checks would re-run on every request and slow every page.
+        $dir = is_writable(ROOT_PATH . '/app/storage') ? ROOT_PATH . '/app/storage' : rtrim(sys_get_temp_dir(), '/\\');
+        return $dir . '/' . $name . '_' . $db . '.ok';
     }
 
     /** For tests: inject a pre-built PDO (e.g. a throwaway test database). */
@@ -113,10 +116,21 @@ class Database
         // a timeout — is a passing hiccup: the user gets a calm "reconnecting"
         // page that retries by itself, never the wizard (which shows SQL).
         $attempt = function () {
+            // After the first successful check the (slow, on shared hosting) information_schema lookup is
+            // skipped: a plain SELECT 1 proves the connection works. The marker is per database and per install.
+            $flag = self::marker('db_tables_ok');
+            if (is_file($flag)) {
+                self::pdo()->query('SELECT 1');
+                return ['state' => 'ok', 'error' => ''];
+            }
             $n = (int) self::pdo()->query(
                 "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('roles', 'users', 'tenants')"
             )->fetchColumn();
-            return $n === 3 ? ['state' => 'ok', 'error' => ''] : ['state' => 'needs_setup', 'error' => 'The database has no tables yet.'];
+            if ($n === 3) {
+                @file_put_contents($flag, date('c'));
+                return ['state' => 'ok', 'error' => ''];
+            }
+            return ['state' => 'needs_setup', 'error' => 'The database has no tables yet.'];
         };
         for ($try = 1; ; $try++) {
             try {

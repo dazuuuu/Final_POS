@@ -177,6 +177,7 @@ class DaySales
         self::ensure($db);
         $today = date('Y-m-d');
         $now = date('Y-m-d H:i:s');
+        self::backfill($db, $tenantId, $today);
         $st = $db->prepare('SELECT * FROM day_sessions WHERE tenant_id = ? AND (final = 0 AND day < ? OR closed_at IS NULL AND day = ?)');
         $st->execute([$tenantId, $today, $today]);
         $fin = $db->prepare('UPDATE day_sessions SET closed_at = COALESCE(closed_at, ?), closing_sales = ?, closing_count = ?, final = 1 WHERE id = ?');
@@ -187,9 +188,72 @@ class DaySales
                 $t = self::sumBetween($db, $tenantId, $w['from'], $w['end'], (int) $s['user_id'] ?: null);
                 $fin->execute([$w['close'], $t['total'], $t['count'], $s['id']]);
             } elseif ($w['close'] <= $now) {
-                $shut->execute([$w['close'], $s['id']]);
+                // Closing time passed: the evening report is saved to the history now (midnight finalises it).
+                $t = self::sumBetween($db, $tenantId, $w['from'], $now, (int) $s['user_id'] ?: null);
+                $db->prepare('UPDATE day_sessions SET closed_at = COALESCE(closed_at, ?), closing_sales = ?, closing_count = ? WHERE id = ?')
+                   ->execute([$w['close'], $t['total'], $t['count'], $s['id']]);
             }
         }
+    }
+
+    /**
+     * Every finished day of the last 30 that has sales gets its history rows (the whole shop and each
+     * seller), whether or not anyone opened this page that day — so the history is complete and the
+     * evening report is saved by itself. Cheap: it only runs while yesterday has no whole-shop row.
+     */
+    private static function backfill(PDO $db, int $tenantId, string $today): void
+    {
+        $yesterday = date('Y-m-d', strtotime($today . ' -1 day'));
+        $chk = $db->prepare('SELECT 1 FROM day_sessions WHERE tenant_id = ? AND user_id = 0 AND day = ? LIMIT 1');
+        $chk->execute([$tenantId, $yesterday]);
+        if ($chk->fetchColumn()) return;
+        $from = date('Y-m-d', strtotime($today . ' -30 day')) . ' 00:00:00';
+        $to = $today . ' 00:00:00';
+        $by = []; // day => uid => [count, total]
+        foreach (self::sources($db) as $src) {
+            try {
+                $st = $db->prepare("SELECT DATE(x.{$src['at']}) d, {$src['by']} uid, COUNT(*) c, COALESCE(SUM({$src['total']}),0) t
+                                      FROM {$src['table']} x WHERE x.tenant_id = ? AND {$src['where']} AND x.{$src['at']} >= ? AND x.{$src['at']} < ?
+                                     GROUP BY d, uid");
+                $st->execute([$tenantId, $from, $to]);
+                foreach ($st->fetchAll() as $r) {
+                    foreach ([(int) $r['uid'], 0] as $u) {
+                        $by[$r['d']][$u][0] = ($by[$r['d']][$u][0] ?? 0) + (int) $r['c'];
+                        $by[$r['d']][$u][1] = ($by[$r['d']][$u][1] ?? 0) + (float) $r['t'];
+                    }
+                }
+            } catch (\Throwable $e) { /* package table not installed */ }
+        }
+        $by[$yesterday][0] ??= [0, 0.0]; // marks yesterday as done even when nothing was sold
+        $have = $db->prepare('SELECT day, user_id FROM day_sessions WHERE tenant_id = ? AND day >= ? AND day < ?');
+        $have->execute([$tenantId, substr($from, 0, 10), $today]);
+        $exists = [];
+        foreach ($have->fetchAll() as $r) { $exists[$r['day'] . '|' . $r['user_id']] = true; }
+        $ins = $db->prepare('INSERT IGNORE INTO day_sessions (tenant_id, user_id, day, opened_at, opening_sales, closed_at, closing_sales, closing_count, final)
+                             VALUES (?,?,?,?,?,?,?,?,1)');
+        foreach ($by as $day => $people) {
+            $w = self::window($tenantId, $day);
+            foreach ($people as $uid => [$c, $t]) {
+                if (isset($exists[$day . '|' . $uid])) continue;
+                $ins->execute([$tenantId, $uid, $day, $w['open'], round($t, 2), $w['close'], round($t, 2), $c]);
+            }
+        }
+    }
+
+    /** Until this time of day the figures of the day that just ended (the closing sales) are shown. */
+    const CLOSING_SHOWN_UNTIL = '12:00';
+
+    public static function showClosing(): bool
+    {
+        return date('H:i') < self::CLOSING_SHOWN_UNTIL;
+    }
+
+    /** What yesterday closed with — taken straight from the sales, so it can never read zero by mistake. */
+    public static function yesterday(PDO $db, int $tenantId, ?int $userId = null): array
+    {
+        $day = date('Y-m-d', strtotime('-1 day'));
+        $t = self::totalFor($db, $tenantId, $day, $day, $userId);
+        return ['day' => $day] + $t;
     }
 
     public static function session(PDO $db, int $tenantId, int $userId, string $day): ?array

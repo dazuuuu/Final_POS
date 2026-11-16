@@ -422,6 +422,7 @@ ob_start();
       <div class="pos-cust-menu" id="customerMenu"></div>
     </div>
     <div class="pos-cust-info small" id="customerInfo"></div>
+    <div class="pos-cust-credit" id="customerCredit" style="display:none"></div>
     <div class="form-check small mt-1" id="saveCustomerRow" style="display:none;">
       <input class="form-check-input" type="checkbox" name="save_customer" value="1" id="saveCustomer">
       <label class="form-check-label" for="saveCustomer">Save as a loyal customer</label>
@@ -708,6 +709,10 @@ ob_start();
 .pos-cust-menu .empty{padding:9px 12px;font-size:.8rem;color:#9aa0ac;}
 .pos-cust-info{color:#5b6070;min-height:0;margin-top:4px;}
 .pos-cust-info .owe{color:#b91c1c;font-weight:700;}
+.pos-cust-credit{margin-top:6px;border:1px solid #fecaca;background:#fff7f7;border-radius:10px;padding:8px 10px;font-size:.8rem;max-height:210px;overflow:auto;}
+.pos-cust-credit .cc-h{display:flex;justify-content:space-between;font-weight:700;color:#b91c1c;margin-bottom:4px;}
+.pos-cust-credit .cc-i{border-top:1px dashed #f3c6c6;padding:4px 0;}
+.pos-cust-credit .cc-i small{color:#6b7280;display:block;}
 .pos-held{background:#fffbeb;border:1px solid #fde68a;border-radius:14px;padding:10px 12px;margin-bottom:14px;}
 .pos-held-title{font-weight:700;font-size:.85rem;color:#92400e;margin-bottom:8px;}
 .pos-held-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;}
@@ -1008,6 +1013,7 @@ var custInfo = document.getElementById('customerInfo');
 var saveRow = document.getElementById('saveCustomerRow');
 var custTimer = null, custItems = [], custActive = -1;
 var CUSTOMER_API = <?php echo json_encode(public_url('api/customers/search.php')); ?>;
+var CUSTOMER_CREDIT_API = <?php echo json_encode(public_url('api/customers/credit.php')); ?>;
 function isWalkin() { var v = custInput.value.trim(); return v === '' || v.toLowerCase() === WALKIN.toLowerCase(); }
 function refreshCustInfo(owed, phone) {
     var parts = [];
@@ -1016,6 +1022,27 @@ function refreshCustInfo(owed, phone) {
     custInfo.innerHTML = parts.join(' · ');
     saveRow.style.display = (!isWalkin() && (custId.value === '0' || custId.value === '')) ? 'block' : 'none';
 }
+// What this customer already owes and took on credit (shown when they are picked or their typed name matches).
+var custCredit = document.getElementById('customerCredit'), ccTimer = null, ccSeq = 0;
+function loadCustCredit(id, name) {
+    var seq = ++ccSeq;
+    fetch(CUSTOMER_CREDIT_API + '?' + (id ? 'id=' + id : 'name=' + encodeURIComponent(name)), { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (seq !== ccSeq) return;
+        if (!d.found) { custCredit.style.display = 'none'; return; }
+        if (!id) { custId.value = d.id; if (d.phone && !document.getElementById('creditPhone').value) { document.getElementById('creditPhone').value = d.phone; } refreshCustInfo(d.balance, d.phone); }
+        if (!d.invoices.length) { custCredit.style.display = 'none'; return; }
+        custCredit.innerHTML = '<div class="cc-h"><span>' + esc(d.name) + ' already owes</span><span>' + money(d.balance) + '</span></div>'
+          + d.invoices.map(function (i) {
+              var items = i.items.map(function (l) { return (Math.round(l.qty * 100) / 100) + '× ' + esc(l.name); }).join(', ');
+              return '<div class="cc-i"><b>' + esc(i.label) + '</b> · ' + esc(i.date) + ' · balance ' + money(i.balance)
+                + '<small>' + (items || esc(i.kind)) + '</small></div>';
+            }).join('')
+          + '<div class="mt-1 text-muted">A new credit sale is added to this balance.</div>';
+        custCredit.style.display = 'block';
+      }).catch(function () {});
+}
 function pickCustomer(c) {
     custInput.value = c.name;
     custId.value = c.saved ? c.id : 0;
@@ -1023,6 +1050,7 @@ function pickCustomer(c) {
     if (c.email) { document.getElementById('creditEmail').value = c.email; }
     custMenu.classList.remove('show');
     refreshCustInfo(c.owed || 0, c.phone);
+    if (c.saved) { loadCustCredit(c.id, ''); } else { custCredit.style.display = 'none'; }
 }
 function showCustMenu() {
     var q = isWalkin() ? '' : custInput.value.trim();
@@ -1047,6 +1075,9 @@ custInput.addEventListener('focus', function () { if (isWalkin()) { custInput.se
 custInput.addEventListener('input', function () {
     custId.value = 0;
     refreshCustInfo(0);
+    custCredit.style.display = 'none';
+    clearTimeout(ccTimer);
+    if (!isWalkin() && custInput.value.trim().length > 1) { ccTimer = setTimeout(function () { loadCustCredit(0, custInput.value.trim()); }, 350); }
     clearTimeout(custTimer);
     custTimer = setTimeout(showCustMenu, 200);
 });
@@ -1072,7 +1103,7 @@ custInput.addEventListener('blur', function () {
     if (custInput.value.trim() === '') { custInput.value = WALKIN; refreshCustInfo(0); }
 });
 document.getElementById('customerClear').addEventListener('click', function () {
-    custInput.value = WALKIN; custId.value = 0; refreshCustInfo(0);
+    custInput.value = WALKIN; custId.value = 0; refreshCustInfo(0); custCredit.style.display = 'none';
 });
 refreshCustInfo(0, <?php echo json_encode($customer['phone'] ?? ''); ?>);
 

@@ -96,6 +96,12 @@ class ShopUrl
         if (self::$slug !== null) {
             $acct = Signup::findBySlug(self::$slug);
             if (!$acct) {
+                // A shop address must never read "not found" because of one slow / dropped database reply:
+                // look once more before giving up.
+                usleep(250000);
+                $acct = Signup::findBySlug(self::$slug);
+            }
+            if (!$acct) {
                 self::notFound();
             }
             if (!$acct['owner_user_id']) {

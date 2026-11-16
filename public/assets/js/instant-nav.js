@@ -32,7 +32,9 @@
   if (HTMLScriptElement.supports && HTMLScriptElement.supports('speculationrules')) {
     var not = SKIP.map(function (p) { return { not: { href_matches: '*' + p + '*' } }; });
     var rules = {
-      prerender: [{
+      // prefetch (just the page), not prerender (the whole page with its scripts and background calls):
+      // on a shared host, rendering every hovered link ahead multiplied the load and caused 503 / slow sales.
+      prefetch: [{
         source: 'document',
         where: { and: [{ href_matches: '/*' }, { not: { selector_matches: '[data-no-instant], [target=_blank], [download]' } }].concat(not) },
         eagerness: 'moderate'
