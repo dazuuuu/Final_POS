@@ -26,7 +26,7 @@ if (!empty($_SESSION['logged_in']) && !empty($_SESSION['otp_verified'])) {
 }
 
 $error = '';
-$notice = '';
+$notice = !empty($_GET['newday']) ? 'A new day has started — you were clocked out at midnight. Clock in to start today.' : '';
 
 // Single-tenant deployment: there's only ever one shop, so its branding can
 // be shown before anyone logs in. No database / no tables yet (fresh install
@@ -102,6 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['logged_in']    = true;
         $_SESSION['otp_verified'] = true;
         $_SESSION['must_reset']   = false;
+        $_SESSION['staff_day']    = date('Y-m-d');
         header('Location: ' . public_url('staff/dashboard/'));
         exit;
     }

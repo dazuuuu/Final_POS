@@ -8,7 +8,9 @@ unset($_SESSION['day_greet']);
 try {
     $__dgDb = Database::pdo();
     $__dgS = DaySales::open($__dgDb, (int) TenantContext::tenantId(), (int) TenantContext::userId());
-    $__dgNow = DaySales::totalFor($__dgDb, (int) TenantContext::tenantId(), DaySales::today(), DaySales::today(), (int) TenantContext::userId());
+    // The owner's summary is the whole shop; an admin's or staff member's is their own sales.
+    $__dgWho = TenantContext::isPrimaryOwner() ? null : (int) TenantContext::userId();
+    $__dgNow = DaySales::totalFor($__dgDb, (int) TenantContext::tenantId(), DaySales::today(), DaySales::today(), $__dgWho);
     $__dgT = (new Models\TenantModel($__dgDb))->find(TenantContext::tenantId());
 } catch (\Throwable $e) {
     return;
@@ -23,9 +25,9 @@ $__dgHello = $__dgH < 12 ? 'Good morning' : ($__dgH < 17 ? 'Good afternoon' : 'G
     <h2 id="dgTitle" class="h5 fw-bold mb-1"><?php echo $__dgHello; ?>, <?php echo htmlspecialchars($_SESSION['username'] ?? ''); ?></h2>
     <div class="text-muted small mb-3"><?php echo date('l, j F Y'); ?> · day opened at <?php echo date('g:i a', strtotime($__dgS['opened_at'])); ?></div>
     <div class="dg-tiles">
-      <div><span>Opening sales · today</span><strong class="text-success"><?php echo $__dgCur . ' ' . number_format($__dgNow['total'], 0); ?></strong>
+      <div><span>Opening sales · today<?php echo $__dgWho === null ? ' (whole shop)' : ''; ?></span><strong class="text-success"><?php echo $__dgCur . ' ' . number_format($__dgNow['total'], 0); ?></strong>
         <small><?php echo (int) $__dgNow['count']; ?> sale<?php echo $__dgNow['count'] === 1 ? '' : 's'; ?> so far</small></div>
-      <?php if (DaySales::showClosing()): $__dgY = DaySales::yesterday($__dgDb, (int) TenantContext::tenantId(), (int) TenantContext::userId()); ?>
+      <?php if (DaySales::showClosing()): $__dgY = DaySales::yesterday($__dgDb, (int) TenantContext::tenantId(), $__dgWho); ?>
       <div><span>Closing sales · yesterday</span><strong><?php echo $__dgCur . ' ' . number_format($__dgY['total'], 0); ?></strong>
         <small><?php echo (int) $__dgY['count']; ?> sale<?php echo $__dgY['count'] === 1 ? '' : 's'; ?></small></div>
       <?php endif; ?>

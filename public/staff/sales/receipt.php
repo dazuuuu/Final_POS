@@ -3,6 +3,14 @@
 require_once __DIR__ . '/../../../app/app.php';
 PageGuard::auth(Capabilities::SALES_VIEW);
 
+// A receipt only reads the session: release it now so this page never waits on (or blocks)
+// the other requests the till is making, which is what made the receipt popup hang.
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    require_once ROOT_PATH . '/app/helpers/uploads.php';
+    csrf_token();
+    session_write_close();
+}
+
 $pdo = Database::pdo();
 $SA  = new Models\SaleModel($pdo);
 

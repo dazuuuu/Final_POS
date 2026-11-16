@@ -12,6 +12,9 @@ require_once __DIR__ . '/PathConfig.php';
 if (!function_exists('csrf_token')) {
     function csrf_token(): string
     {
+        if (!empty($_SESSION['csrf_token'])) { // already loaded (also after session_write_close): don't reopen the session
+            return $_SESSION['csrf_token'];
+        }
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
         }

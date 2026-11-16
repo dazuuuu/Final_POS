@@ -142,6 +142,11 @@ if (PHP_SAPI !== 'cli' && strpos(str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] 
 // Rehydrate the current tenant/user/capabilities for this request.
 TenantContext::boot();
 
+// The account's own time zone (PHP and MySQL), and — until the owner has chosen one — a one-time page asking for it.
+AccountTime::apply();
+AccountTime::gate();
+StaffDay::enforce(); // staff are clocked out and signed out at midnight; they clock in again the next day
+
 // Owner accounts: one device at a time (signing in elsewhere signs this one out).
 SingleSession::enforce();
 

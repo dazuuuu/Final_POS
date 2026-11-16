@@ -214,20 +214,28 @@ class TimeLogModel extends Model
         return $stmt->fetchAll();
     }
 
+    /**
+     * Closes forgotten clock-outs. A clock-in left open from a PREVIOUS day is always closed (the day
+     * ended at midnight — staff clock in again each day); today's are closed once the shop's clock-out
+     * time passes. The clock-out is stamped at that day's clock-out time, or 23:59:59 when the person
+     * clocked in after it. Flagged auto_closed.
+     */
     public function autoCloseOverdueForTenant(int $tenantId): int
     {
-        $settings = $this->settings($tenantId);
-        $cutoff = date('Y-m-d') . ' ' . $settings['clock_out_time'];
-        if (time() < strtotime($cutoff)) {
-            return 0;
+        $out = $this->settings($tenantId)['clock_out_time'];
+        $stamp = 'IF(CONCAT(DATE(clock_in_at), " ", ?) > clock_in_at, CONCAT(DATE(clock_in_at), " ", ?), CONCAT(DATE(clock_in_at), " 23:59:59"))';
+        $n = 0;
+        $prev = $this->db->prepare("UPDATE staff_time_logs SET clock_out_at = $stamp, auto_closed = 1
+                                     WHERE tenant_id = ? AND clock_out_at IS NULL AND DATE(clock_in_at) < CURDATE()");
+        $prev->execute([$out, $out, $tenantId]);
+        $n += $prev->rowCount();
+        if (time() >= strtotime(date('Y-m-d') . ' ' . $out)) {
+            $today = $this->db->prepare("UPDATE staff_time_logs SET clock_out_at = $stamp, auto_closed = 1
+                                          WHERE tenant_id = ? AND clock_out_at IS NULL AND CONCAT(DATE(clock_in_at), \" \", ?) <= NOW()");
+            $today->execute([$out, $out, $tenantId, $out]);
+            $n += $today->rowCount();
         }
-        $stmt = $this->db->prepare(
-            'UPDATE staff_time_logs
-                SET clock_out_at = CONCAT(DATE(clock_in_at), " ", ?), auto_closed = 1
-              WHERE tenant_id = ? AND clock_out_at IS NULL AND CONCAT(DATE(clock_in_at), " ", ?) <= NOW()'
-        );
-        $stmt->execute([$settings['clock_out_time'], $tenantId, $settings['clock_out_time']]);
-        return $stmt->rowCount();
+        return $n;
     }
 
     // ---- internals ----
@@ -235,7 +243,9 @@ class TimeLogModel extends Model
     private function autoClose(array $log): void
     {
         $settings = $this->settings((int) $log['tenant_id']);
-        $closeAt = $this->dateOf($log['clock_in_at']) . ' ' . $settings['clock_out_time'];
+        $day = $this->dateOf($log['clock_in_at']);
+        $closeAt = $day . ' ' . $settings['clock_out_time'];
+        if ($closeAt <= $log['clock_in_at']) { $closeAt = $day . ' 23:59:59'; }
         $stmt = $this->db->prepare('UPDATE staff_time_logs SET clock_out_at = ?, auto_closed = 1 WHERE id = ?');
         $stmt->execute([$closeAt, $log['id']]);
     }
