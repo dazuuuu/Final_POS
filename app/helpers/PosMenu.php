@@ -66,7 +66,9 @@ class PosMenu
         $common = Features::anyPackage(); // staff, sales, credit/held, reports, printer, inventory: every package
         // Restaurant-only accounts have their own orders, stock and payments — no shop menus.
         $restOnly = !$shop && Features::enabled(Features::RESTAURANT_POS);
-        $shopCommon = $common && !$restOnly;
+        // Services accounts: Operations / Management / Finances menus; the retail shop only joins as an add-on.
+        $svcMode = Features::servicesMode();
+        $shopCommon = $common && !$restOnly && (!$svcMode || $shop);
         $main = $owner && ShopContext::isMainShop();
         $primary = $owner && self::isPrimaryOwner();
         $money = PageGuard::seesMoney();
@@ -124,7 +126,37 @@ class PosMenu
             ]];
         }
 
-        if (Features::enabled(Features::SERVICES)) {
+        if ($svcMode) {
+            $deskOk = $owner || $can(Capabilities::SERVICES_BOOK) || $can(Capabilities::SERVICES_CASHIER);
+            $g[] = ['operations', 'Operations', 'fa-clipboard-list', [
+                ['Serving', 'fa-hand-sparkles', 'super/services/serving.php', true],
+                ['New client', 'fa-user-plus', 'super/services/new.php', true],
+                ['Front desk', 'fa-clipboard-list', 'super/services/', $deskOk],
+                ['My clients', 'fa-user-check', 'super/services/mine.php', true],
+                ['Record my job', 'fa-pen-to-square', 'super/services/my-job.php', !$owner],
+            ]];
+            $g[] = ['management', 'Management', 'fa-sitemap', $staff ? [] : [
+                ['Staff', 'fa-user-gear', 'super/staff/', $can(Capabilities::STAFF_MANAGE)],
+                ['Permissions', 'fa-key', 'super/staff/permissions.php', $can(Capabilities::STAFF_MANAGE)],
+                ['Attendance', 'fa-clock', 'super/staff/attendance.php', $can(Capabilities::STAFF_MANAGE)],
+                ['Customers', 'fa-address-book', 'super/customers/', $shop && $can(Capabilities::CUSTOMERS_MANAGE)],
+                ['Inventory', 'fa-warehouse', 'super/inventory/', $can(Capabilities::INVENTORY_VIEW) || $invEdit],
+                ['Record stock', 'fa-truck-ramp-box', 'super/stock/new.php', $invEdit],
+                ['Import products', 'fa-file-import', 'super/import/store.php', $owner && $invEdit],
+                ['Import photos', 'fa-images', 'super/import/photos.php', $owner && $invEdit],
+                ['Admins', 'fa-user-shield', 'super/admins/', $primary, $pro],
+                [ShopContext::isMainShop() ? 'My shops' : 'Shops', 'fa-shop', 'super/shops/', $shop && $owner, $pro],
+            ]];
+            $g[] = ['finances', 'Finances', 'fa-wallet', [
+                ['Services & prices', 'fa-list', 'super/services/catalog.php', $can(Capabilities::SERVICES_MANAGE)],
+                ['Commissions', 'fa-percent', 'super/services/commissions.php', $money],
+                ['Pay staff', 'fa-hand-holding-dollar', 'super/services/payouts.php', $can(Capabilities::SERVICES_PAYOUT)],
+                ['Expenses', 'fa-file-invoice-dollar', "$a/expenses/", $can(Capabilities::EXPENSES_RECORD)],
+                ['Finances', 'fa-scale-balanced', 'super/finances/', $money],
+                [$staff ? 'My sales' : 'Sales', 'fa-receipt', "$a/sales/", $staff ? $can(Capabilities::SALES_VIEW) : $money],
+                ['Reports', 'fa-chart-line', 'super/reports/', $money && $can(Capabilities::REPORTS_VIEW)],
+            ]];
+        } elseif (Features::enabled(Features::SERVICES)) {
             $g[] = ['services', 'Services', 'fa-user-gear', [
                 ['Front desk', 'fa-clipboard-list', 'super/services/', $owner || $can(Capabilities::SERVICES_BOOK) || $can(Capabilities::SERVICES_CASHIER)],
                 ['New client', 'fa-user-plus', 'super/services/new.php', $can(Capabilities::SERVICES_BOOK)],
@@ -137,7 +169,7 @@ class PosMenu
         }
 
         $elec = Features::enabled(Features::ELECTRONICS);
-        $g[] = ['stock', 'Stock', 'fa-boxes-stacked', $restOnly ? [] : [
+        $g[] = ['stock', 'Stock', 'fa-boxes-stacked', $restOnly || ($svcMode && !$shop) ? [] : [
             ['Inventory', 'fa-warehouse', "$a/inventory/", $common && ($can(Capabilities::INVENTORY_VIEW) || $invEdit)],
             ['Record stock', 'fa-truck-ramp-box', "$a/stock/new.php", $common && ($staff ? $can(Capabilities::STOCK_ENTER) : $invEdit)],
             ['Products', 'fa-box', 'super/products/', $shop && !$staff && $invEdit],
@@ -153,14 +185,14 @@ class PosMenu
             ['Warranty & repairs', 'fa-screwdriver-wrench', 'super/electronics/repairs.php', $elec && $can(Capabilities::SALES_RECORD)],
         ]];
 
-        $g[] = ['money', 'Money', 'fa-wallet', !$shopCommon ? [] : [
+        $g[] = ['money', 'Money', 'fa-wallet', !$shopCommon || $svcMode ? [] : [
             ['Expenses', 'fa-file-invoice-dollar', "$a/expenses/", $shop && $can(Capabilities::EXPENSES_RECORD)],
             ['Finances', 'fa-scale-balanced', 'super/finances/', $shop && $money],
             [$staff ? 'My sales' : 'Sales', 'fa-receipt', "$a/sales/", $staff ? $can(Capabilities::SALES_VIEW) : $money],
             ['Reports', 'fa-chart-line', 'super/reports/', $money && $can(Capabilities::REPORTS_VIEW)],
         ]];
 
-        $g[] = ['people', 'People', 'fa-users', !$common || $staff ? [] : [
+        $g[] = ['people', 'People', 'fa-users', !$common || $staff || $svcMode ? [] : [
             ['Customers', 'fa-address-book', 'super/customers/', $shop && $can(Capabilities::CUSTOMERS_MANAGE)],
             ['Staff', 'fa-user-gear', 'super/staff/', $can(Capabilities::STAFF_MANAGE)],
             ['Permissions', 'fa-key', 'super/staff/permissions.php', $can(Capabilities::STAFF_MANAGE)],
@@ -168,7 +200,7 @@ class PosMenu
         ]];
 
         $updates = $shop && $main ? count(Updates::pending()) : 0;
-        $g[] = ['business', $staff ? 'Account' : 'Business', 'fa-briefcase', [
+        $g[] = ['business', $staff ? 'Account' : 'Business', 'fa-briefcase', $svcMode && !$staff ? [] : [
             [ShopContext::isMainShop() ? 'My shops' : 'Shops', 'fa-shop', 'super/shops/', $shop && $owner, $pro],
             ['Admins', 'fa-user-shield', 'super/admins/', $primary, $pro],
             ['Updates', 'fa-download', 'super/updates/', $shop && $main, $updates ? $updates . ' new' : null],
@@ -184,6 +216,8 @@ class PosMenu
             ['Printer setup', 'fa-print', 'super/printer/', $common],
             ['Navigation menu', 'fa-arrow-down-up-across-line', 'super/settings/menu.php', $owner],
             ['Export & import', 'fa-right-left', 'super/backup/', $common && $primary],
+            ['Add-ons', 'fa-puzzle-piece', 'super/settings/addons.php', $svcMode && $primary, $svcMode && !$shop ? 'Shop' : null],
+            ['Website API', 'fa-plug', 'super/api/', $svcMode && $owner, $svcMode && $owner && !self::apiOn() ? 'Premium' : null],
         ]];
 
         $replies = self::ticketReplies();
@@ -193,6 +227,10 @@ class PosMenu
             ['Support tickets', 'fa-ticket', 'super/help/tickets.php', true, $replies ? $replies . ' new' : null],
         ]];
 
+        if ($svcMode) { // Home, Operations, Management, Finances, then the shop (if added), Settings, Help
+            $rank = array_flip(['home', 'operations', 'management', 'finances', 'shop', 'stock', 'business', 'settings', 'help']);
+            usort($g, fn($x, $y) => ($rank[$x[0]] ?? 50) <=> ($rank[$y[0]] ?? 50));
+        }
         $out = [];
         foreach ($g as [$key, $label, $icon, $links]) {
             $links = array_values(array_map(

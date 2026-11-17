@@ -12,9 +12,9 @@ require_once __DIR__ . '/../../../app/app.php';
 // (or, with the Services package, their Services screen) instead of the POS.
 PageGuard::auth();
 
-if (!TenantContext::can(Capabilities::SALES_RECORD) && Features::enabled(Features::SERVICES)) {
+if ((!TenantContext::can(Capabilities::SALES_RECORD) || !Features::enabled(Features::SHOP_POS)) && Features::enabled(Features::SERVICES)) {
     $desk = TenantContext::can(Capabilities::SERVICES_BOOK) || TenantContext::can(Capabilities::SERVICES_CASHIER);
-    header('Location: ' . public_url($desk ? 'super/services/' : 'super/services/mine.php'));
+    header('Location: ' . public_url($desk ? 'super/services/' : 'super/services/serving.php'));
     exit;
 }
 

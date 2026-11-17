@@ -17,6 +17,7 @@ if (!$t || (!$isDesk && !$assignedToMe)) {
 $self = public_url('super/services/view.php?id=' . $id);
 $canAssign = $isOwner || $canBook;
 $canPay = $isOwner || $canCash;
+$canServe = $isDesk || $assignedToMe; // add services, products and charges while serving
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -28,10 +29,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($action === 'assign' && $canAssign) {
         $res = $SD->assign((int) ($_POST['item_id'] ?? 0), (int) ($_POST['staff_id'] ?? 0) ?: null);
         $msg = 'Staff assigned.';
-    } elseif ($action === 'add_product' && $isDesk) {
+    } elseif ($action === 'add_product' && $canServe) {
         $res = $SD->addProduct($id, (int) ($_POST['product_id'] ?? 0), (float) ($_POST['quantity'] ?? 1));
         $msg = 'Product added.';
-    } elseif ($action === 'remove' && $isDesk) {
+    } elseif ($action === 'add_service' && $canServe) {
+        // Someone who can't assign staff can only add to their own work.
+        $res = $SD->addService($id, (int) ($_POST['service_id'] ?? 0), $canAssign ? ((int) ($_POST['staff_id'] ?? 0) ?: null) : $me);
+        $msg = 'Service added.';
+    } elseif ($action === 'add_charge' && $canServe) {
+        $res = $SD->addCharge($id, (string) ($_POST['charge_name'] ?? ''), (float) ($_POST['charge_amount'] ?? 0));
+        $msg = 'Charge added.';
+    } elseif ($action === 'remove' && $canServe) {
         $res = $SD->removeItem((int) ($_POST['item_id'] ?? 0));
         $msg = 'Removed.';
     } elseif ($action === 'checkin' && $canAssign) {
@@ -53,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     $_SESSION['flash'][$res['ok'] ? 'success' : 'error'] = $res['ok'] ? $msg : $res['error'];
-    header('Location: ' . $self);
+    header('Location: ' . (($_POST['return'] ?? '') === 'serving' ? public_url('super/services/serving.php#t' . $id) : $self));
     exit;
 }
 
@@ -62,7 +70,9 @@ $serviceItems = array_values(array_filter($t['items'], fn($i) => ($i['kind'] ?? 
 $productItems = array_values(array_filter($t['items'], fn($i) => ($i['kind'] ?? 'service') === 'product'));
 $allDone = !array_filter($serviceItems, fn($i) => $i['status'] !== 'done');
 $open = in_array($t['status'], ['booked', 'open'], true);
-$stock = $isDesk && $open ? $SD->sellableProducts() : [];
+$stock = $canServe && $open ? $SD->sellableProducts() : [];
+$chargeItems = array_values(array_filter($t['items'], fn($i) => ($i['kind'] ?? 'service') === 'charge'));
+$offeredServices = $canServe && $open ? $SD->servicesForShop() : [];
 $qf = fn($q) => rtrim(rtrim(number_format((float) $q, 2), '0'), '.');
 
 ob_start();
@@ -119,24 +129,24 @@ ob_start();
         <?php if ($it['status'] !== 'done' && $t['status'] !== 'cancelled' && ($mine || $canAssign)): ?>
           <form method="post"><input type="hidden" name="action" value="done"><input type="hidden" name="item_id" value="<?php echo (int) $it['id']; ?>"><button class="btn btn-sm btn-success"><i class="fas fa-check me-1"></i>Done</button></form>
         <?php endif; ?>
-        <?php if ($isDesk && $open && count($t['items']) > 1): ?>
+        <?php if ($canServe && $open && count($t['items']) > 1): ?>
           <form method="post" onsubmit="return confirm('Remove <?php echo svc_h($it['service_name']); ?> from this visit?');"><input type="hidden" name="action" value="remove"><input type="hidden" name="item_id" value="<?php echo (int) $it['id']; ?>"><button class="btn btn-sm btn-link text-muted p-0" title="Remove"><i class="fas fa-xmark"></i></button></form>
         <?php endif; ?>
       </div>
     </div>
   <?php endforeach; ?>
 
-  <?php if ($productItems || ($isDesk && $open && $stock)): ?>
-  <h2 class="h6 fw-bold mt-4 mb-2"><i class="fas fa-bag-shopping me-1 text-primary"></i>Products</h2>
+  <?php if ($productItems || $chargeItems || ($canServe && $open)): ?>
+  <h2 class="h6 fw-bold mt-4 mb-2"><i class="fas fa-bag-shopping me-1 text-primary"></i>Products &amp; extras</h2>
   <?php foreach ($productItems as $it): ?>
     <div class="d-flex justify-content-between align-items-center border-bottom py-2 small">
       <div><strong><?php echo $qf($it['quantity']); ?> × <?php echo svc_h($it['service_name']); ?></strong><?php if ($canMoney): ?> <span class="text-muted">@ <?php echo svc_money($it['price']); ?> = <?php echo svc_money((float) $it['price'] * (float) $it['quantity']); ?></span><?php endif; ?></div>
-      <?php if ($isDesk && $open && count($t['items']) > 1): ?>
+      <?php if ($canServe && $open && count($t['items']) > 1): ?>
         <form method="post" onsubmit="return confirm('Remove this product? It goes back into stock.');"><input type="hidden" name="action" value="remove"><input type="hidden" name="item_id" value="<?php echo (int) $it['id']; ?>"><button class="btn btn-sm btn-link text-muted p-0" title="Remove"><i class="fas fa-xmark"></i></button></form>
       <?php endif; ?>
     </div>
   <?php endforeach; ?>
-  <?php if ($isDesk && $open && $stock): ?>
+  <?php if ($canServe && $open && $stock): ?>
     <form method="post" class="d-flex gap-2 mt-2 flex-wrap">
       <input type="hidden" name="action" value="add_product">
       <select name="product_id" class="form-select form-select-sm" style="flex:1;min-width:180px;" required>
@@ -145,6 +155,31 @@ ob_start();
       </select>
       <input type="number" name="quantity" value="1" min="0.01" step="any" class="form-control form-control-sm" style="width:80px;" aria-label="Quantity">
       <button class="btn btn-sm btn-outline-primary"><i class="fas fa-plus me-1"></i>Add</button>
+    </form>
+  <?php endif; ?>
+  <?php foreach ($chargeItems as $it): ?>
+    <div class="d-flex justify-content-between align-items-center border-bottom py-2 small">
+      <div><i class="fas fa-plus-circle text-muted me-1"></i><strong><?php echo svc_h($it['service_name']); ?></strong><?php if ($canMoney): ?> <span class="text-muted"><?php echo svc_money($it['price']); ?></span><?php endif; ?></div>
+      <?php if ($canServe && $open && count($t['items']) > 1): ?>
+        <form method="post"><input type="hidden" name="action" value="remove"><input type="hidden" name="item_id" value="<?php echo (int) $it['id']; ?>"><button class="btn btn-sm btn-link text-muted p-0" title="Remove"><i class="fas fa-xmark"></i></button></form>
+      <?php endif; ?>
+    </div>
+  <?php endforeach; ?>
+  <?php if ($canServe && $open): ?>
+    <form method="post" class="d-flex gap-2 mt-2 flex-wrap">
+      <input type="hidden" name="action" value="add_service">
+      <select name="service_id" class="form-select form-select-sm" style="flex:1;min-width:180px;" required>
+        <option value="">Add another service…</option>
+        <?php foreach ($offeredServices as $sv): ?><option value="<?php echo (int) $sv['id']; ?>"><?php echo svc_h($sv['name']); ?><?php echo $canMoney ? ' — ' . svc_money($sv['price']) : ''; ?></option><?php endforeach; ?>
+      </select>
+      <?php if ($canAssign): ?><select name="staff_id" class="form-select form-select-sm" style="max-width:170px;"><option value="0">Assign later</option><?php foreach ($staff as $u): ?><option value="<?php echo (int) $u['id']; ?>" <?php echo (int) $u['id'] === $me ? 'selected' : ''; ?>><?php echo svc_h($u['username']); ?></option><?php endforeach; ?></select><?php endif; ?>
+      <button class="btn btn-sm btn-outline-primary"><i class="fas fa-plus me-1"></i>Add</button>
+    </form>
+    <form method="post" class="d-flex gap-2 mt-2 flex-wrap">
+      <input type="hidden" name="action" value="add_charge">
+      <input name="charge_name" class="form-control form-control-sm" style="flex:1;min-width:180px;" maxlength="150" placeholder="Extra charge (e.g. Extra length)" required>
+      <input type="number" name="charge_amount" class="form-control form-control-sm" style="width:120px;" min="0.01" step="any" placeholder="Amount" required>
+      <button class="btn btn-sm btn-outline-secondary"><i class="fas fa-plus me-1"></i>Add charge</button>
     </form>
   <?php endif; ?>
   <?php endif; ?>

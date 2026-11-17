@@ -118,6 +118,10 @@ class ServiceDeskModel
             $db->exec("ALTER TABLE svc_ticket_items ADD COLUMN kind ENUM('service','product') NOT NULL DEFAULT 'service' AFTER service_name,
                        ADD COLUMN product_id INT NULL AFTER kind, ADD COLUMN quantity DECIMAL(12,2) NOT NULL DEFAULT 1 AFTER product_id");
         }
+        $kindType = (string) $db->query("SELECT COLUMN_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'svc_ticket_items' AND column_name = 'kind'")->fetchColumn();
+        if ($kindType !== '' && stripos($kindType, 'charge') === false) { // extra charges (e.g. "Extra length", "Home service")
+            $db->exec("ALTER TABLE svc_ticket_items MODIFY COLUMN kind ENUM('service','product','charge') NOT NULL DEFAULT 'service'");
+        }
         $col = fn(string $t, string $c) => (int) $db->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '$t' AND column_name = '$c'")->fetchColumn();
         if (!$col('svc_ticket_items', 'payout_id')) {
             $db->exec('ALTER TABLE svc_ticket_items ADD COLUMN payout_id INT NULL, ADD COLUMN staff_keeps_all TINYINT(1) NOT NULL DEFAULT 0, ADD KEY idx_svc_item_payout (staff_id, payout_id)');
@@ -127,6 +131,16 @@ class ServiceDeskModel
         }
         if (!$col('svc_services', 'commission_fixed')) { // a set amount per job instead of a % (e.g. KES 1,200 per braid)
             $db->exec('ALTER TABLE svc_services ADD COLUMN commission_fixed DECIMAL(12,2) NULL AFTER commission_pct');
+        }
+        $db->exec("CREATE TABLE IF NOT EXISTS svc_categories (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            account_id INT NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            sort_order INT NOT NULL DEFAULT 0,
+            KEY idx_svc_cat_account (account_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        if (!$col('svc_services', 'image_path')) { // a picture and a category per service, for the card view when taking in a client
+            $db->exec('ALTER TABLE svc_services ADD COLUMN image_path VARCHAR(255) NULL, ADD COLUMN category_id INT NULL');
         }
         $db->exec("CREATE TABLE IF NOT EXISTS svc_payouts (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -158,7 +172,7 @@ class ServiceDeskModel
     /** Every service of the account, with the shop ids that offer it. */
     public function services(bool $activeOnly = false): array
     {
-        $stmt = $this->db->prepare('SELECT * FROM svc_services WHERE account_id = ?' . ($activeOnly ? ' AND active = 1' : '') . ' ORDER BY active DESC, name');
+        $stmt = $this->db->prepare('SELECT s.*, c.name AS category_name FROM svc_services s LEFT JOIN svc_categories c ON c.id = s.category_id WHERE s.account_id = ?' . ($activeOnly ? ' AND s.active = 1' : '') . ' ORDER BY s.active DESC, c.sort_order, c.name, s.name');
         $stmt->execute([$this->account()]);
         $rows = $stmt->fetchAll();
         $shops = $this->db->prepare('SELECT tenant_id FROM svc_service_shops WHERE service_id = ?');
@@ -174,8 +188,9 @@ class ServiceDeskModel
     public function servicesForShop(?int $tid = null): array
     {
         $stmt = $this->db->prepare(
-            'SELECT s.* FROM svc_services s JOIN svc_service_shops ss ON ss.service_id = s.id
-              WHERE ss.tenant_id = ? AND s.active = 1 ORDER BY s.name'
+            'SELECT s.*, c.name AS category_name FROM svc_services s JOIN svc_service_shops ss ON ss.service_id = s.id
+               LEFT JOIN svc_categories c ON c.id = s.category_id
+              WHERE ss.tenant_id = ? AND s.active = 1 ORDER BY (c.id IS NULL), c.sort_order, c.name, s.name'
         );
         $stmt->execute([$tid ?? $this->tid()]);
         return $stmt->fetchAll();
@@ -193,22 +208,57 @@ class ServiceDeskModel
         $shopIds = array_values(array_filter(array_map('intval', (array) ($in['shops'] ?? [])), fn($t) => \ShopContext::canAccess($t)));
         if (!$shopIds) { $shopIds = [$this->tid()]; } // single shop: it's offered here
         $desc = trim((string) ($in['description'] ?? '')) ?: null;
+        $cat = (int) ($in['category_id'] ?? 0) ?: null;
+        if ($cat) {
+            $ck = $this->db->prepare('SELECT 1 FROM svc_categories WHERE id = ? AND account_id = ?');
+            $ck->execute([$cat, $this->account()]);
+            if (!$ck->fetchColumn()) { $cat = null; }
+        }
+        $image = trim((string) ($in['image_path'] ?? '')) ?: null; // set only when a new picture was uploaded
 
         if ($id) {
             $own = $this->db->prepare('SELECT 1 FROM svc_services WHERE id = ? AND account_id = ?');
             $own->execute([$id, $this->account()]);
             if (!$own->fetchColumn()) { return ['ok' => false, 'error' => 'Service not found.']; }
-            $this->db->prepare('UPDATE svc_services SET name = ?, description = ?, price = ?, duration_min = ?, commission_pct = ?, commission_fixed = ?, active = ? WHERE id = ?')
-                ->execute([$name, $desc, round($price, 2), $dur, $pct, $fixed, empty($in['inactive']) ? 1 : 0, $id]);
+            $this->db->prepare('UPDATE svc_services SET name = ?, description = ?, price = ?, duration_min = ?, commission_pct = ?, commission_fixed = ?, active = ?, category_id = ?' . ($image ? ', image_path = ?' : '') . ' WHERE id = ?')
+                ->execute(array_merge([$name, $desc, round($price, 2), $dur, $pct, $fixed, empty($in['inactive']) ? 1 : 0, $cat], $image ? [$image] : [], [$id]));
         } else {
-            $this->db->prepare('INSERT INTO svc_services (account_id, name, description, price, duration_min, commission_pct, commission_fixed) VALUES (?,?,?,?,?,?,?)')
-                ->execute([$this->account(), $name, $desc, round($price, 2), $dur, $pct, $fixed]);
+            $this->db->prepare('INSERT INTO svc_services (account_id, name, description, price, duration_min, commission_pct, commission_fixed, category_id, image_path) VALUES (?,?,?,?,?,?,?,?,?)')
+                ->execute([$this->account(), $name, $desc, round($price, 2), $dur, $pct, $fixed, $cat, $image]);
             $id = (int) $this->db->lastInsertId();
         }
         $this->db->prepare('DELETE FROM svc_service_shops WHERE service_id = ?')->execute([$id]);
         $ins = $this->db->prepare('INSERT INTO svc_service_shops (service_id, tenant_id) VALUES (?,?)');
         foreach (array_unique($shopIds) as $t) { $ins->execute([$id, $t]); }
         return ['ok' => true, 'error' => null, 'id' => $id];
+    }
+
+    // ---- service categories (Hair, Nails, Spa…) ----------------------------
+
+    public function categories(): array
+    {
+        $st = $this->db->prepare('SELECT c.*, (SELECT COUNT(*) FROM svc_services s WHERE s.category_id = c.id) AS n FROM svc_categories c WHERE c.account_id = ? ORDER BY c.sort_order, c.name');
+        $st->execute([$this->account()]);
+        return $st->fetchAll();
+    }
+
+    public function saveCategory(string $name, ?int $id = null): array
+    {
+        $name = trim($name);
+        if ($name === '') { return ['ok' => false, 'error' => 'Enter the category name.']; }
+        if ($id) {
+            $this->db->prepare('UPDATE svc_categories SET name = ? WHERE id = ? AND account_id = ?')->execute([mb_substr($name, 0, 100), $id, $this->account()]);
+        } else {
+            $this->db->prepare('INSERT INTO svc_categories (account_id, name) VALUES (?, ?)')->execute([$this->account(), mb_substr($name, 0, 100)]);
+        }
+        return ['ok' => true, 'error' => null];
+    }
+
+    /** Services in a deleted category are kept, just uncategorised. */
+    public function deleteCategory(int $id): void
+    {
+        $this->db->prepare('UPDATE svc_services SET category_id = NULL WHERE category_id = ? AND account_id = ?')->execute([$id, $this->account()]);
+        $this->db->prepare('DELETE FROM svc_categories WHERE id = ? AND account_id = ?')->execute([$id, $this->account()]);
     }
 
     // ---- people -----------------------------------------------------------
@@ -266,7 +316,13 @@ class ServiceDeskModel
             $lines[] = [$offered[$sid], $staff];
         }
         $products = array_values(array_filter((array) ($in['products'] ?? []), fn($p) => (int) ($p['product_id'] ?? 0) > 0 && (float) ($p['quantity'] ?? 0) > 0));
-        if (!$lines && !$products) { return ['ok' => false, 'error' => 'Add at least one service or product.']; }
+        $charges = array_values(array_filter((array) ($in['charges'] ?? []), fn($c) => trim((string) ($c['name'] ?? '')) !== '' && (float) ($c['amount'] ?? 0) > 0));
+        if (!$lines && !$products && !$charges) { return ['ok' => false, 'error' => 'Choose at least one service.']; }
+        if (!$scheduled && empty($in['allow_same_name'])) { // clients being served are told apart by name — keep each one unique
+            $dup = $this->db->prepare("SELECT number FROM svc_tickets WHERE tenant_id = ? AND status = 'open' AND LOWER(TRIM(customer_name)) = LOWER(?) LIMIT 1");
+            $dup->execute([$tid, $name]);
+            if ($n = $dup->fetchColumn()) { return ['ok' => false, 'error' => $name . ' is already being served (' . $n . '). Use a different name — e.g. add a surname or a number.']; }
+        }
 
         $this->db->beginTransaction();
         try {
@@ -287,6 +343,9 @@ class ServiceDeskModel
             foreach ($products as $p) {
                 $err = $this->insertProduct($id, $tid, (int) $p['product_id'], (float) $p['quantity']);
                 if ($err) { $this->db->rollBack(); return ['ok' => false, 'error' => $err]; }
+            }
+            foreach ($charges as $c) {
+                $this->insertCharge($id, $tid, trim((string) $c['name']), (float) $c['amount']);
             }
             $this->recalc($id);
             $this->db->commit();
@@ -467,6 +526,46 @@ class ServiceDeskModel
             "INSERT INTO svc_ticket_items (ticket_id, tenant_id, service_name, kind, product_id, quantity, price, status, done_at) VALUES (?,?,?, 'product', ?,?,?, 'done', NOW())"
         )->execute([$ticketId, $tid, $p['name'], $productId, $qty, self::productPrice($p)]);
         return null;
+    }
+
+    private function insertCharge(int $ticketId, int $tid, string $name, float $amount): void
+    {
+        $this->db->prepare(
+            "INSERT INTO svc_ticket_items (ticket_id, tenant_id, service_name, kind, quantity, price, status, done_at) VALUES (?,?,?, 'charge', 1, ?, 'done', NOW())"
+        )->execute([$ticketId, $tid, mb_substr($name, 0, 150), round($amount, 2)]);
+    }
+
+    /** Add another service to a visit that is still unpaid (during serving). */
+    public function addService(int $ticketId, int $serviceId, ?int $staffId): array
+    {
+        $tid = $this->tid();
+        $status = $this->openStatus($ticketId);
+        if (!$status) { return ['ok' => false, 'error' => 'Services can only be added before payment.']; }
+        $offered = [];
+        foreach ($this->servicesForShop($tid) as $s) { $offered[(int) $s['id']] = $s; }
+        if (!isset($offered[$serviceId])) { return ['ok' => false, 'error' => 'That service isn\'t offered in this shop.']; }
+        if (!$this->canBeAssigned($staffId, $tid)) { return ['ok' => false, 'error' => 'Pick a staff member of this shop.']; }
+        $this->db->prepare('INSERT INTO svc_ticket_items (ticket_id, tenant_id, service_id, service_name, price, staff_id) VALUES (?,?,?,?,?,?)')
+            ->execute([$ticketId, $tid, $serviceId, $offered[$serviceId]['name'], $offered[$serviceId]['price'], $staffId]);
+        $this->recalc($ticketId);
+        return ['ok' => true, 'error' => null];
+    }
+
+    /** Add an extra charge (a name and an amount) to an unpaid visit. */
+    public function addCharge(int $ticketId, string $name, float $amount): array
+    {
+        if (trim($name) === '' || $amount <= 0) { return ['ok' => false, 'error' => 'Enter what the charge is for and the amount.']; }
+        if (!$this->openStatus($ticketId)) { return ['ok' => false, 'error' => 'Charges can only be added before payment.']; }
+        $this->insertCharge($ticketId, $this->tid(), trim($name), $amount);
+        $this->recalc($ticketId);
+        return ['ok' => true, 'error' => null];
+    }
+
+    private function openStatus(int $ticketId): bool
+    {
+        $t = $this->db->prepare("SELECT status FROM svc_tickets WHERE id = ? AND tenant_id = ?");
+        $t->execute([$ticketId, $this->tid()]);
+        return in_array($t->fetchColumn(), ['booked', 'open'], true);
     }
 
     private function recalc(int $ticketId): void

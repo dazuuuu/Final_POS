@@ -60,11 +60,11 @@ class Features
     {
         return [
             self::SHOP_BASIC => ['Shop POS Basic', 20000, 'One shop: sales, credit, held sales, payments, returns, inventory, stock, suppliers, expenses, finances, customers, reports and settings. Up to 3 staff, Bluetooth + USB printing. (Basic.)', 'fa-store'],
-            self::SERVICES_BASIC => ['Services Basic', 20000, 'Shop POS Basic plus services: a price list, walk-ins and bookings, assigning staff, invoices, receipts and commissions. One shop, up to 3 staff, Bluetooth + USB printing. (Basic.)', 'fa-user-gear'],
+            self::SERVICES_BASIC => ['Services Basic', 20000, 'For service businesses: a price list, serving clients (several services, products and extra charges), walk-ins and bookings, assigning staff, invoices, receipts and commissions. The retail shop can be added from Settings → Add-ons. One shop, up to 3 staff, Bluetooth + USB printing. (Basic.)', 'fa-user-gear'],
             self::SHOP_POS => ['Shop POS', 30000, 'Full retail POS: sales, credit, held sales, payments, returns, inventory, stock, suppliers, staff, expenses, finances, customers, reports and settings.', 'fa-cash-register'],
             self::RESTAURANT_POS => ['Restaurant POS', 30000, 'Restaurant & bar POS: store stock, stock moved to the kitchen and to the counter or bar, menu with recipes, table and takeaway orders, bills and payments, online menu and deliveries, and several restaurants or bars each with its own prices. (Pro.)', 'fa-utensils'],
             self::RESTAURANT_ROOMS => ['Restaurant + Rooms', 40000, 'Everything in the Restaurant POS, plus Rooms & Accommodation (rooms, guest bookings, invoices, check-out with late fees, receipts) and table bookings with pre-set group menus and family platters.', 'fa-hotel'],
-            self::SERVICES => ['Services', 30000, 'Everything in the Shop POS, plus for service businesses: a price list of services, walk-in clients and bookings, assigning staff, invoices and receipts, and staff commissions.', 'fa-user-gear'],
+            self::SERVICES => ['Services', 30000, 'For service businesses (salon, spa, barber, garage): a price list of services, serving clients with products and extra charges, walk-ins and bookings, assigning staff, invoices and receipts, and staff commissions. The retail shop is an optional add-on (Settings → Add-ons).', 'fa-user-gear'],
             self::STOCK_CONTROL => ['Stock Control', 0, 'Separate stock-management system (not advertised): its own login with two-step sign-in, stores, stock receiving, transfers between stores, stock counts and corrections, stock value, administrators and staff. No selling.', 'fa-boxes-stacked'],
             self::ELECTRONICS => ['Electronics', 30000, 'Everything in the Shop POS, plus for phone & electronics shops: serial number / IMEI for every unit, warranties that start at sale, and warranty / repair returns.', 'fa-mobile-screen'],
         ];
@@ -102,6 +102,7 @@ class Features
         '/super/statements/', // transaction statement: every package (owners only)
         '/super/api/', // Website API add-on: its own switch (ShopApi), any package
         '/super/day/', // opening & closing sales: every package, everyone
+        '/super/settings/addons.php', // add-ons (e.g. the shop for a Services account)
     ];
 
     /**
@@ -136,9 +137,12 @@ class Features
             return false;
         }
         $state = self::forAccount(self::accountId($tenantId));
-        if ($key === self::SHOP_POS && (!empty($state[self::ELECTRONICS]) || !empty($state[self::SERVICES])
-            || !empty($state[self::SHOP_BASIC]) || !empty($state[self::SERVICES_BASIC]))) {
+        if ($key === self::SHOP_POS && (!empty($state[self::ELECTRONICS]) || !empty($state[self::SHOP_BASIC]))) {
             return true; // these are the shop template plus their own features
+        }
+        if ($key === self::SHOP_POS && (!empty($state[self::SERVICES]) || !empty($state[self::SERVICES_BASIC]))) {
+            // Services is its own system; the retail shop is an add-on the owner switches on (Settings → Add-ons).
+            return !empty($state[self::SHOP_POS]) || Addons::on(self::accountId($tenantId), Addons::SERVICES_SHOP);
         }
         if ($key === self::SERVICES && !empty($state[self::SERVICES_BASIC])) {
             return true;
@@ -147,6 +151,16 @@ class Features
             return true; // the restaurant POS is part of Restaurant + Rooms
         }
         return $state[$key] ?? false;
+    }
+
+    /** A Services account without a retail shop package: its menu is Operations / Management / Finances (the shop joins only as an add-on). */
+    public static function servicesMode(?int $tenantId = null): bool
+    {
+        $tenantId ??= TenantContext::tenantId();
+        if ($tenantId === null) { return false; }
+        $st = self::forAccount(self::accountId($tenantId));
+        return (!empty($st[self::SERVICES]) || !empty($st[self::SERVICES_BASIC]))
+            && empty($st[self::SHOP_POS]) && empty($st[self::SHOP_BASIC]) && empty($st[self::ELECTRONICS]);
     }
 
     /** key => bool for every package, for one account (top-level tenant id). */
@@ -341,6 +355,12 @@ class Features
             }
         } elseif (self::enabled(self::SHOP_POS, $account)) {
             return;
+        }
+        // Services accounts: their money pages (expenses, finances) belong to the service business even without the shop add-on.
+        if (self::servicesMode($account)) {
+            foreach (['/super/finances/', '/super/expenses/', '/staff/expenses/'] as $ok) {
+                if (strpos($script, $ok) !== false) { return; }
+            }
         }
         // Restaurant-only accounts: the shop's orders, sales, credit and stock pages don't apply —
         // the restaurant has its own (orders, payments, store stock, kitchen).
