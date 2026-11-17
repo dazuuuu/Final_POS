@@ -28,6 +28,7 @@ $__side = [
     ['tickets', 'Support tickets', 'fa-ticket', 'support/tickets/'],
     ['quotes', 'Quote requests', 'fa-file-signature', 'support/quotes/'],
     ['alerts', 'News & alerts', 'fa-bullhorn', 'support/alerts/'],
+    ['errors', 'Errors', 'fa-bug', 'support/errors/'],
     ['settings', 'Settings', 'fa-gear', 'support/settings/'],
 ];
 if (SupportAccount::isOwner()) { // the support team is managed by the main admin only

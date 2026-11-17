@@ -34,6 +34,20 @@ unset($_SESSION['receipt_popup']);
     back.classList.remove('on'); frame.src = 'about:blank';
     if (onClose) { var cb = onClose; onClose = null; cb(); }
   }
+  // A receipt that did not open (offline notice, error page or nothing at all) is reported and offers a retry.
+  frame.addEventListener('load', function () {
+    if (frame.src === 'about:blank' || !back.classList.contains('on')) return;
+    var bad = false, why = '';
+    try {
+      var d = frame.contentDocument, t = d && d.body ? d.body.innerText.trim() : '';
+      if (!d || !d.body || t === '') { bad = true; why = 'receipt came back empty'; }
+      else if (/Waiting for your internet connection|Reconnecting|Receipt not found/i.test(t)) { bad = true; why = t.slice(0, 80); }
+    } catch (e) {}
+    if (bad) {
+      if (window.dzReport) window.dzReport('Receipt did not open: ' + why, frame.src, 0);
+      if (!frame.dataset.retried) { frame.dataset.retried = '1'; setTimeout(function () { frame.src = frame.src; }, 1500); }
+    } else { delete frame.dataset.retried; }
+  });
   document.getElementById('rpClose').onclick = close;
   back.addEventListener('click', function (e) { if (e.target === back) close(); });
   document.getElementById('rpPrint').onclick = function () {

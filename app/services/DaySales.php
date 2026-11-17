@@ -613,6 +613,22 @@ class DaySales
                 'items' => 'SELECT ticket_id AS parent, COALESCE(product_id, service_id) AS product_id, service_name AS product, quantity AS qty, price * quantity AS amount, 0 AS cost FROM svc_ticket_items WHERE ticket_id IN (%s)',
             ];
         }
+        if ($exists('rest_table_bookings')) {
+            $src['booking'] = [
+                'label' => 'Booking', 'table' => 'rest_table_bookings', 'at' => 'paid_at', 'by' => 'x.created_by',
+                'where' => "x.paid_at IS NOT NULL AND x.status <> 'cancelled'",
+                'total' => 'x.total', 'customer' => 'x.customer_name', 'method' => "'paid'",
+                'items' => 'SELECT booking_id AS parent, ref_id AS product_id, name AS product, quantity AS qty, line_total AS amount, 0 AS cost FROM rest_table_booking_items WHERE booking_id IN (%s)',
+            ];
+        }
+        if ($exists('room_stays')) {
+            $src['stay'] = [
+                'label' => 'Hotel', 'table' => 'room_stays', 'at' => 'checked_out_at', 'by' => 'COALESCE(x.checked_out_by, x.created_by)',
+                'where' => "x.status = 'checked_out'",
+                'total' => 'x.total', 'customer' => 'x.guest_name', 'method' => "'paid'",
+                'items' => "SELECT id AS parent, room_id AS product_id, CONCAT(room_name, ' (', nights, ' night(s))') AS product, 1 AS qty, total AS amount, 0 AS cost FROM room_stays WHERE id IN (%s)",
+            ];
+        }
         return $cache = $src;
     }
 }

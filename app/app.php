@@ -97,6 +97,7 @@ spl_autoload_register(function ($class) {
 
 // Technical usage per account for the support console (requests, data, CPU, errors — never business data).
 Telemetry::start();
+ErrorLog::install(); // warnings and notices are written down too (Support → Errors)
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

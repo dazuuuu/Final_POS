@@ -13,6 +13,7 @@
 <?php /* Speed: open connections to the style/icon servers early, and fetch the next page as soon as a link is pointed at or touched. */ ?>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<script src="<?php echo public_url('assets/js/error-report.js'); ?>?v=<?php echo @filemtime(__DIR__ . '/../assets/js/error-report.js'); ?>"></script>
 <script src="<?php echo public_url('assets/js/page-loader.js'); ?>?v=<?php echo @filemtime(__DIR__ . '/../assets/js/page-loader.js'); ?>"></script>
 <script src="<?php echo public_url('assets/js/instant-nav.js'); ?>?v=<?php echo @filemtime(__DIR__ . '/../assets/js/instant-nav.js'); ?>" defer></script>
 <script>

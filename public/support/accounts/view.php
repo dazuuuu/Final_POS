@@ -221,7 +221,7 @@ if (support_posted()) {
 }
 
 $packages = Features::forAccount($id);
-$shops = $pdo->prepare('SELECT name, status, created_at FROM tenants WHERE id = ? OR parent_tenant_id = ? ORDER BY parent_tenant_id IS NOT NULL, created_at');
+$shops = $pdo->prepare('SELECT id, name, status, created_at FROM tenants WHERE id = ? OR parent_tenant_id = ? ORDER BY parent_tenant_id IS NOT NULL, created_at');
 $shops->execute([$id, $id]);
 $shops = $shops->fetchAll(PDO::FETCH_ASSOC);
 
