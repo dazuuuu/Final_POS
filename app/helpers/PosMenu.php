@@ -85,6 +85,7 @@ class PosMenu
             ['Dashboard', 'fa-gauge-high', $staff ? 'staff/dashboard/' : 'super/dashboard/', true],
             ['Statement', 'fa-file-lines', 'super/statements/', $money],
             ['Opening & closing sales', 'fa-sun', 'super/day/', true],
+            ['My WhatsApp', 'fa-comment-dots', "$a/whatsapp/", true], // everyone: the number receipts are sent from
         ]];
 
         $g[] = ['shop', 'Shop', 'fa-cash-register', !$shopCommon ? [] : [

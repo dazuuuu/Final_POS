@@ -54,6 +54,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'email
     }
 }
 
+// WhatsApp: the credit overview — this sale, what is paid and owed, and everything the customer owes in total.
+$overview = [];
+if (!empty($order['customer_id'])) {
+    try { $overview = (new Models\CustomerCreditModel($pdo))->openInvoices((int) $order['customer_id']); } catch (Throwable $e) { /* optional */ }
+}
+$waPhone = (string) ($order['customer_phone'] ?? '');
+if ($waPhone === '' && !empty($order['customer_id'])) {
+    $cp = $pdo->prepare('SELECT phone FROM customers WHERE id = ? AND tenant_id = ?'); $cp->execute([(int) $order['customer_id'], TenantContext::tenantId()]); $waPhone = (string) ($cp->fetchColumn() ?: '');
+}
+$waText = $order['status'] === 'open' || $balanceDue > 0.004
+    ? WhatsApp::creditText($order, $items, $shop, $currency, (float) $paidSoFar, (float) $balanceDue, $overview, (string) ($tenant['phone'] ?? ''))
+    : WhatsApp::saleText($order + ['payment_method' => $order['payment_method'] ?? 'cash'], $items, $shop, $currency, $openedBy, (string) ($tenant['phone'] ?? ''));
+
 function money($n) { global $currency; return $currency . ' ' . number_format((float) $n, 2); }
 
 // Reached from both the staff till and (potentially) the owner's views —
@@ -200,6 +213,7 @@ $editUrl = public_url(($isStaffViewer ? 'staff' : 'super') . '/orders/edit.php?i
         <?php endif; ?>
       </div>
     <?php endif; ?>
+    <?php include __DIR__ . '/../../components/whatsapp_panel.php'; ?>
     <form method="post" class="d-flex gap-2 mb-2">
       <input type="hidden" name="action" value="email_invoice">
       <input type="email" name="email" class="form-control" placeholder="customer@email.com" value="<?php echo htmlspecialchars($order['customer_email'] ?? ''); ?>" required>

@@ -102,6 +102,7 @@ class Features
         '/super/statements/', // transaction statement: every package (owners only)
         '/super/api/', // Website API add-on: its own switch (ShopApi), any package
         '/super/day/', // opening & closing sales: every package, everyone
+        '/super/whatsapp/', '/staff/whatsapp/', // each person's own WhatsApp number for sending receipts
         '/super/settings/addons.php', // add-ons (e.g. the shop for a Services account)
     ];
 

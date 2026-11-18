@@ -15,12 +15,19 @@ unset($_SESSION['receipt_popup']);
 #rpBox iframe{border:0;width:100%;flex:1;min-height:360px;background:#f1f5f9;}
 #rpBar{display:flex;gap:8px;padding:10px;border-top:1px solid #e5e7eb;}
 #rpBar button{flex:1;padding:11px;border-radius:9px;font-weight:700;border:1px solid #d4d4d8;background:#fff;}
+#rpWa.on{display:flex !important;}
 #rpBar #rpPrint{background:#1f9a5f;border-color:#1f9a5f;color:#fff;}
 </style>
 <div id="rpBack" aria-hidden="true"><div id="rpBox" role="dialog" aria-label="Receipt">
   <iframe id="rpFrame" title="Receipt"></iframe>
-  <div id="rpBar"><button type="button" id="rpClose">Close</button><button type="button" id="rpPrint"><i class="fas fa-print me-1"></i>Print</button></div>
+  <div id="rpWa" style="display:none;gap:6px;padding:8px 10px;border-top:1px solid #e5e7eb;background:#f0faf5;flex-wrap:wrap;align-items:center;">
+    <input type="tel" id="rpWaTo" placeholder="Client's WhatsApp, e.g. 0712 345 678" inputmode="tel" style="flex:1;min-width:150px;padding:8px;border:1px solid #d4d4d8;border-radius:8px;">
+    <button type="button" id="rpWaGo" style="padding:8px 14px;border-radius:8px;border:0;background:#25d366;color:#fff;font-weight:700;">Send</button>
+    <div id="rpWaFrom" style="width:100%;font-size:.75rem;color:#64748b;"></div>
+  </div>
+  <div id="rpBar"><button type="button" id="rpClose">Close</button><button type="button" id="rpWaBtn"><i class="fab fa-whatsapp me-1" style="color:#25d366"></i>WhatsApp</button><button type="button" id="rpPrint"><i class="fas fa-print me-1"></i>Print</button></div>
 </div></div>
+<script src="<?php echo htmlspecialchars(public_url('assets/js/whatsapp.js')); ?>"></script>
 <script>
 (function () {
   var back = document.getElementById('rpBack'), frame = document.getElementById('rpFrame'), onClose = null;
@@ -31,7 +38,7 @@ unset($_SESSION['receipt_popup']);
     frame.src = url; back.classList.add('on');
   }
   function close() {
-    back.classList.remove('on'); frame.src = 'about:blank';
+    back.classList.remove('on'); waBox.classList.remove('on'); frame.src = 'about:blank';
     if (onClose) { var cb = onClose; onClose = null; cb(); }
   }
   // A receipt that did not open (offline notice, error page or nothing at all) is reported and offers a retry.
@@ -48,6 +55,20 @@ unset($_SESSION['receipt_popup']);
       if (!frame.dataset.retried) { frame.dataset.retried = '1'; setTimeout(function () { frame.src = frame.src; }, 1500); }
     } else { delete frame.dataset.retried; }
   });
+  // WhatsApp: the receipt page exposes its message (window.TasoWaMsg); ask for the client's number here and open WhatsApp.
+  var waBox = document.getElementById('rpWa'), waTo = document.getElementById('rpWaTo');
+  document.getElementById('rpWaBtn').onclick = function () {
+    var m = null; try { m = frame.contentWindow.TasoWaMsg; } catch (e) {}
+    if (!m) { alert('Open the receipt first.'); return; }
+    waTo.value = waTo.value || (m.phone ? '0' + m.phone.slice(3) : '');
+    document.getElementById('rpWaFrom').textContent = m.mine ? 'Replies come to your WhatsApp +' + m.mine : 'Opens in the WhatsApp on this device.';
+    waBox.classList.toggle('on'); waTo.focus();
+  };
+  document.getElementById('rpWaGo').onclick = function () {
+    var m = null; try { m = frame.contentWindow.TasoWaMsg; } catch (e) {}
+    if (m && window.TasoWa) { TasoWa.send(waTo.value, m.text); }
+  };
+  waTo.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('rpWaGo').click(); } });
   document.getElementById('rpClose').onclick = close;
   back.addEventListener('click', function (e) { if (e.target === back) close(); });
   document.getElementById('rpPrint').onclick = function () {

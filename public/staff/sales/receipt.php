@@ -161,18 +161,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'email
     }
 }
 
-// WhatsApp number (Kenya-friendly)
-$waNum = '';
-if (!empty($sale['customer_phone'])) {
-    $d = preg_replace('/\D+/', '', $sale['customer_phone']);
-    if ($d !== '') {
-        if (strpos($d, '0') === 0) { $d = '254' . substr($d, 1); }
-        elseif (strpos($d, '254') !== 0) { $d = '254' . $d; }
-        $waNum = $d;
-    }
-}
-$waText = rawurlencode("Receipt {$sale['receipt_number']} from {$RECEIPT_BUSINESS['name']}\nTotal: " . money($sale['total']) . "\nThank you!");
-$waLink = 'https://wa.me/' . $waNum . '?text=' . $waText;
+// WhatsApp: the receipt as a message, to the client's number (typed on the receipt, or the one saved on the sale).
+$waPhone = (string) ($sale['customer_phone'] ?? '');
+$waText = WhatsApp::saleText($sale, $items, $RECEIPT_BUSINESS['name'], 'KES', $staff, (string) ($tenant['phone'] ?? ''));
 
 $defaultEmail = htmlspecialchars($sale['customer_email'] ?? '');
 
@@ -211,8 +202,8 @@ $editUrl = public_url(($isStaffViewer ? 'staff' : 'super') . '/sales/edit.php?id
   <div class="actions">
     <div class="d-flex gap-2 mb-2">
       <button onclick="TasoPrinter.printClick()" class="btn btn-primary flex-fill"><i class="fas fa-print me-1"></i> Print / Save PDF</button>
-      <a href="<?php echo htmlspecialchars($waLink); ?>" target="_blank" rel="noopener" class="btn btn-success flex-fill"><i class="fab fa-whatsapp me-1"></i> WhatsApp</a>
     </div>
+    <?php include __DIR__ . '/../../components/whatsapp_panel.php'; ?>
     <?php if (TenantContext::can(Capabilities::SALES_RECORD)): ?>
       <a href="<?php echo htmlspecialchars($editUrl); ?>" class="btn btn-outline-primary w-100 mb-2"><i class="fas fa-pen-to-square me-1"></i>Edit sale</a>
     <?php endif; ?>
