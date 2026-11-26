@@ -21,6 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $page_title = 'Support';
+// Installing from this page installs the Support app (not the shop POS).
+$__manifestUrl = public_url('support/manifest.php'); $__themeColor = '#0c1711'; $__appTitle = Branding::platform()['name'] . ' Support';
 ob_start();
 ?>
 <div class="auth-title">Support</div>

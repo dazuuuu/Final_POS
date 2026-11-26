@@ -30,6 +30,7 @@ $byPath = $pdo->query("SELECT path, COUNT(*) c FROM sys_errors WHERE created_at 
 $logs = ErrorLog::tail(120);
 
 $nav = 'errors';
+$page_title = 'Errors';
 ob_start();
 ?>
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">

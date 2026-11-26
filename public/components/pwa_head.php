@@ -1,12 +1,12 @@
 <?php /* PWA head tags + service-worker registration. Include inside <head>. */ ?>
 <?php require_once __DIR__ . '/../../app/helpers/PathConfig.php'; ?>
 <?php $__shopSlug = class_exists('ShopUrl', false) ? (string) ShopUrl::current() : ''; ?>
-<link rel="manifest" href="<?php echo $__shopSlug !== '' && preg_match('/^[a-z0-9-]+$/', $__shopSlug) ? public_url('manifest.php?s=' . $__shopSlug) : public_url('manifest.webmanifest'); ?>">
-<meta name="theme-color" content="#0f766e">
+<link rel="manifest" href="<?php echo isset($__manifestUrl) ? htmlspecialchars($__manifestUrl) : ($__shopSlug !== '' && preg_match('/^[a-z0-9-]+$/', $__shopSlug) ? public_url('manifest.php?s=' . $__shopSlug) : public_url('manifest.webmanifest')); ?>">
+<meta name="theme-color" content="<?php echo htmlspecialchars($__themeColor ?? '#0f766e'); ?>">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Dazu POS">
+<meta name="apple-mobile-web-app-title" content="<?php echo htmlspecialchars($__appTitle ?? 'Dazu POS'); ?>">
 <link rel="apple-touch-icon" href="<?php echo public_url('assets/icons/apple-touch-icon.png'); ?>">
 <link rel="icon" type="image/png" sizes="32x32" href="<?php echo public_url('assets/icons/favicon-32.png'); ?>">
 <?php /* 1%–100% loader for slow pages, forms and connections (invisible when things are fast). */ ?>

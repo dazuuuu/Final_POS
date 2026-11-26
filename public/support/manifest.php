@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../app/app.php';
 $brand = Branding::platform();
 $start = public_url('support/');
 header('Content-Type: application/manifest+json; charset=utf-8');
+header('Cache-Control: public, max-age=3600');
 echo json_encode([
     'name' => $brand['name'] . ' Support',
     'short_name' => 'Support',
@@ -14,7 +15,10 @@ echo json_encode([
     'start_url' => $start,
     'scope' => $start,
     'display' => 'standalone',
-    'orientation' => 'portrait-primary',
+    'orientation' => 'any',
+    'lang' => 'en',
+    'categories' => ['business', 'productivity'],
+    'prefer_related_applications' => false,
     'background_color' => '#0c1711',
     'theme_color' => '#0c1711',
     'icons' => [

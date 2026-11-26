@@ -244,5 +244,6 @@ h1.h4{font-weight:600;letter-spacing:-.02em;}
   }
 })();
 </script>
+<?php include __DIR__ . '/../components/support_install_banner.php'; ?>
 </body>
 </html>
