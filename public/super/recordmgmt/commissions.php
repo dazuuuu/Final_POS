@@ -27,11 +27,13 @@ ob_start();
 </div>
 
 <div class="card border-0 shadow-sm" style="border-radius:14px;"><div class="card-body p-4">
-  <h2 class="h6 fw-bold mb-3">Per employee</h2>
+  <h2 class="h6 fw-bold mb-3">Per employee <span class="small fw-normal text-muted">— grouped A–Z</span></h2>
   <div class="table-responsive"><table class="table align-middle">
     <thead><tr><th>Employee</th><th>Role</th><th>Jobs</th><th>Earned (net)</th><th>Commission</th><th>Owed now</th></tr></thead>
     <tbody>
-    <?php foreach ($byEmployee as $e): ?>
+    <?php $groups = rm_alpha_groups($byEmployee, fn($e) => trim($e['first_name'] . ' ' . $e['last_name'])); foreach ($groups as $letter => $rows): ?>
+      <tr class="table-light"><th colspan="6" class="small text-uppercase text-muted py-1"><?php echo rm_h($letter); ?></th></tr>
+      <?php foreach ($rows as $e): ?>
       <tr>
         <td><?php echo rm_h(trim($e['first_name'] . ' ' . $e['last_name'])); ?></td>
         <td><?php echo rm_h($e['role']); ?></td>
@@ -40,6 +42,7 @@ ob_start();
         <td class="text-success fw-semibold"><?php echo rm_money($e['commission']); ?></td>
         <td class="fw-bold"><?php echo rm_money($e['owed']); ?></td>
       </tr>
+      <?php endforeach; ?>
     <?php endforeach; ?>
     <?php if (!$byEmployee): ?><tr><td colspan="6" class="text-center text-muted py-3">No employees yet.</td></tr><?php endif; ?>
     </tbody>

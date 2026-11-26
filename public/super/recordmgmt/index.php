@@ -16,8 +16,11 @@ foreach ($ops as $o) {
 
 ob_start();
 ?>
+<?php $egroups = rm_alpha_groups($employees, 'rm_name'); ?>
+<?php foreach ($egroups as $letter => $rows): ?>
+<div class="small fw-bold text-uppercase text-muted mb-2"><?php echo rm_h($letter); ?></div>
 <div class="row g-3 mb-4">
-  <?php foreach ($employees as $e): ?>
+  <?php foreach ($rows as $e): ?>
     <div class="col-6 col-md-4 col-lg-3">
       <a href="<?php echo public_url('super/recordmgmt/record.php?employee_id=' . (int) $e['id']); ?>" class="text-decoration-none">
         <div class="card border-0 shadow-sm h-100" style="border-radius:14px;">
@@ -33,10 +36,11 @@ ob_start();
       </a>
     </div>
   <?php endforeach; ?>
-  <?php if (!$employees): ?>
-    <div class="col-12 text-center text-muted py-4">No employees yet. Add them from <a href="<?php echo public_url('super/recordmgmt/employees.php'); ?>">Employees</a>.</div>
-  <?php endif; ?>
 </div>
+<?php endforeach; ?>
+<?php if (!$employees): ?>
+  <div class="text-center text-muted py-4">No employees yet. Add them from <a href="<?php echo public_url('super/recordmgmt/employees.php'); ?>">Employees</a>.</div>
+<?php endif; ?>
 
 <div class="card border-0 shadow-sm" style="border-radius:14px;"><div class="card-body p-4">
   <h2 class="h6 fw-bold mb-3">Today's operations</h2>

@@ -508,4 +508,132 @@ class RecordMgmtModel
         $avg = $rows ? array_sum(array_column($rows, 'revenue')) / count($rows) : 0;
         return ['rows' => $rows, 'average' => $avg];
     }
+
+    // ===== Clean records ====================================================
+    // Lets the owner see everything recorded on the account — employees,
+    // services, products, operations, payments, expenses — and delete the
+    // specific entries they pick (not a date sweep). Deleting an operation or
+    // payment reverses its effect on the employee's owed balance, since this
+    // is meant for correcting mistakes. Owner-only.
+
+    public const RECORD_TYPES = ['employees', 'services', 'products', 'operations', 'payments', 'expenses'];
+
+    /** Every record of every type, newest/most-recent first within each type, for the Clean records browser. */
+    public function allRecords(): array
+    {
+        $acc = $this->account();
+        $out = [];
+        $out['employees'] = $this->employees(false);
+        $out['services'] = $this->services(false);
+        $out['products'] = $this->products(false);
+        $st = $this->db->prepare("SELECT o.*, CONCAT(e.first_name, ' ', COALESCE(e.last_name,'')) employee_name
+            FROM rm_operations o JOIN rm_employees e ON e.id = o.employee_id
+            WHERE o.account_id = ? ORDER BY o.created_at DESC LIMIT 500");
+        $st->execute([$acc]);
+        $out['operations'] = $st->fetchAll();
+        $out['payments'] = $this->payments(500);
+        $st = $this->db->prepare('SELECT ex.*, c.name category_name FROM rm_expenses ex
+            JOIN rm_expense_categories c ON c.id = ex.category_id
+            WHERE ex.account_id = ? ORDER BY ex.created_at DESC LIMIT 500');
+        $st->execute([$acc]);
+        $out['expenses'] = $st->fetchAll();
+        return $out;
+    }
+
+    /** How many operations/payments reference this employee — if any, deleting is blocked (deactivate instead). */
+    public function employeeUsage(int $id): int
+    {
+        $acc = $this->account();
+        $st = $this->db->prepare('SELECT (SELECT COUNT(*) FROM rm_operations WHERE employee_id = ? AND account_id = ?)
+            + (SELECT COUNT(*) FROM rm_payments WHERE employee_id = ? AND account_id = ?)');
+        $st->execute([$id, $acc, $id, $acc]);
+        return (int) $st->fetchColumn();
+    }
+
+    public function serviceUsage(int $id): int
+    {
+        $st = $this->db->prepare('SELECT COUNT(*) FROM rm_operations WHERE service_id = ? AND account_id = ?');
+        $st->execute([$id, $this->account()]);
+        return (int) $st->fetchColumn();
+    }
+
+    public function productUsage(int $id): int
+    {
+        $st = $this->db->prepare('SELECT COUNT(*) FROM rm_operation_products op
+            JOIN rm_operations o ON o.id = op.operation_id WHERE op.product_id = ? AND o.account_id = ?');
+        $st->execute([$id, $this->account()]);
+        return (int) $st->fetchColumn();
+    }
+
+    /**
+     * Deletes the chosen ids of one $type (one of RECORD_TYPES). Employees,
+     * services and products that are referenced by any operation are skipped
+     * (use Deactivate instead) — the response says how many were skipped.
+     * Deleting an operation reverses its commission from the employee's owed
+     * balance; deleting a payment adds the amount back to what's owed.
+     */
+    public function deleteRecords(string $type, array $ids): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        $ids = array_filter($ids, fn($id) => $id > 0);
+        if (!in_array($type, self::RECORD_TYPES, true) || !$ids) {
+            return ['ok' => false, 'error' => 'Choose at least one record to delete.'];
+        }
+        $acc = $this->account();
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $removed = 0; $skipped = 0;
+
+        try {
+            if ($type === 'employees') {
+                foreach ($ids as $id) {
+                    if ($this->employeeUsage($id) > 0) { $skipped++; continue; }
+                    $this->db->prepare('DELETE FROM rm_employees WHERE id = ? AND account_id = ?')->execute([$id, $acc]);
+                    $removed++;
+                }
+            } elseif ($type === 'services') {
+                foreach ($ids as $id) {
+                    if ($this->serviceUsage($id) > 0) { $skipped++; continue; }
+                    $this->db->prepare('DELETE FROM rm_services WHERE id = ? AND account_id = ?')->execute([$id, $acc]);
+                    $removed++;
+                }
+            } elseif ($type === 'products') {
+                foreach ($ids as $id) {
+                    if ($this->productUsage($id) > 0) { $skipped++; continue; }
+                    $this->db->prepare('DELETE FROM rm_products WHERE id = ? AND account_id = ?')->execute([$id, $acc]);
+                    $removed++;
+                }
+            } elseif ($type === 'operations') {
+                $this->db->beginTransaction();
+                $st = $this->db->prepare("SELECT * FROM rm_operations WHERE id IN ($in) AND account_id = ?");
+                $st->execute([...$ids, $acc]);
+                foreach ($st->fetchAll() as $op) {
+                    $this->db->prepare('UPDATE rm_employees SET owed = GREATEST(owed - ?, 0) WHERE id = ?')
+                        ->execute([(float) $op['commission'], (int) $op['employee_id']]);
+                    $this->db->prepare('DELETE FROM rm_operation_products WHERE operation_id = ?')->execute([$op['id']]);
+                    $this->db->prepare('DELETE FROM rm_operations WHERE id = ?')->execute([$op['id']]);
+                    $removed++;
+                }
+                $this->db->commit();
+            } elseif ($type === 'payments') {
+                $this->db->beginTransaction();
+                $st = $this->db->prepare("SELECT * FROM rm_payments WHERE id IN ($in) AND account_id = ?");
+                $st->execute([...$ids, $acc]);
+                foreach ($st->fetchAll() as $p) {
+                    $this->db->prepare('UPDATE rm_employees SET owed = owed + ? WHERE id = ?')
+                        ->execute([(float) $p['amount'], (int) $p['employee_id']]);
+                    $this->db->prepare('DELETE FROM rm_payments WHERE id = ?')->execute([$p['id']]);
+                    $removed++;
+                }
+                $this->db->commit();
+            } elseif ($type === 'expenses') {
+                $st = $this->db->prepare("DELETE FROM rm_expenses WHERE id IN ($in) AND account_id = ?");
+                $st->execute([...$ids, $acc]);
+                $removed = $st->rowCount();
+            }
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) { $this->db->rollBack(); }
+            return ['ok' => false, 'error' => 'Could not delete: ' . $e->getMessage()];
+        }
+        return ['ok' => true, 'removed' => $removed, 'skipped' => $skipped];
+    }
 }

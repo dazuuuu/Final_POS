@@ -68,11 +68,13 @@ ob_start();
 
   <div class="col-12 col-lg-7">
     <div class="card border-0 shadow-sm" style="border-radius:14px;"><div class="card-body p-4">
-      <h2 class="h6 fw-bold mb-3">Employees (<?php echo count($employees); ?>)</h2>
+      <h2 class="h6 fw-bold mb-3">Employees (<?php echo count($employees); ?>) <span class="small fw-normal text-muted">— grouped A–Z</span></h2>
       <div class="table-responsive"><table class="table align-middle">
         <thead><tr><th>Name</th><th>Role</th><th>Phone</th><th>Owed</th><th></th></tr></thead>
         <tbody>
-        <?php foreach ($employees as $e): ?>
+        <?php $groups = rm_alpha_groups($employees, 'rm_name'); foreach ($groups as $letter => $rows): ?>
+          <tr class="table-light"><th colspan="5" class="small text-uppercase text-muted py-1"><?php echo rm_h($letter); ?></th></tr>
+          <?php foreach ($rows as $e): ?>
           <tr class="<?php echo $e['active'] ? '' : 'text-muted'; ?>">
             <td><?php echo rm_h(rm_name($e)); ?><?php if (!$e['active']): ?> <span class="badge bg-secondary">Inactive</span><?php endif; ?></td>
             <td><?php echo rm_h($e['role']); ?></td>
@@ -86,6 +88,7 @@ ob_start();
               </form>
             </td>
           </tr>
+          <?php endforeach; ?>
         <?php endforeach; ?>
         <?php if (!$employees): ?><tr><td colspan="5" class="text-center text-muted py-3">No employees yet.</td></tr><?php endif; ?>
         </tbody>

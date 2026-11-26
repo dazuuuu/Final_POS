@@ -53,11 +53,13 @@ ob_start();
   </div>
   <div class="col-12 col-lg-7">
     <div class="card border-0 shadow-sm" style="border-radius:14px;"><div class="card-body p-4">
-      <h2 class="h6 fw-bold mb-3">Services (<?php echo count($services); ?>)</h2>
+      <h2 class="h6 fw-bold mb-3">Services (<?php echo count($services); ?>) <span class="small fw-normal text-muted">— grouped A–Z</span></h2>
       <div class="table-responsive"><table class="table align-middle">
         <thead><tr><th>Name</th><th>Charge</th><th>Description</th><th></th></tr></thead>
         <tbody>
-        <?php foreach ($services as $s): ?>
+        <?php $groups = rm_alpha_groups($services, fn($s) => $s['name']); foreach ($groups as $letter => $rows): ?>
+          <tr class="table-light"><th colspan="4" class="small text-uppercase text-muted py-1"><?php echo rm_h($letter); ?></th></tr>
+          <?php foreach ($rows as $s): ?>
           <tr class="<?php echo $s['active'] ? '' : 'text-muted'; ?>">
             <td><?php echo rm_h($s['name']); ?></td>
             <td><?php echo $s['charge_type'] === 'percent' ? rm_h($s['amount']) . '%' : rm_money($s['amount']); ?></td>
@@ -70,6 +72,7 @@ ob_start();
               </form>
             </td>
           </tr>
+          <?php endforeach; ?>
         <?php endforeach; ?>
         <?php if (!$services): ?><tr><td colspan="4" class="text-center text-muted py-3">No services yet.</td></tr><?php endif; ?>
         </tbody>

@@ -180,6 +180,7 @@ class PosMenu
                 ['Pay employees', 'fa-hand-holding-dollar', 'super/recordmgmt/payments.php', $owner || $can(Capabilities::RM_PAYOUT)],
                 ['Expenses', 'fa-file-invoice-dollar', 'super/recordmgmt/expenses.php', $owner || $can(Capabilities::RM_EXPENSES)],
                 ['Employee tracker', 'fa-chart-line', 'super/recordmgmt/tracker.php', $money],
+                ['Clean records', 'fa-broom', 'super/recordmgmt/cleanup.php', $owner],
                 ['Staff (logins)', 'fa-user-gear', 'super/staff/', $can(Capabilities::STAFF_MANAGE)],
                 ['Permissions', 'fa-key', 'super/staff/permissions.php', $can(Capabilities::STAFF_MANAGE)],
             ]];

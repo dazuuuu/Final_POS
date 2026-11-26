@@ -39,6 +39,28 @@ function rm_name(array $e): string
     return trim($e['first_name'] . ' ' . ($e['last_name'] ?? ''));
 }
 
+/**
+ * Groups $rows alphabetically by the first letter of $label($row) — rows
+ * sharing a starting letter land under the same letter heading, in A→Z
+ * order (non-letters grouped under "#"). Keeps each group in its incoming
+ * order (callers should already SELECT ... ORDER BY the label).
+ */
+function rm_alpha_groups(array $rows, callable $label): array
+{
+    $groups = [];
+    foreach ($rows as $row) {
+        $l = strtoupper(substr(trim((string) $label($row)), 0, 1));
+        $key = ($l !== '' && ctype_alpha($l)) ? $l : '#';
+        $groups[$key][] = $row;
+    }
+    uksort($groups, function ($a, $b) {
+        if ($a === '#') { return 1; }
+        if ($b === '#') { return -1; }
+        return $a <=> $b;
+    });
+    return $groups;
+}
+
 function rm_render(string $title, string $content): void
 {
     $page_title = $title;
