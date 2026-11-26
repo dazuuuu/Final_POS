@@ -248,7 +248,7 @@
         : 'The upload could not finish. Press Try again to send it once more.', true);
       retry = function () { sendWithProgress(f, submitter); };
     };
-    xhr.open((f.method || 'post').toUpperCase(), url);
+    xhr.open((f.getAttribute('method') || 'post').toUpperCase(), url);
     xhr.send(data);
   }
 
@@ -258,7 +258,7 @@
     var target = (f.getAttribute('target') || '').toLowerCase();
     if (target && target !== '_self') return;
     var action = f.getAttribute('action') || location.href;
-    if (isDownload(action) || (f.method || '').toLowerCase() === 'get' && Array.prototype.some.call(f.elements, function (x) {
+    if (isDownload(action) || (f.getAttribute('method') || '').toLowerCase() === 'get' && Array.prototype.some.call(f.elements, function (x) {
       return x.name && /^(excel|pdf|csv|download|export)$/i.test(x.name) && (x.type !== 'checkbox' || x.checked);
     })) return;
     if (navigator.onLine === false) {
