@@ -844,7 +844,8 @@ class OrderModel extends Model
     {
         $tid = \TenantContext::tenantId();
         $periodSql = match ($period) {
-            'today' => "AND DATE(o.paid_at) = CURDATE()",
+            // Range form so idx_order_report (tenant_id, status, paid_at) can be used.
+            'today' => "AND o.paid_at >= CURDATE() AND o.paid_at < CURDATE() + INTERVAL 1 DAY",
             'week'  => "AND o.paid_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
             'month' => "AND o.paid_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)",
             default => '',
@@ -895,10 +896,10 @@ class OrderModel extends Model
                     (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) AS item_count
                FROM orders o
           LEFT JOIN users u ON u.id = o.opened_by
-              WHERE o.tenant_id = ? AND o.status = 'paid' AND DATE(o.paid_at) = ? {$staffSql}
+              WHERE o.tenant_id = ? AND o.status = 'paid' AND o.paid_at >= ? AND o.paid_at < ? + INTERVAL 1 DAY {$staffSql}
            ORDER BY o.paid_at ASC, o.id ASC"
         );
-        $params = [$tenantId, $date];
+        $params = [$tenantId, $date, $date];
         if ($staffId !== null) { $params[] = $staffId; }
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
@@ -928,11 +929,11 @@ class OrderModel extends Model
                     MIN(o.paid_at) AS first_at, MAX(o.paid_at) AS last_at
                FROM order_items oi
                JOIN orders o ON o.id = oi.order_id AND o.tenant_id = oi.tenant_id
-              WHERE oi.tenant_id = ? AND o.status = 'paid' AND DATE(o.paid_at) = ?
+              WHERE oi.tenant_id = ? AND o.status = 'paid' AND o.paid_at >= ? AND o.paid_at < ? + INTERVAL 1 DAY
            GROUP BY oi.product_name
            ORDER BY revenue DESC"
         );
-        $stmt->execute([$tenantId, $date]);
+        $stmt->execute([$tenantId, $date, $date]);
         return $stmt->fetchAll();
     }
 
@@ -943,7 +944,8 @@ class OrderModel extends Model
         if ($tid === null) { return []; }
 
         $periodSql = match ($period) {
-            'today' => "AND DATE(o.paid_at) = CURDATE()",
+            // Range form so idx_order_report (tenant_id, status, paid_at) can be used.
+            'today' => "AND o.paid_at >= CURDATE() AND o.paid_at < CURDATE() + INTERVAL 1 DAY",
             'week'  => "AND o.paid_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
             'month' => "AND o.paid_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)",
             default => '',
@@ -995,11 +997,11 @@ class OrderModel extends Model
                   FROM order_items oi
                   JOIN orders o    ON o.id = oi.order_id AND o.tenant_id = oi.tenant_id
              LEFT JOIN products p  ON p.id = oi.product_id AND p.tenant_id = oi.tenant_id
-                 WHERE oi.tenant_id = ? AND o.status = 'paid' AND DATE(o.paid_at) = ?
+                 WHERE oi.tenant_id = ? AND o.status = 'paid' AND o.paid_at >= ? AND o.paid_at < ? + INTERVAL 1 DAY
               GROUP BY oi.product_id";
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$tid, $date]);
+        $stmt->execute([$tid, $date, $date]);
         $rows = $stmt->fetchAll();
         foreach ($rows as &$r) {
             $rev  = round((float) $r['revenue'], 2);
@@ -1029,6 +1031,10 @@ class OrderModel extends Model
         $this->ensureColumn('orders', 'edit_count', "ALTER TABLE orders ADD COLUMN edit_count INT NOT NULL DEFAULT 0 AFTER status");
         $this->ensureColumn('orders', 'edited_at', "ALTER TABLE orders ADD COLUMN edited_at DATETIME NULL AFTER edit_count");
         $this->ensureColumn('orders', 'amount_paid', "ALTER TABLE orders ADD COLUMN amount_paid DECIMAL(12,2) NOT NULL DEFAULT 0 AFTER total");
+        // The sales list (today/week/month/one day) was filtering tenant_id + status
+        // then scanning every matching row to evaluate DATE(paid_at) — this index,
+        // paired with range-form date filters below, lets it seek instead.
+        $this->ensureIndex('orders', 'idx_order_report', 'tenant_id, status, paid_at');
         $this->ensureTable('order_payments', "CREATE TABLE IF NOT EXISTS order_payments (
             id INT AUTO_INCREMENT PRIMARY KEY,
             tenant_id INT NOT NULL,
@@ -1092,6 +1098,20 @@ class OrderModel extends Model
             $this->db->exec($sql);
         } catch (\PDOException $ignored) {
             // Setup/migration pages may construct models before the schema exists.
+        }
+    }
+
+    /** Adds an index once, if a table doesn't already have one by that name (installs that predate it). */
+    private function ensureIndex(string $table, string $indexName, string $columnsSql): void
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?");
+            $stmt->execute([$table, $indexName]);
+            if ((int) $stmt->fetchColumn() > 0) {
+                return;
+            }
+            $this->db->exec("ALTER TABLE `{$table}` ADD INDEX `{$indexName}` ({$columnsSql})");
+        } catch (\PDOException $ignored) {
         }
     }
 }

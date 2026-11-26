@@ -18,6 +18,11 @@ if ((!TenantContext::can(Capabilities::SALES_RECORD) || !Features::enabled(Featu
     exit;
 }
 
+if (Features::recordMgmtOnly()) {
+    header('Location: ' . public_url('super/recordmgmt/'));
+    exit;
+}
+
 // Restaurant-only accounts: staff home is the restaurant order screen.
 if (!Features::enabled(Features::SHOP_POS) && Features::enabled(Features::RESTAURANT_POS)) {
     $pos = Database::pdo()->prepare('SELECT position FROM users WHERE id = ?');

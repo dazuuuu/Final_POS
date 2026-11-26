@@ -10,6 +10,9 @@
       <li><a href="#packages">Packages</a></li>
       <li><a href="#demo">Live demo</a></li>
       <li><a href="#start">Get started</a></li>
+      <li class="mobile-signin-divider" aria-hidden="true"></li>
+      <li class="mobile-signin"><a href="<?php echo $h(public_url('admin/')); ?>"><i class="fas fa-user-tie"></i> Owner / admin sign in</a></li>
+      <li class="mobile-signin"><a href="<?php echo $h(public_url('terminal/')); ?>"><i class="fas fa-delete-left"></i> Staff terminal (PIN)</a></li>
     </ul>
     <div class="signin">
       <button type="button" aria-haspopup="true"><i class="fas fa-right-to-bracket"></i> Sign in <i class="fas fa-chevron-down" style="font-size:.7rem"></i></button>

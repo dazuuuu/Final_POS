@@ -688,9 +688,13 @@ class SaleModel extends Model
                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE KEY uq_sale_receipt (tenant_id, receipt_number),
                 KEY idx_sale_tenant (tenant_id),
-                KEY idx_sale_staff (staff_id)
+                KEY idx_sale_staff (staff_id),
+                KEY idx_sale_report (tenant_id, status, created_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
+        // Installs from before this index existed: the sales list (today/week/month/one day)
+        // was doing a full scan of the tenant's sales instead of a range seek.
+        $this->ensureIndex('sales', 'idx_sale_report', 'tenant_id, status, created_at');
 
         $this->ensureTable('sale_items', "
             CREATE TABLE IF NOT EXISTS sale_items (
@@ -766,6 +770,20 @@ class SaleModel extends Model
         }
     }
 
+    /** Adds an index once, if a table doesn't already have one by that name (installs that predate it). */
+    private function ensureIndex(string $table, string $indexName, string $columnsSql): void
+    {
+        try {
+            $stmt = $this->db->prepare("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?");
+            $stmt->execute([$table, $indexName]);
+            if ((int) $stmt->fetchColumn() > 0) {
+                return;
+            }
+            $this->db->exec("ALTER TABLE `{$table}` ADD INDEX `{$indexName}` ({$columnsSql})");
+        } catch (\PDOException $ignored) {
+        }
+    }
+
     public function forStaff(int $staffId, int $limit = 500, ?string $date = null): array
     {
         $tid = \TenantContext::tenantId();
@@ -788,7 +806,9 @@ class SaleModel extends Model
     {
         $tid = \TenantContext::tenantId();
         $periodSql = match ($period) {
-            'today' => "AND DATE(s.created_at) = CURDATE()",
+            // Range form (not DATE(s.created_at) = CURDATE()) so the idx_sale_report
+            // index is actually used instead of a full scan of the tenant's sales.
+            'today' => "AND s.created_at >= CURDATE() AND s.created_at < CURDATE() + INTERVAL 1 DAY",
             'week'  => "AND s.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
             'month' => "AND s.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)",
             default => '',
@@ -814,10 +834,10 @@ class SaleModel extends Model
             "SELECT s.*, u.username AS staff_name
                FROM sales s
           LEFT JOIN users u ON u.id = s.staff_id
-              WHERE s.tenant_id = ? AND s.status = 'completed' AND DATE(s.created_at) = ?
+              WHERE s.tenant_id = ? AND s.status = 'completed' AND s.created_at >= ? AND s.created_at < ? + INTERVAL 1 DAY
            ORDER BY s.created_at ASC"
         );
-        $stmt->execute([$tenantId, $date]);
+        $stmt->execute([$tenantId, $date, $date]);
         return $stmt->fetchAll();
     }
 
@@ -871,7 +891,9 @@ class SaleModel extends Model
         }
 
         $periodSql = match ($period) {
-            'today' => "AND DATE(s.created_at) = CURDATE()",
+            // Range form (not DATE(s.created_at) = CURDATE()) so the idx_sale_report
+            // index is actually used instead of a full scan of the tenant's sales.
+            'today' => "AND s.created_at >= CURDATE() AND s.created_at < CURDATE() + INTERVAL 1 DAY",
             'week'  => "AND s.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
             'month' => "AND s.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)",
             default => '',
@@ -930,11 +952,11 @@ class SaleModel extends Model
                   FROM sale_items si
                   JOIN sales s     ON s.id = si.sale_id AND s.tenant_id = si.tenant_id
              LEFT JOIN products p  ON p.id = si.product_id AND p.tenant_id = si.tenant_id
-                 WHERE si.tenant_id = ? AND s.status = 'completed' AND DATE(s.created_at) = ?
+                 WHERE si.tenant_id = ? AND s.status = 'completed' AND s.created_at >= ? AND s.created_at < ? + INTERVAL 1 DAY
               GROUP BY si.product_id";
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([$tid, $date]);
+        $stmt->execute([$tid, $date, $date]);
         $rows = $stmt->fetchAll();
         foreach ($rows as &$r) {
             $rev  = round((float) $r['revenue'], 2);

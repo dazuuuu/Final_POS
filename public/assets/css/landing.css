@@ -43,6 +43,7 @@ body.lp{overflow-x:hidden;margin:0;font-family:'Plus Jakarta Sans',system-ui,-ap
 .signin-menu b{display:block;font-size:.92rem}
 .signin-menu small{color:var(--muted);font-size:.78rem;line-height:1.35;display:block}
 .menu-btn{display:none;background:none;border:0;color:#fff;font-size:1.3rem;margin-left:auto}
+.mobile-signin,.mobile-signin-divider{display:none}
 
 /* ---------- hero ---------- */
 /* The green slanted backdrop is its own layer, so the dashboard mock-up can hang over its edge. */
@@ -243,8 +244,13 @@ body.lp{overflow-x:hidden;margin:0;font-family:'Plus Jakarta Sans',system-ui,-ap
 /* ---------- responsive ---------- */
 @media (max-width:1100px){.float.f-left{left:-20px}.float.f-right{right:-10px}.float.f-cal{display:none}}
 @media (max-width:960px){
-  .nav{display:none}.menu-btn{display:block}.signin{margin-left:0}
-  .lp-head.open .nav{display:flex;flex-direction:column;position:absolute;top:70px;left:20px;right:20px;background:var(--g-900);border-radius:16px;padding:18px;gap:14px}
+  .nav{display:none}.menu-btn{display:block}.signin{display:none}
+  .lp-head.open .nav{display:flex;flex-direction:column;position:absolute;top:70px;left:20px;right:20px;background:var(--g-900);border-radius:16px;padding:18px;gap:14px;max-height:calc(100vh - 90px);overflow-y:auto}
+  .lp-head.open .nav a{display:block;padding:6px 0}
+  .mobile-signin-divider{display:block;height:1px;background:rgba(255,255,255,.15);margin:4px 0}
+  .mobile-signin{display:block}
+  .mobile-signin a{display:flex;align-items:center;gap:10px;color:#fff;font-weight:700}
+  .mobile-signin i{width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.12);display:grid;place-items:center;font-size:.85rem;flex:0 0 auto}
   .feat-grid,.pk-grid,.opts{grid-template-columns:1fr 1fr}
   .split,.demo-card,.quote{grid-template-columns:1fr;gap:34px}
   .split.rev .split-text{order:0}

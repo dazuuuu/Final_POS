@@ -36,6 +36,13 @@ if (Features::enabled(Features::SERVICES)) {
     $toggles[] = ['key' => 'svc_money',   'label' => 'Services: see money',    'desc' => 'See service prices and amounts, and their own commission.', 'caps' => [Capabilities::SERVICES_MONEY]];
     $toggles[] = ['key' => 'svc_payout',  'label' => 'Services: pay staff commission', 'desc' => 'Pay staff what they have earned — their commission balance goes back to zero.', 'caps' => [Capabilities::SERVICES_PAYOUT]];
 }
+// Record Management package.
+if (Features::enabled(Features::RECORD_MGMT)) {
+    $toggles[] = ['key' => 'rm_manage',  'label' => 'Record Mgmt: manage', 'desc' => 'Add/edit employees, services, products and expense categories.', 'caps' => [Capabilities::RM_MANAGE]];
+    $toggles[] = ['key' => 'rm_operate', 'label' => 'Record Mgmt: operations', 'desc' => 'Record a service an employee performed on the Operations sheet (cashier/supervisor).', 'caps' => [Capabilities::RM_OPERATIONS]];
+    $toggles[] = ['key' => 'rm_payout',  'label' => 'Record Mgmt: pay employees', 'desc' => 'Pay employees what they are owed.', 'caps' => [Capabilities::RM_PAYOUT]];
+    $toggles[] = ['key' => 'rm_expenses','label' => 'Record Mgmt: expenses', 'desc' => 'Log expenses under a category, with proof.', 'caps' => [Capabilities::RM_EXPENSES]];
+}
 // Restaurant + Rooms package.
 if (Features::enabled(Features::RESTAURANT_ROOMS)) {
     $toggles[] = ['key' => 'rooms_manage', 'label' => 'Rooms: set up rooms',   'desc' => 'Add and edit rooms, their prices and the late check-out fee.', 'caps' => [Capabilities::ROOMS_MANAGE]];

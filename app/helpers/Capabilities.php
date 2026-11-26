@@ -31,6 +31,11 @@ class Capabilities
     const ROOMS_MANAGE     = 'rooms.manage';     // add / edit rooms, prices and the late-checkout fee
     const ROOMS_DESK       = 'rooms.desk';       // book guests in, add room service, check out and take payment
     const TABLE_BOOKINGS   = 'tables.book';      // group / family table bookings with pre-set menus and platters
+    // Record Management package: employees, services, operations, commissions, expenses.
+    const RM_MANAGE        = 'rm.manage';        // employees, services, products and expense categories
+    const RM_OPERATIONS    = 'rm.operations';    // record a service performed on the Operations sheet
+    const RM_PAYOUT        = 'rm.payout';        // pay employees what they're owed
+    const RM_EXPENSES      = 'rm.expenses';      // record expenses under a category
     // Money views. The primary owner always holds these; admins have finances
     // unless the owner switches it off, but start without stock value. Staff never get them.
     const FINANCE_VIEW     = 'finance.view';     // finances, profit, reports, statements, day totals
@@ -55,6 +60,7 @@ class Capabilities
             self::SERVICES_BOOK, self::SERVICES_CASHIER, self::SERVICES_MONEY, self::SERVICES_MANAGE,
             self::SERVICES_PAYOUT, self::ROOMS_MANAGE, self::ROOMS_DESK, self::TABLE_BOOKINGS,
             self::FINANCE_VIEW, self::STOCK_VALUE,
+            self::RM_MANAGE, self::RM_OPERATIONS, self::RM_PAYOUT, self::RM_EXPENSES,
         ];
     }
 

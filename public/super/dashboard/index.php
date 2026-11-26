@@ -9,6 +9,12 @@ if (!Features::enabled(Features::SHOP_POS) && Features::enabled(Features::RESTAU
     exit;
 }
 
+// Record Management-only accounts get their own overview, not the shop dashboard.
+if (Features::recordMgmtOnly()) {
+    header('Location: ' . public_url('super/recordmgmt/dashboard.php'));
+    exit;
+}
+
 $pdo = Database::pdo();
 $__money = PageGuard::seesMoney(); // admins without finance rights get the dashboard without money
 $__tenant = (new Models\TenantModel($pdo))->find(TenantContext::tenantId());

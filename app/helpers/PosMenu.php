@@ -68,7 +68,8 @@ class PosMenu
         $restOnly = !$shop && Features::enabled(Features::RESTAURANT_POS);
         // Services accounts: Operations / Management / Finances menus; the retail shop only joins as an add-on.
         $svcMode = Features::servicesMode();
-        $shopCommon = $common && !$restOnly && (!$svcMode || $shop);
+        $rmMode = Features::recordMgmtOnly();
+        $shopCommon = $common && !$restOnly && (!$svcMode || $shop) && !$rmMode;
         $main = $owner && ShopContext::isMainShop();
         $primary = $owner && self::isPrimaryOwner();
         $money = PageGuard::seesMoney();
@@ -169,8 +170,23 @@ class PosMenu
             ]];
         }
 
+        if ($rmMode) {
+            $g[] = ['recordmgmt', 'Record Management', 'fa-user-clock', [
+                ['Operations', 'fa-clipboard-list', 'super/recordmgmt/', $canOperate = $owner || $can(Capabilities::RM_OPERATIONS)],
+                ['Employees', 'fa-users-gear', 'super/recordmgmt/employees.php', $owner || $can(Capabilities::RM_MANAGE)],
+                ['Services', 'fa-list', 'super/recordmgmt/services.php', $owner || $can(Capabilities::RM_MANAGE)],
+                ['Products', 'fa-box', 'super/recordmgmt/products.php', $owner || $can(Capabilities::RM_MANAGE)],
+                ['Commissions', 'fa-percent', 'super/recordmgmt/commissions.php', $money || $canOperate],
+                ['Pay employees', 'fa-hand-holding-dollar', 'super/recordmgmt/payments.php', $owner || $can(Capabilities::RM_PAYOUT)],
+                ['Expenses', 'fa-file-invoice-dollar', 'super/recordmgmt/expenses.php', $owner || $can(Capabilities::RM_EXPENSES)],
+                ['Employee tracker', 'fa-chart-line', 'super/recordmgmt/tracker.php', $money],
+                ['Staff (logins)', 'fa-user-gear', 'super/staff/', $can(Capabilities::STAFF_MANAGE)],
+                ['Permissions', 'fa-key', 'super/staff/permissions.php', $can(Capabilities::STAFF_MANAGE)],
+            ]];
+        }
+
         $elec = Features::enabled(Features::ELECTRONICS);
-        $g[] = ['stock', 'Stock', 'fa-boxes-stacked', $restOnly || ($svcMode && !$shop) ? [] : [
+        $g[] = ['stock', 'Stock', 'fa-boxes-stacked', $restOnly || ($svcMode && !$shop) || $rmMode ? [] : [
             ['Inventory', 'fa-warehouse', "$a/inventory/", $common && ($can(Capabilities::INVENTORY_VIEW) || $invEdit)],
             ['Record stock', 'fa-truck-ramp-box', "$a/stock/new.php", $common && ($staff ? $can(Capabilities::STOCK_ENTER) : $invEdit)],
             ['Products', 'fa-box', 'super/products/', $shop && !$staff && $invEdit],
@@ -186,14 +202,14 @@ class PosMenu
             ['Warranty & repairs', 'fa-screwdriver-wrench', 'super/electronics/repairs.php', $elec && $can(Capabilities::SALES_RECORD)],
         ]];
 
-        $g[] = ['money', 'Money', 'fa-wallet', !$shopCommon || $svcMode ? [] : [
+        $g[] = ['money', 'Money', 'fa-wallet', !$shopCommon || $svcMode || $rmMode ? [] : [
             ['Expenses', 'fa-file-invoice-dollar', "$a/expenses/", $shop && $can(Capabilities::EXPENSES_RECORD)],
             ['Finances', 'fa-scale-balanced', 'super/finances/', $shop && $money],
             [$staff ? 'My sales' : 'Sales', 'fa-receipt', "$a/sales/", $staff ? $can(Capabilities::SALES_VIEW) : $money],
             ['Reports', 'fa-chart-line', 'super/reports/', $money && $can(Capabilities::REPORTS_VIEW)],
         ]];
 
-        $g[] = ['people', 'People', 'fa-users', !$common || $staff || $svcMode ? [] : [
+        $g[] = ['people', 'People', 'fa-users', !$common || $staff || $svcMode || $rmMode ? [] : [
             ['Customers', 'fa-address-book', 'super/customers/', $shop && $can(Capabilities::CUSTOMERS_MANAGE)],
             ['Staff', 'fa-user-gear', 'super/staff/', $can(Capabilities::STAFF_MANAGE)],
             ['Permissions', 'fa-key', 'super/staff/permissions.php', $can(Capabilities::STAFF_MANAGE)],
@@ -201,7 +217,7 @@ class PosMenu
         ]];
 
         $updates = $shop && $main ? count(Updates::pending()) : 0;
-        $g[] = ['business', $staff ? 'Account' : 'Business', 'fa-briefcase', $svcMode && !$staff ? [] : [
+        $g[] = ['business', $staff ? 'Account' : 'Business', 'fa-briefcase', ($svcMode || $rmMode) && !$staff ? [] : [
             [ShopContext::isMainShop() ? 'My shops' : 'Shops', 'fa-shop', 'super/shops/', $shop && $owner, $pro],
             ['Admins', 'fa-user-shield', 'super/admins/', $primary, $pro],
             ['Updates', 'fa-download', 'super/updates/', $shop && $main, $updates ? $updates . ' new' : null],
@@ -230,6 +246,9 @@ class PosMenu
 
         if ($svcMode) { // Home, Operations, Management, Finances, then the shop (if added), Settings, Help
             $rank = array_flip(['home', 'operations', 'management', 'finances', 'shop', 'stock', 'business', 'settings', 'help']);
+            usort($g, fn($x, $y) => ($rank[$x[0]] ?? 50) <=> ($rank[$y[0]] ?? 50));
+        } elseif ($rmMode) { // Home, Record Management, Settings, Help
+            $rank = array_flip(['home', 'recordmgmt', 'settings', 'help']);
             usort($g, fn($x, $y) => ($rank[$x[0]] ?? 50) <=> ($rank[$y[0]] ?? 50));
         }
         $out = [];

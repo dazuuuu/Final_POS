@@ -42,6 +42,10 @@ class Features
     // selling). Its own login, look and pages under /stock/ — see app/stock/.
     // Set up by support on request; never listed on the website.
     const STOCK_CONTROL  = 'stock_control';
+    // Record Management: a standalone package (no shop POS) for recording
+    // employees, the services they perform, products used, commissions and
+    // expenses — see app/models/RecordMgmtModel.php and public/super/recordmgmt/.
+    const RECORD_MGMT    = 'record_management_20k';
     /** Packages support can assign but the website never lists, demos or quotes. */
     const HIDDEN = [self::STOCK_CONTROL];
     const BASIC_STAFF_LIMIT = 3;
@@ -66,6 +70,7 @@ class Features
             self::RESTAURANT_ROOMS => ['Restaurant + Rooms', 40000, 'Everything in the Restaurant POS, plus Rooms & Accommodation (rooms, guest bookings, invoices, check-out with late fees, receipts) and table bookings with pre-set group menus and family platters.', 'fa-hotel'],
             self::SERVICES => ['Services', 30000, 'For service businesses (salon, spa, barber, garage): a price list of services, serving clients with products and extra charges, walk-ins and bookings, assigning staff, invoices and receipts, and staff commissions. The retail shop is an optional add-on (Settings → Add-ons).', 'fa-user-gear'],
             self::STOCK_CONTROL => ['Stock Control', 0, 'Separate stock-management system (not advertised): its own login with two-step sign-in, stores, stock receiving, transfers between stores, stock counts and corrections, stock value, administrators and staff. No selling.', 'fa-boxes-stacked'],
+            self::RECORD_MGMT => ['Record Management System', 20000, 'Standalone employee & commission tracker for service businesses: record employees and the services they offer, an Operations sheet logging each service (cash or M-Pesa, products used), automatic 50/50 commissions, staff payouts, expense categories with proof, and an employee performance tracker. No retail shop.', 'fa-user-clock'],
             self::ELECTRONICS => ['Electronics', 30000, 'Everything in the Shop POS, plus for phone & electronics shops: serial number / IMEI for every unit, warranties that start at sale, and warranty / repair returns.', 'fa-mobile-screen'],
         ];
     }
@@ -152,6 +157,19 @@ class Features
             return true; // the restaurant POS is part of Restaurant + Rooms
         }
         return $state[$key] ?? false;
+    }
+
+    /** Record Management account: standalone, no shop/services/restaurant package alongside it. */
+    public static function recordMgmtOnly(?int $tenantId = null): bool
+    {
+        $tenantId ??= TenantContext::tenantId();
+        if ($tenantId === null) { return false; }
+        $st = self::forAccount(self::accountId($tenantId));
+        if (empty($st[self::RECORD_MGMT])) { return false; }
+        foreach ([self::SHOP_POS, self::SHOP_BASIC, self::ELECTRONICS, self::SERVICES, self::SERVICES_BASIC, self::RESTAURANT_POS, self::RESTAURANT_ROOMS] as $k) {
+            if (!empty($st[$k])) { return false; }
+        }
+        return true;
     }
 
     /** A Services account without a retail shop package: its menu is Operations / Management / Finances (the shop joins only as an add-on). */
@@ -352,6 +370,10 @@ class Features
             }
         } elseif (strpos($script, '/electronics/') !== false) {
             if (self::enabled(self::ELECTRONICS, $account)) {
+                return;
+            }
+        } elseif (strpos($script, '/recordmgmt/') !== false) {
+            if (self::enabled(self::RECORD_MGMT, $account)) {
                 return;
             }
         } elseif (self::enabled(self::SHOP_POS, $account)) {
