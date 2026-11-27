@@ -23,6 +23,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'reset_site') {
+    if (strtoupper(trim((string) ($_POST['confirm'] ?? ''))) !== 'RESET') {
+        $_SESSION['flash']['error'] = 'Type RESET in the confirmation box to proceed.';
+    } else {
+        $res = $RM->resetAll();
+        $_SESSION['flash'][$res['ok'] ? 'success' : 'error'] = $res['ok']
+            ? 'Everything has been deleted. Default roles have been reseeded.'
+            : $res['error'];
+    }
+    header('Location: ' . public_url('super/recordmgmt/cleanup.php'));
+    exit;
+}
+
 $records = $RM->allRecords();
 $tab = in_array($_GET['tab'] ?? '', \Models\RecordMgmtModel::RECORD_TYPES, true) ? $_GET['tab'] : 'employees';
 $labels = [
@@ -76,8 +89,24 @@ ob_start();
     <?php if (!$records[$tab]): ?><tr><td colspan="6" class="text-center text-muted py-3">Nothing recorded here yet.</td></tr><?php endif; ?>
     </tbody>
   </table></div>
-  <?php if ($records[$tab]): ?><button class="btn btn-danger mt-2">Delete selected</button><?php endif; ?>
+  <?php if ($records[$tab]): ?>
+    <button type="button" class="btn btn-outline-secondary mt-2" onclick="this.closest('form').querySelectorAll('.rm-pick').forEach(c=>c.checked=true)">Select all</button>
+    <button class="btn btn-danger mt-2">Delete selected</button>
+  <?php endif; ?>
 </form>
+</div></div>
+
+<div class="card border-0 shadow-sm mt-4" style="border-radius:14px;border:1px solid #f1aeb5!important;"><div class="card-body p-4">
+  <h2 class="h6 fw-bold text-danger mb-2">Reset site</h2>
+  <p class="small text-muted">Deletes everything recorded on this account — every employee, service, product, operation, payment and expense (and expense categories). Default roles are reseeded so you can start again. This cannot be undone.</p>
+  <form method="post" class="d-flex gap-2 align-items-end" onsubmit="return confirm('This permanently deletes EVERYTHING in Record Management for this account. Are you absolutely sure?');">
+    <input type="hidden" name="action" value="reset_site">
+    <div>
+      <label class="form-label small">Type <strong>RESET</strong> to confirm</label>
+      <input name="confirm" class="form-control" autocomplete="off" required>
+    </div>
+    <button class="btn btn-danger">Reset site — delete everything</button>
+  </form>
 </div></div>
 <?php
 $content = ob_get_clean();

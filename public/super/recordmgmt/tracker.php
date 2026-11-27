@@ -24,7 +24,7 @@ ob_start();
 
 <div class="card border-0 shadow-sm mb-3" style="border-radius:14px;"><div class="card-body p-4">
   <h2 class="h6 fw-bold mb-3">Revenue vs. average (<?php echo rm_money($avg); ?>)</h2>
-  <?php $max = max(array_column($rows, 'revenue') ?: [1]) ?: 1; ?>
+  <?php $max = max(1.0, (float) max($rows ? array_column($rows, 'revenue') : [0])); ?>
   <?php foreach ($rows as $r): $over = $r['revenue'] >= $avg; ?>
     <div class="mb-2">
       <div class="d-flex justify-content-between small"><span><?php echo rm_h($r['name']); ?></span><span><?php echo rm_money($r['revenue']); ?></span></div>

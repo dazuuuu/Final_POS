@@ -636,4 +636,30 @@ class RecordMgmtModel
         }
         return ['ok' => true, 'removed' => $removed, 'skipped' => $skipped];
     }
+
+    /**
+     * Reset site: wipes every Record Management record for this account —
+     * employees, services, products, operations (+ their product usage),
+     * payments and expenses (+ categories). Default roles are reseeded so
+     * the account isn't left with no roles to pick from. Irreversible.
+     */
+    public function resetAll(): array
+    {
+        $acc = $this->account();
+        $this->db->beginTransaction();
+        try {
+            $this->db->prepare('DELETE op FROM rm_operation_products op
+                JOIN rm_operations o ON o.id = op.operation_id WHERE o.account_id = ?')->execute([$acc]);
+            foreach (['rm_operations', 'rm_payments', 'rm_expenses', 'rm_expense_categories',
+                      'rm_products', 'rm_services', 'rm_employees', 'rm_roles'] as $table) {
+                $this->db->prepare("DELETE FROM $table WHERE account_id = ?")->execute([$acc]);
+            }
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            return ['ok' => false, 'error' => 'Could not reset: ' . $e->getMessage()];
+        }
+        $this->ensureDefaultRoles();
+        return ['ok' => true];
+    }
 }
