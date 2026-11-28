@@ -23,9 +23,11 @@ $login = $ok && !empty($res['login_url']) ? $res['login_url'] : public_url('auth
 <style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f5f7;font-family:-apple-system,'Helvetica Neue',Helvetica,Arial,sans-serif;padding:20px;}
 .card{background:#fff;border-radius:6px;max-width:980px;width:100%;padding:56px 40px 64px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,.05);}
-.card img.pic{width:280px;max-width:70%;height:auto;}
-h1{font-size:clamp(2.6rem,7vw,4.4rem);font-weight:700;color:#1b1b1b;margin:26px 0 18px;letter-spacing:-.02em;}
-p{font-size:1.25rem;line-height:1.45;color:#555;max-width:760px;margin:0 auto;}
+.tick{width:96px;height:96px;border-radius:50%;background:#1f9a5f;display:inline-flex;align-items:center;justify-content:center;margin:0 auto;}
+.tick svg{width:52px;height:52px;}
+.cross{background:#d9534f;}
+h1{font-size:clamp(2.2rem,6vw,3.2rem);font-weight:700;color:#1b1b1b;margin:26px 0 18px;letter-spacing:-.02em;}
+p{font-size:1.15rem;line-height:1.45;color:#555;max-width:760px;margin:0 auto;}
 .reg{margin-top:56px;color:#555;font-size:1.15rem;line-height:2.1;}
 .btn{display:inline-block;margin-top:34px;background:#1f9a5f;color:#fff;text-decoration:none;font-weight:600;padding:14px 30px;border-radius:10px;font-size:1rem;}
 .btn:hover{background:#167d4c;}
@@ -34,10 +36,16 @@ p{font-size:1.25rem;line-height:1.45;color:#555;max-width:760px;margin:0 auto;}
 </head>
 <body>
 <div class="card">
-  <img class="pic" src="<?php echo $h(public_url('assets/img/' . ($ok ? 'email-done.png' : 'email-confirm.png'))); ?>" alt="">
+  <div class="tick<?php echo $ok ? '' : ' cross'; ?>">
+    <?php if ($ok): ?>
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 13 9 18 20 6"></polyline></svg>
+    <?php else: ?>
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
+    <?php endif; ?>
+  </div>
   <h1><?php echo $h($title); ?></h1>
   <p><?php echo $h($text); ?></p>
-  <a class="btn" href="<?php echo $h($login); ?>"><?php echo $ok ? 'Go to sign in' : 'Go to sign in'; ?></a>
+  <a class="btn" href="<?php echo $h($login); ?>"><?php echo $ok ? 'Proceed to account' : 'Go to sign in'; ?></a>
   <div class="reg">Best regards,<br>The <?php echo $h($brand['name']); ?> Team</div>
 </div>
 </body>

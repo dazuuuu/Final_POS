@@ -137,12 +137,64 @@ class RecordMgmtModel
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             KEY idx_rm_exp_account (account_id, created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $db->exec("CREATE TABLE IF NOT EXISTS rm_settings (
+            account_id INT NOT NULL PRIMARY KEY,
+            day_start_hour TINYINT NOT NULL DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         $done = true;
     }
 
     private function account(): int
     {
         return \Features::accountId((int) \TenantContext::tenantId());
+    }
+
+    /**
+     * The business day's start hour (0-23). Default 0 = midnight-to-midnight
+     * (unchanged behaviour). An owner running round the clock sets this to,
+     * say, 7 so "today" always means 7am to 7am, never resetting at midnight.
+     */
+    public function dayStartHour(): int
+    {
+        $st = $this->db->prepare('SELECT day_start_hour FROM rm_settings WHERE account_id = ?');
+        $st->execute([$this->account()]);
+        $h = $st->fetchColumn();
+        return $h !== false ? max(0, min(23, (int) $h)) : 0;
+    }
+
+    public function setDayStartHour(int $hour): void
+    {
+        $hour = max(0, min(23, $hour));
+        $this->db->prepare('INSERT INTO rm_settings (account_id, day_start_hour) VALUES (?, ?) ON DUPLICATE KEY UPDATE day_start_hour = VALUES(day_start_hour)')
+            ->execute([$this->account(), $hour]);
+    }
+
+    /**
+     * The datetime (Y-m-d H:i:s) the CURRENT business day started — e.g. with
+     * a 7am start hour, at 2am it's still "yesterday 07:00", not today
+     * midnight. Pass a calendar date to get that date's business-day start
+     * instead of "right now"'s.
+     */
+    public function businessDayStart(?string $calendarDate = null): string
+    {
+        $hour = $this->dayStartHour();
+        if ($hour === 0) {
+            return ($calendarDate ?: date('Y-m-d')) . ' 00:00:00';
+        }
+        if ($calendarDate !== null) {
+            return $calendarDate . ' ' . str_pad((string) $hour, 2, '0', STR_PAD_LEFT) . ':00:00';
+        }
+        $now = new \DateTime();
+        $cutoff = (clone $now)->setTime($hour, 0, 0);
+        if ($now < $cutoff) { $cutoff->modify('-1 day'); }
+        return $cutoff->format('Y-m-d H:i:s');
+    }
+
+    /** The business day before the current one — e.g. a 1am sale under a 7am cutoff shows up here, not under "today". */
+    public function businessYesterdayStart(): string
+    {
+        $todayCalendarDate = substr($this->businessDayStart(), 0, 10);
+        return $this->businessDayStart(date('Y-m-d', strtotime($todayCalendarDate . ' -1 day')));
     }
 
     /** Seeds the default roles the first time an account opens Employees. */
@@ -661,5 +713,136 @@ class RecordMgmtModel
         }
         $this->ensureDefaultRoles();
         return ['ok' => true];
+    }
+
+    /**
+     * One row per day for the last $days days (oldest first): revenue and
+     * commissions earned (from Operations), expenses logged, and amounts
+     * paid out to employees. Used by the dashboard's performance graph and
+     * cash flow — "cash in" is revenue, "cash out" is expenses + payouts.
+     */
+    public function dailyTrend(int $days = 7): array
+    {
+        $acc = $this->account();
+        $from = date('Y-m-d', strtotime('-' . ($days - 1) . ' days'));
+        $to = date('Y-m-d');
+
+        $rev = $this->db->prepare("SELECT DATE(created_at) d, COALESCE(SUM(amount),0) revenue, COALESCE(SUM(commission),0) commissions
+            FROM rm_operations WHERE account_id = ? AND created_at >= ? AND created_at < ? + INTERVAL 1 DAY GROUP BY DATE(created_at)");
+        $rev->execute([$acc, $from, $to]);
+        $revByDay = array_column($rev->fetchAll(), null, 'd');
+
+        $exp = $this->db->prepare("SELECT DATE(created_at) d, COALESCE(SUM(amount),0) expenses
+            FROM rm_expenses WHERE account_id = ? AND created_at >= ? AND created_at < ? + INTERVAL 1 DAY GROUP BY DATE(created_at)");
+        $exp->execute([$acc, $from, $to]);
+        $expByDay = array_column($exp->fetchAll(), null, 'd');
+
+        $pay = $this->db->prepare("SELECT DATE(created_at) d, COALESCE(SUM(amount),0) paid
+            FROM rm_payments WHERE account_id = ? AND created_at >= ? AND created_at < ? + INTERVAL 1 DAY GROUP BY DATE(created_at)");
+        $pay->execute([$acc, $from, $to]);
+        $payByDay = array_column($pay->fetchAll(), null, 'd');
+
+        $out = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $d = date('Y-m-d', strtotime("-$i days"));
+            $revenue = (float) ($revByDay[$d]['revenue'] ?? 0);
+            $commissions = (float) ($revByDay[$d]['commissions'] ?? 0);
+            $expenses = (float) ($expByDay[$d]['expenses'] ?? 0);
+            $paid = (float) ($payByDay[$d]['paid'] ?? 0);
+            $out[] = [
+                'date' => $d,
+                'revenue' => $revenue,
+                'commissions' => $commissions,
+                'expenses' => $expenses,
+                'paid' => $paid,
+                'cash_in' => $revenue,
+                'cash_out' => $expenses + $paid,
+                'net' => $revenue - $expenses - $paid,
+            ];
+        }
+        return $out;
+    }
+
+    // ===== Reports ==========================================================
+    // Printable reports — Employees report (what each employee earned and was
+    // paid) and Staff report (what each logged-in user — admin/supervisor/
+    // cashier — recorded on the Operations sheet). Either one employee/staff
+    // member or every one of them, over a date range.
+
+    /** One row per employee (or just $employeeId): jobs, revenue, commission earned, paid out in range, and current owed. */
+    public function employeeReport(?int $employeeId, string $from, string $to): array
+    {
+        $acc = $this->account();
+        $sql = "SELECT e.id, e.first_name, e.middle_name, e.last_name, e.role, e.owed,
+                COUNT(o.id) jobs, COALESCE(SUM(o.net_amount),0) revenue, COALESCE(SUM(o.commission),0) commission,
+                (SELECT COALESCE(SUM(p.amount),0) FROM rm_payments p WHERE p.employee_id = e.id AND p.account_id = e.account_id AND p.created_at >= ? AND p.created_at < ? + INTERVAL 1 DAY) paid
+            FROM rm_employees e
+            LEFT JOIN rm_operations o ON o.employee_id = e.id AND o.account_id = e.account_id AND o.created_at >= ? AND o.created_at < ? + INTERVAL 1 DAY
+            WHERE e.account_id = ?";
+        $args = [$from, $to, $from, $to, $acc];
+        if ($employeeId) { $sql .= ' AND e.id = ?'; $args[] = $employeeId; }
+        $sql .= ' GROUP BY e.id ORDER BY e.first_name, e.last_name';
+        $st = $this->db->prepare($sql);
+        $st->execute($args);
+        return $st->fetchAll();
+    }
+
+    /** Every service an employee (or all) performed in range — the detail behind the Employees report. */
+    public function employeeReportDetail(?int $employeeId, string $from, string $to): array
+    {
+        $sql = "SELECT o.*, CONCAT(e.first_name, ' ', COALESCE(e.last_name,'')) employee_name
+            FROM rm_operations o JOIN rm_employees e ON e.id = o.employee_id
+            WHERE o.account_id = ? AND o.created_at >= ? AND o.created_at < ? + INTERVAL 1 DAY";
+        $args = [$this->account(), $from, $to];
+        if ($employeeId) { $sql .= ' AND o.employee_id = ?'; $args[] = $employeeId; }
+        $sql .= ' ORDER BY o.created_at';
+        $st = $this->db->prepare($sql);
+        $st->execute($args);
+        return $st->fetchAll();
+    }
+
+    /** Every login (admin/supervisor/cashier) who has recorded anything for this account — for the report picker. */
+    public function staffUsers(): array
+    {
+        $acc = $this->account();
+        $st = $this->db->prepare("SELECT DISTINCT u.id, u.username FROM users u
+            WHERE u.id IN (
+                SELECT created_by FROM rm_operations WHERE account_id = ? AND created_by IS NOT NULL
+                UNION SELECT paid_by FROM rm_payments WHERE account_id = ? AND paid_by IS NOT NULL
+                UNION SELECT created_by FROM rm_expenses WHERE account_id = ? AND created_by IS NOT NULL
+            ) ORDER BY u.username");
+        $st->execute([$acc, $acc, $acc]);
+        return $st->fetchAll();
+    }
+
+    /** One row per staff login (or just $userId): operations recorded, revenue processed, payments made, expenses logged. */
+    public function staffReport(?int $userId, string $from, string $to): array
+    {
+        $acc = $this->account();
+        $users = $this->staffUsers();
+        if ($userId) { $users = array_values(array_filter($users, fn($u) => (int) $u['id'] === $userId)); }
+        $out = [];
+        foreach ($users as $u) {
+            $uid = (int) $u['id'];
+            $st = $this->db->prepare('SELECT COUNT(*) jobs, COALESCE(SUM(amount),0) revenue, COALESCE(SUM(commission),0) commission
+                FROM rm_operations WHERE account_id = ? AND created_by = ? AND created_at >= ? AND created_at < ? + INTERVAL 1 DAY');
+            $st->execute([$acc, $uid, $from, $to]);
+            $ops = $st->fetch();
+            $st = $this->db->prepare('SELECT COUNT(*) n, COALESCE(SUM(amount),0) total FROM rm_payments
+                WHERE account_id = ? AND paid_by = ? AND created_at >= ? AND created_at < ? + INTERVAL 1 DAY');
+            $st->execute([$acc, $uid, $from, $to]);
+            $pay = $st->fetch();
+            $st = $this->db->prepare('SELECT COUNT(*) n, COALESCE(SUM(amount),0) total FROM rm_expenses
+                WHERE account_id = ? AND created_by = ? AND created_at >= ? AND created_at < ? + INTERVAL 1 DAY');
+            $st->execute([$acc, $uid, $from, $to]);
+            $exp = $st->fetch();
+            $out[] = [
+                'user_id' => $uid, 'username' => $u['username'],
+                'jobs' => (int) $ops['jobs'], 'revenue' => (float) $ops['revenue'], 'commission' => (float) $ops['commission'],
+                'payments_made' => (int) $pay['n'], 'payments_total' => (float) $pay['total'],
+                'expenses_logged' => (int) $exp['n'], 'expenses_total' => (float) $exp['total'],
+            ];
+        }
+        return $out;
     }
 }

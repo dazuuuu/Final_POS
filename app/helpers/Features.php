@@ -107,6 +107,8 @@ class Features
         '/super/statements/', // transaction statement: every package (owners only)
         '/super/api/', // Website API add-on: its own switch (ShopApi), any package
         '/super/day/', // opening & closing sales: every package, everyone
+        '/super/timezone/', // one-time (and later, on-demand) time zone picker: every package, everyone
+        '/super/account-backup.php', '/staff/account-backup.php', // the 2-hourly safety backup download: every package, everyone
         '/super/whatsapp/', '/staff/whatsapp/', // each person's own WhatsApp number for sending receipts
         '/super/settings/addons.php', // add-ons (e.g. the shop for a Services account)
     ];
@@ -339,6 +341,11 @@ class Features
         if (!preg_match('#/(super|staff)/#', $script, $m) || TenantContext::tenantId() === null) {
             return;
         }
+        // Support previewing an account sees it exactly as it is, including a
+        // locked/suspended/unlicensed state — never gets bounced out of the preview.
+        if (!empty($_SESSION['support_preview'])) {
+            return;
+        }
         $account = self::accountId(TenantContext::tenantId());
         // Stock Control organisations live in their own system under /stock/.
         if (self::isStockControl(TenantContext::tenantId())) {
@@ -384,6 +391,10 @@ class Features
             foreach (['/super/finances/', '/super/expenses/', '/staff/expenses/'] as $ok) {
                 if (strpos($script, $ok) !== false) { return; }
             }
+        }
+        // Record Management (standalone, no shop): the primary owner can still reach Admins — it's package-agnostic.
+        if (self::recordMgmtOnly($account) && strpos($script, '/super/admins/') !== false) {
+            return;
         }
         // Restaurant-only accounts: the shop's orders, sales, credit and stock pages don't apply —
         // the restaurant has its own (orders, payments, store stock, kitchen).

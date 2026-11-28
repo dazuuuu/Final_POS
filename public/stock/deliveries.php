@@ -7,7 +7,10 @@ $store = stock_store();
 $stores = StockControl::myStores();
 $value = StockControl::can('stock.value');
 $scope = ($_GET['scope'] ?? 'all') === 'here' || count($stores) < 2 ? [$store] : array_keys($stores);
-$rows = StockControl::deliveries($scope, 300);
+$from = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['from'] ?? '') ? $_GET['from'] : null;
+$to   = preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['to'] ?? '') ? $_GET['to'] : null;
+if ($from && $to && $from > $to) { [$from, $to] = [$to, $from]; }
+$rows = StockControl::deliveries($scope, 300, $from, $to);
 
 if (!empty($_GET['excel']) || !empty($_GET['pdf'])) {
     $head = ['Date', 'Reference', 'Type', 'From', 'To', 'Delivery / invoice no.', 'Delivered by', 'Vehicle', 'Items', 'Units'];
@@ -32,8 +35,14 @@ ob_start();
 <div class="sc-head">
   <div><h1>Deliveries</h1><p>Stock that came in from suppliers and stock moved between your stores — with who delivered it.</p></div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-  <a class="btn btn-l" href="?excel=1&scope=<?php echo count($scope) > 1 ? 'all' : 'here'; ?>"><i class="fas fa-file-excel" style="color:#16a34a"></i> Excel</a>
-  <a class="btn btn-l" href="?pdf=1&scope=<?php echo count($scope) > 1 ? 'all' : 'here'; ?>"><i class="fas fa-file-pdf" style="color:#dc2626"></i> PDF</a>
+  <form method="get" style="display:flex;gap:6px;align-items:center;">
+    <input type="hidden" name="scope" value="<?php echo count($scope) > 1 ? 'all' : 'here'; ?>">
+    <input type="date" name="from" value="<?php echo htmlspecialchars((string) $from); ?>" class="form-control form-control-sm" style="max-width:140px">
+    <input type="date" name="to" value="<?php echo htmlspecialchars((string) $to); ?>" class="form-control form-control-sm" style="max-width:140px">
+    <button class="btn btn-l">Filter</button>
+  </form>
+  <a class="btn btn-l" href="?excel=1&scope=<?php echo count($scope) > 1 ? 'all' : 'here'; ?>&from=<?php echo htmlspecialchars((string) $from); ?>&to=<?php echo htmlspecialchars((string) $to); ?>"><i class="fas fa-file-excel" style="color:#16a34a"></i> Excel</a>
+  <a class="btn btn-l" href="?pdf=1&scope=<?php echo count($scope) > 1 ? 'all' : 'here'; ?>&from=<?php echo htmlspecialchars((string) $from); ?>&to=<?php echo htmlspecialchars((string) $to); ?>"><i class="fas fa-file-pdf" style="color:#dc2626"></i> PDF</a>
   <?php if (count($stores) > 1): ?>
   <div class="seg"><a class="<?php echo count($scope) > 1 ? 'on' : ''; ?>" href="?scope=all">All stores</a><a class="<?php echo count($scope) === 1 ? 'on' : ''; ?>" href="?scope=here">This store</a></div>
   <?php endif; ?>

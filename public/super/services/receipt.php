@@ -39,7 +39,7 @@ unset($_SESSION['flash']['success']);
   .ok{max-width:380px;margin:0 auto 12px;background:#dcfce7;color:#166534;padding:10px 14px;border-radius:8px;font-size:14px;}
   @media print{ body{background:#fff;padding:0;} .slip{box-shadow:none;} .actions,.ok{display:none;} }
 </style>
-<?php $autoPrint = !empty($_GET['new']) && $paid; include __DIR__ . '/../../components/printer_script.php'; ?>
+<?php $autoPrint = !empty($_GET['new']) && $paid; $printEntity = 'service:' . (int) $t['id']; include __DIR__ . '/../../components/printer_script.php'; ?>
 </head>
 <body>
 <?php if ($flash): ?><div class="ok"><?php echo svc_h($flash); ?></div><?php endif; ?>

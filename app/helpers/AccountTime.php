@@ -65,7 +65,8 @@ class AccountTime
     /** Owner signed in, zone never chosen: send them to confirm it first (back-office pages only). */
     public static function gate(): void
     {
-        if (empty($_SESSION['logged_in']) || empty($_SESSION['otp_verified']) || ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') { return; }
+        if (empty($_SESSION['logged_in']) || empty($_SESSION['otp_verified']) || ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET'
+            || !empty($_SESSION['support_preview'])) { return; }
         $script = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
         if (strpos($script, '/super/') === false || strpos($script, '/super/api/') !== false || strpos($script, '/timezone/') !== false) { return; }
         if (!TenantContext::isPrimaryOwner() || self::info()['set']) { return; }

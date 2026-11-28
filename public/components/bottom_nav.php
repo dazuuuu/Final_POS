@@ -13,7 +13,7 @@ $__activeGroup = PosMenu::activeGroup($__groups, $__activePath);
 
 // The two group tabs: the first available of each preference list.
 $__tabKeys = [];
-foreach ([['pinned', 'shop', 'restaurant', 'services'], ['stock', 'restaurant', 'services', 'money']] as $__prefs) {
+foreach ([['pinned', 'shop', 'restaurant', 'services', 'recordmgmt'], ['stock', 'restaurant', 'services', 'money', 'people']] as $__prefs) {
     foreach ($__prefs as $__k) {
         if (isset($__byKey[$__k]) && !in_array($__k, $__tabKeys, true)) { $__tabKeys[] = $__k; break; }
     }

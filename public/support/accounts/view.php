@@ -7,7 +7,7 @@ $pdo = Database::pdo();
 $id = (int) ($_GET['id'] ?? 0);
 SupportOrg::guard($id); // only this support company's accounts
 $stmt = $pdo->prepare(
-    'SELECT t.*, u.id AS owner_id, u.username AS owner_username, u.email AS owner_email
+    'SELECT t.*, u.id AS owner_id, u.username AS owner_username, u.email AS owner_email, u.email_verified AS owner_email_verified
        FROM tenants t LEFT JOIN users u ON u.id = t.owner_user_id
       WHERE t.id = ? AND t.parent_tenant_id IS NULL'
 );
@@ -81,12 +81,16 @@ if (support_posted()) {
         support_flash('New activation key: ' . $key . '. The old key no longer works.');
     } elseif ($action === 'waive') {
         $n = License::waive($id);
+        $pdo->prepare("UPDATE tenants SET status = 'active' WHERE (id = ? OR parent_tenant_id = ?) AND status <> 'active'")->execute([$id, $id]);
+        AccountLock::unlock($id);
         support_flash('Activation waived: the account never locks and ' . ($n ? "$n login" . ($n === 1 ? ' was' : 's were') . ' switched on' : 'all logins were already on') . ' — they can sign in now.');
     } elseif ($action === 'activate_user') {
         $chk = $pdo->prepare('SELECT u.username FROM users u JOIN tenants t ON t.id = u.tenant_id WHERE u.id = ? AND (t.id = ? OR t.parent_tenant_id = ?)');
         $chk->execute([(int) ($_POST['user'] ?? 0), $id, $id]);
         if (($uname = $chk->fetchColumn()) !== false) {
             License::activateUser((int) $_POST['user']);
+            $pdo->prepare("UPDATE tenants SET status = 'active' WHERE (id = ? OR parent_tenant_id = ?) AND status <> 'active'")->execute([$id, $id]);
+            AccountLock::unlock($id);
             support_flash("$uname can sign in now.");
         }
     } elseif ($action === 'new_owner') {
@@ -120,10 +124,74 @@ if (support_posted()) {
                 $pdo->prepare('UPDATE tenants SET owner_user_id = ?, signup_completed_at = COALESCE(signup_completed_at, NOW()) WHERE id = ?')->execute([$newId, $id]);
             }
             License::forceActivate($id);
-            $cf = EmailConfirm::start('user', $newId, $email, $username, $pw, EmailConfirm::absolute('admin/'), $id);
+            $cf = EmailConfirm::start('user', $newId, $email, $username, $pw, Signup::shopUrl($acct['slug']) . '/', $id);
             support_flash("New owner $username created. " . ($cf['sent'] ? "A \"Confirm your email\" message went to $email — they can sign in once they confirm, and then receive their login details."
                     : "The confirm email could not be sent (check Settings → SMTP). Send them this link: {$cf['link']}")
                 . ($main ? ' It is now the main owner' . ($acct['owner_id'] ? " ({$acct['owner_username']} still works too)." : '.') : ' The main owner is unchanged.'));
+        }
+    } elseif ($action === 'make_primary') {
+        // Swap which EXISTING owner-role login is the main owner — no new
+        // credentials, nothing deleted. The old main owner keeps their login
+        // and simply becomes an extra owner/admin (demote further yourself
+        // from the Owner login card, or block them from Account status).
+        $newId = (int) ($_POST['user'] ?? 0);
+        $chk = $pdo->prepare(
+            "SELECT u.id, u.username, u.email FROM users u JOIN roles r ON r.id = u.role_id
+              WHERE u.id = ? AND u.tenant_id = ? AND r.role_name = 'tenant_owner'"
+        );
+        $chk->execute([$newId, $id]);
+        $target = $chk->fetch(PDO::FETCH_ASSOC);
+        if (!$target) {
+            support_flash('That login was not found on this account.', 'danger');
+        } elseif ($newId === (int) ($acct['owner_id'] ?? 0)) {
+            support_flash($target['username'] . ' is already the main owner.', 'danger');
+        } else {
+            $pdo->prepare('UPDATE tenants SET owner_user_id = ? WHERE id = ?')->execute([$newId, $id]);
+            support_flash($target['username'] . ' (' . $target['email'] . ') is now the main owner.'
+                . ($acct['owner_username'] ? ' ' . $acct['owner_username'] . ' is still an owner-level login, just not the main one.' : ''));
+        }
+    } elseif ($action === 'resend_confirm') {
+        if (!$acct['owner_id']) {
+            support_flash('No owner login on this account yet.', 'danger');
+        } else {
+            $sent = EmailConfirm::resend((string) $acct['owner_email']);
+            support_flash($sent ? 'Confirm email re-sent to ' . $acct['owner_email'] . '.'
+                : 'Could not resend yet (one every 2 minutes), or there is nothing pending to confirm — check Settings → SMTP.', $sent ? 'success' : 'danger');
+        }
+    } elseif ($action === 'email_credentials') {
+        if (!$acct['owner_id']) {
+            support_flash('No owner login on this account yet.', 'danger');
+        } else {
+            $newPw = bin2hex(random_bytes(5));
+            $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([password_hash($newPw, PASSWORD_DEFAULT), $acct['owner_id']]);
+            $loginUrl = Signup::shopUrl($acct['slug']) . '/';
+            $html = '<p>Hello ' . htmlspecialchars($acct['owner_username']) . ',</p>'
+                . '<p>Here are your login details for <strong>' . htmlspecialchars($acct['name']) . '</strong>:</p>'
+                . '<p>Sign in: <a href="' . htmlspecialchars($loginUrl) . '">' . htmlspecialchars($loginUrl) . '</a><br>'
+                . 'Email: ' . htmlspecialchars($acct['owner_email']) . '<br>'
+                . 'Password: <strong>' . htmlspecialchars($newPw) . '</strong></p>'
+                . '<p>For your safety, please change this password after you sign in.</p>';
+            $text = "Sign in: $loginUrl\nEmail: {$acct['owner_email']}\nPassword: $newPw\n\nPlease change this password after you sign in.";
+            $ok = (new MailService())->send((string) $acct['owner_email'], 'Your login details — ' . $acct['name'], $html, $text);
+            support_flash($ok ? 'New password emailed to ' . $acct['owner_email'] . '.'
+                : 'Could not send the email (check Settings → SMTP). New password: ' . $newPw, $ok ? 'success' : 'danger');
+        }
+    } elseif ($action === 'delete_other_owner') {
+        $target = (int) ($_POST['user'] ?? 0);
+        $chk = $pdo->prepare(
+            "SELECT u.id, u.username FROM users u JOIN roles r ON r.id = u.role_id
+              WHERE u.id = ? AND u.tenant_id = ? AND r.role_name = 'tenant_owner'"
+        );
+        $chk->execute([$target, $id]);
+        $victim = $chk->fetch(PDO::FETCH_ASSOC);
+        if (!$victim) {
+            support_flash('That login was not found on this account.', 'danger');
+        } elseif ($target === (int) ($acct['owner_id'] ?? 0)) {
+            support_flash('That is the main owner — make another login the main owner first, then delete this one.', 'danger');
+        } else {
+            $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ?')->execute([$target]);
+            $pdo->prepare('DELETE FROM users WHERE id = ? AND tenant_id = ?')->execute([$target, $id]);
+            support_flash($victim['username'] . ' deleted — only one owner-level login remains on this account. Their past records stay as they were.');
         }
     } elseif ($action === 'delete_account') {
         if (trim($_POST['confirm_name'] ?? '') !== $acct['name']) {
@@ -140,7 +208,10 @@ if (support_posted()) {
         }
     } elseif ($action === 'license_activate') {
         License::forceActivate($id);
-        support_flash('Account activated. It will never lock.');
+        License::activateUsers($id); // activating here IS the verification — no separate email confirm needed
+        $pdo->prepare("UPDATE tenants SET status = 'active' WHERE (id = ? OR parent_tenant_id = ?) AND status <> 'active'")->execute([$id, $id]);
+        AccountLock::unlock($id);
+        support_flash('Account activated. It will never lock, and every login on it can sign in straight away — no email confirmation needed.');
     } elseif ($action === 'owner') {
         // Create the owner, or change the current one. "take_over" frees an
         // email/username used by another account (that copy is switched off and
@@ -205,7 +276,7 @@ if (support_posted()) {
                 License::forceActivate($id);
                 // A new login, or a new email address, is confirmed by its owner before it can sign in.
                 if (!$ownerId || $target !== $ownerId || strtolower((string) ($acct['owner_email'] ?? '')) !== $email) {
-                    $cf = EmailConfirm::start('user', $target, $email, $username, $pw !== '' ? $pw : null, EmailConfirm::absolute('admin/'), $id);
+                    $cf = EmailConfirm::start('user', $target, $email, $username, $pw !== '' ? $pw : null, Signup::shopUrl($acct['slug']) . '/', $id);
                     $notes[] = $cf['sent'] ? "A \"Confirm your email\" message went to $email — sign-in opens once they confirm."
                         : "The confirm email could not be sent (check Settings → SMTP). Send them this link: {$cf['link']}";
                 }
@@ -219,6 +290,15 @@ if (support_posted()) {
     header('Location: ' . $self);
     exit;
 }
+
+// Other owner-role logins on this account (admins) — so support can make one
+// of them the main owner without creating or deleting any login.
+$otherOwners = $pdo->prepare(
+    "SELECT u.id, u.username, u.email, u.is_active FROM users u JOIN roles r ON r.id = u.role_id
+      WHERE u.tenant_id = ? AND r.role_name = 'tenant_owner' AND u.id <> ? ORDER BY u.username"
+);
+$otherOwners->execute([$id, (int) ($acct['owner_id'] ?? 0)]);
+$otherOwners = $otherOwners->fetchAll(PDO::FETCH_ASSOC);
 
 $packages = Features::forAccount($id);
 $shops = $pdo->prepare('SELECT id, name, status, created_at FROM tenants WHERE id = ? OR parent_tenant_id = ? ORDER BY parent_tenant_id IS NOT NULL, created_at');
@@ -481,6 +561,47 @@ echo $__css;
         <button class="btn btn-sm btn-primary"><?php echo $acct['owner_id'] ? 'Save owner' : 'Create owner'; ?></button>
       </form>
     </div>
+
+    <?php if ($acct['owner_id']): ?>
+    <div class="s-card mb-3">
+      <h2 class="h6 mb-1"><i class="fas fa-envelope me-1 text-primary"></i>Email login credentials</h2>
+      <?php if (!$acct['owner_email_verified']): ?>
+        <p class="small text-muted mb-3"><?php echo htmlspecialchars($acct['owner_username']); ?> hasn't confirmed their email yet, so they can't sign in anywhere but the device they signed up on. Resend the confirm link — once they click it, their login details follow automatically.</p>
+        <form method="post">
+          <?php echo support_csrf_field(); ?><input type="hidden" name="action" value="resend_confirm">
+          <button class="btn btn-sm btn-outline-primary">Resend confirm email</button>
+        </form>
+      <?php else: ?>
+        <p class="small text-muted mb-3">Sets a new password for <?php echo htmlspecialchars($acct['owner_username']); ?> and emails it to them straight away, with their shop's own sign-in address — for when they've lost their password or need it resent.</p>
+        <form method="post" onsubmit="return confirm('Set a new password for <?php echo htmlspecialchars($acct['owner_username'], ENT_QUOTES); ?> and email it to <?php echo htmlspecialchars($acct['owner_email'], ENT_QUOTES); ?> now?');">
+          <?php echo support_csrf_field(); ?><input type="hidden" name="action" value="email_credentials">
+          <button class="btn btn-sm btn-outline-primary">Email login credentials now</button>
+        </form>
+      <?php endif; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($otherOwners): ?>
+    <div class="s-card mb-3">
+      <h2 class="h6 mb-1"><i class="fas fa-right-left me-1 text-primary"></i>Make another admin the main owner</h2>
+      <p class="small text-muted mb-3">This account already has other owner-level logins (admins). Pick one to become the <strong>main owner</strong> — no new login is created and nothing is deleted; <?php echo $acct['owner_username'] ? htmlspecialchars($acct['owner_username']) : 'the current owner'; ?> simply stops being the main one and keeps working as an extra owner/admin.</p>
+      <?php foreach ($otherOwners as $o): ?>
+        <div class="d-flex justify-content-between align-items-center border rounded-3 p-2 mb-2">
+          <div><strong><?php echo htmlspecialchars($o['username']); ?></strong><div class="small text-muted"><?php echo htmlspecialchars($o['email']); ?><?php if (!$o['is_active']): ?> · <span class="text-danger">blocked</span><?php endif; ?></div></div>
+          <div class="d-flex gap-2">
+            <form method="post" onsubmit="return confirm('Make <?php echo htmlspecialchars($o['username'], ENT_QUOTES); ?> the main owner of <?php echo htmlspecialchars($acct['name'], ENT_QUOTES); ?>?');">
+              <?php echo support_csrf_field(); ?><input type="hidden" name="action" value="make_primary"><input type="hidden" name="user" value="<?php echo (int) $o['id']; ?>">
+              <button class="btn btn-sm btn-outline-primary">Make main owner</button>
+            </form>
+            <form method="post" onsubmit="return confirm('Delete the login <?php echo htmlspecialchars($o['username'], ENT_QUOTES); ?> (<?php echo htmlspecialchars($o['email'], ENT_QUOTES); ?>) completely? This can\'t be undone — their past records stay, but this login is gone for good.');">
+              <?php echo support_csrf_field(); ?><input type="hidden" name="action" value="delete_other_owner"><input type="hidden" name="user" value="<?php echo (int) $o['id']; ?>">
+              <button class="btn btn-sm btn-outline-danger">Delete</button>
+            </form>
+          </div>
+        </div>
+      <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
 
     <div class="s-card mb-3">
       <h2 class="h6 mb-1"><i class="fas fa-user-plus me-1 text-primary"></i>Add a new owner</h2>

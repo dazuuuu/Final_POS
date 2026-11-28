@@ -26,9 +26,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $categories = $RM->expenseCategories();
-$range = in_array($_GET['range'] ?? 'today', ['today', 'week', 'month'], true) ? $_GET['range'] : 'today';
-$to = date('Y-m-d');
-$from = match ($range) { 'week' => date('Y-m-d', strtotime('-6 days')), 'month' => date('Y-m-01'), default => $to };
+$range = $_GET['range'] ?? 'today';
+$range = in_array($range, ['today', 'yesterday', 'week', 'month'], true) ? $range : 'today';
+$to = $RM->businessDayStart();
+$from = match ($range) {
+    'yesterday' => $to = $RM->businessYesterdayStart(),
+    'week' => $RM->businessDayStart(date('Y-m-d', strtotime('-6 days'))),
+    'month' => $RM->businessDayStart(date('Y-m-01')),
+    default => $to,
+};
 $expenses = $RM->expenses($from, $to);
 $byCategory = $RM->expensesByCategory($from, $to);
 $total = array_sum(array_column($expenses, 'amount'));
@@ -68,7 +74,7 @@ ob_start();
 
   <div class="col-12 col-lg-7">
     <div class="d-flex gap-2 mb-3">
-      <?php foreach (['today' => 'Today', 'week' => 'Last 7 days', 'month' => 'This month'] as $k => $l): ?>
+      <?php foreach (['today' => 'Today', 'yesterday' => 'Yesterday', 'week' => 'Last 7 days', 'month' => 'This month'] as $k => $l): ?>
         <a href="?range=<?php echo $k; ?>" class="btn btn-sm <?php echo $range === $k ? 'btn-primary' : 'btn-outline-secondary'; ?>"><?php echo $l; ?></a>
       <?php endforeach; ?>
     </div>

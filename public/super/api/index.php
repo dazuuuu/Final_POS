@@ -15,7 +15,8 @@ $S = ShopApi::settings($account);
 $on = (int) $S['enabled'] === 1;
 $shops = ShopContext::shops(true);
 $shopIds = array_map(fn($s) => (int) $s['id'], $shops);
-$tab = in_array($_GET['tab'] ?? '', ['keys', 'test', 'orders', 'comments', 'insights', 'settings', 'docs'], true) ? $_GET['tab'] : 'keys';
+$tab = in_array($_GET['tab'] ?? '', ['keys', 'test', 'orders', 'payments', 'comments', 'insights', 'settings', 'docs'], true) ? $_GET['tab'] : 'keys';
+$M = MpesaService::settings($account);
 $flash = $_SESSION['api_flash'] ?? null;
 unset($_SESSION['api_flash']);
 /** Redirect to a tab with an optional message. */
@@ -84,6 +85,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->prepare('UPDATE shop_web_orders SET status = ? WHERE id = ?')->execute([$new, $id]);
             $pdo->commit();
             $back('orders', $o['number'] . ' → ' . ShopApi::ORDER_STATUSES[$new] . ($took !== $takes ? ($takes ? ' (stock taken off)' : ' (stock returned)') : '') . '.');
+        case 'mpesa':
+            MpesaService::save($account, [
+                'enabled' => !empty($_POST['mpesa_enabled']) ? 1 : 0,
+                'environment' => (string) ($_POST['environment'] ?? 'sandbox'),
+                'shortcode' => (string) ($_POST['shortcode'] ?? ''),
+                'consumer_key' => (string) ($_POST['consumer_key'] ?? ''),
+                'consumer_secret' => (string) ($_POST['consumer_secret'] ?? ''),
+                'passkey' => (string) ($_POST['passkey'] ?? ''),
+            ]);
+            $back('payments', 'M-Pesa settings saved.');
     }
     $back($tab);
 }
@@ -154,7 +165,7 @@ ob_start();
 <?php else: ?>
 <!-- ======================= switched on ======================= -->
 <nav class="api-tabs">
-  <?php foreach (['keys' => 'Keys', 'test' => 'Test', 'orders' => 'Orders', 'comments' => 'Comments', 'insights' => 'Insights', 'settings' => 'Settings', 'docs' => 'Docs'] as $k => $l): ?>
+  <?php foreach (['keys' => 'Keys', 'test' => 'Test', 'orders' => 'Orders', 'payments' => 'Payments', 'comments' => 'Comments', 'insights' => 'Insights', 'settings' => 'Settings', 'docs' => 'Docs'] as $k => $l): ?>
     <a class="<?php echo $tab === $k ? 'on' : ''; ?>" href="<?php echo $self . '?tab=' . $k; ?>"><?php echo $l; ?></a>
   <?php endforeach; ?>
 </nav>
@@ -292,7 +303,7 @@ ob_start();
     <p class="small text-muted"><?php echo $S['orders_on'] ? 'Your website can take orders.' : 'Orders from the website are off — switch them on under Settings.'; ?> Confirming an order takes its stock off the shelf; cancelling a confirmed order puts it back.</p>
     <?php if (!$orders): ?><p class="small text-muted mb-0">No orders yet.</p><?php else: ?>
     <div class="table-responsive"><table class="api-table">
-      <thead><tr><th>Order</th><th>Customer</th><th>Items</th><th class="text-end">Total</th><th>Status</th></tr></thead>
+      <thead><tr><th>Order</th><th>Customer</th><th>Items</th><th class="text-end">Total</th><th>Payment</th><th>Status</th></tr></thead>
       <tbody>
       <?php foreach ($orders as $o): ?>
         <tr>
@@ -301,6 +312,13 @@ ob_start();
             <div class="small text-muted"><?php echo $h($o['address']); ?></div><?php if ($o['note']): ?><div class="small fst-italic">“<?php echo $h($o['note']); ?>”</div><?php endif; ?></td>
           <td class="small"><?php foreach ($byOrder[(int) $o['id']] ?? [] as $it): ?><div><?php echo (float) $it['quantity']; ?> × <?php echo $h($it['name']); ?></div><?php endforeach; ?></td>
           <td class="text-end text-nowrap">KES <?php echo number_format((float) $o['total'], 0); ?></td>
+          <td class="small">
+            <?php $ps = $o['payment_status'] ?? 'unpaid'; ?>
+            <?php if ($ps === 'paid'): ?><span class="text-success fw-semibold">Paid</span><?php if ($o['mpesa_receipt']): ?><div class="small text-muted"><?php echo $h($o['mpesa_receipt']); ?></div><?php endif; ?>
+            <?php elseif ($ps === 'pending'): ?><span class="text-warning fw-semibold">Awaiting M-Pesa</span>
+            <?php elseif ($ps === 'failed'): ?><span class="text-danger fw-semibold">Payment failed</span>
+            <?php else: ?><span class="text-muted">Unpaid</span><?php endif; ?>
+          </td>
           <td><form method="post"><?php echo csrf_field(); ?><input type="hidden" name="act" value="order"><input type="hidden" name="id" value="<?php echo (int) $o['id']; ?>">
             <select class="form-select form-select-sm" name="status" onchange="this.form.submit()" style="min-width:130px">
               <?php foreach (ShopApi::ORDER_STATUSES as $k => $l): ?><option value="<?php echo $k; ?>" <?php echo $o['status'] === $k ? 'selected' : ''; ?>><?php echo $l; ?></option><?php endforeach; ?>
@@ -310,6 +328,52 @@ ob_start();
       </tbody>
     </table></div>
     <?php endif; ?>
+  </div>
+
+<?php elseif ($tab === 'payments'): ?>
+  <div class="api-card">
+    <h2>M-Pesa STK push</h2>
+    <p class="small text-muted">Your own Daraja (M-Pesa) credentials for this shop — from the Safaricom developer portal. When switched on, a customer paying for a website order gets a push to their phone; once they enter their PIN, the order is marked paid and its stock is taken off automatically. No one at Dazu POS ever sees these credentials.</p>
+    <form method="post"><?php echo csrf_field(); ?><input type="hidden" name="act" value="mpesa">
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" name="mpesa_enabled" id="mpesaOn" <?php echo (int) $M['enabled'] === 1 ? 'checked' : ''; ?>>
+        <label class="form-check-label" for="mpesaOn">Accept M-Pesa payments on website orders</label>
+      </div>
+      <div class="row g-2">
+        <div class="col-sm-4">
+          <label class="form-label small mb-1">Environment</label>
+          <select class="form-select" name="environment">
+            <option value="sandbox" <?php echo $M['environment'] === 'sandbox' ? 'selected' : ''; ?>>Sandbox (testing)</option>
+            <option value="production" <?php echo $M['environment'] === 'production' ? 'selected' : ''; ?>>Production (live)</option>
+          </select>
+        </div>
+        <div class="col-sm-8">
+          <label class="form-label small mb-1">Shortcode (till / paybill)</label>
+          <input class="form-control" name="shortcode" value="<?php echo $h($M['shortcode']); ?>" placeholder="e.g. 174379">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label small mb-1">Consumer key</label>
+          <input class="form-control" name="consumer_key" placeholder="<?php echo $M['has_credentials'] ? 'Saved — leave blank to keep it' : 'From the Daraja app'; ?>">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label small mb-1">Consumer secret</label>
+          <input class="form-control" type="password" name="consumer_secret" placeholder="<?php echo $M['has_credentials'] ? 'Saved — leave blank to keep it' : 'From the Daraja app'; ?>">
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label small mb-1">Passkey</label>
+          <input class="form-control" type="password" name="passkey" placeholder="<?php echo $M['has_credentials'] ? 'Saved — leave blank to keep it' : 'Lipa Na M-Pesa passkey'; ?>">
+        </div>
+      </div>
+      <button class="btn btn-primary mt-3">Save M-Pesa settings</button>
+    </form>
+    <hr class="my-4">
+    <h2 class="h6">For your developer</h2>
+    <p class="small text-muted mb-1">From the website, after placing an order via <code>/api/v1/orders.php</code>:</p>
+    <pre class="small bg-light p-3 rounded">POST /api/v1/mpesa-stk.php
+{ "number": "WEB-000123", "phone": "0712345678" }
+
+→ sends the STK push. Poll GET /api/v1/orders.php?number=...&amp;phone=...
+  and watch "payment_status" turn to "paid".</pre>
   </div>
 
 <?php elseif ($tab === 'comments'):

@@ -53,6 +53,7 @@ function api_start(string $scope, array $methods = ['GET']): array
         http_response_code(204);
         exit;
     }
+    MpesaService::ensure();
     $plain = ShopApi::keyFromRequest();
     $key = ShopApi::findKey($plain);
     if (!$key) {

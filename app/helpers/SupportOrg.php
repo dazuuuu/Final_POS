@@ -215,6 +215,25 @@ class SupportOrg
         return ['role' => 'owner', 'id' => 0, 'email' => $o['email'], 'name' => $o['name'], 'org' => (int) $o['id']];
     }
 
+    /** A company's own main-admin password (self-service change, or support's own admin resetting it). */
+    public static function setPassword(int $orgId, string $password): ?string
+    {
+        if (strlen($password) < 8) { return 'The password must be at least 8 characters.'; }
+        self::ensure();
+        Database::pdo()->prepare('UPDATE support_orgs SET password_hash = ? WHERE id = ?')
+            ->execute([password_hash($password, PASSWORD_DEFAULT), $orgId]);
+        return null;
+    }
+
+    /** The row for one company, by id — to verify its current password on a self-service change. */
+    public static function find(int $orgId): ?array
+    {
+        self::ensure();
+        $st = Database::pdo()->prepare('SELECT * FROM support_orgs WHERE id = ?');
+        $st->execute([$orgId]);
+        return $st->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
     public static function companies(): array
     {
         self::ensure();

@@ -5,6 +5,7 @@
 // marked "required" can't be closed until they vote / answer.
 // Support previews see it exactly like the owner, but nothing is saved for the owner (see Alerts::pending / respond.php).
 if (TenantContext::role() !== 'tenant_owner' || !empty($_SESSION['demo']) || !class_exists('Alerts')) return;
+if (class_exists('AccountBackup') && !AccountBackup::tourSeen((int) TenantContext::userId())) return; // the backup tour goes first
 $__preview = !empty($_SESSION['support_preview']);
 try {
     $__acct = Features::accountId((int) TenantContext::tenantId());

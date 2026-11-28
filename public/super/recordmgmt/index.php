@@ -4,10 +4,27 @@
 // (visible to the owner/cashier/supervisor; an employee's own total shows
 // on their card).
 require_once __DIR__ . '/_common.php';
-rm_require($canOperate);
+// This is the landing page every Record Management account lands on (see
+// staff/dashboard redirect) — unlike every other rm_* page, it must NEVER
+// rm_require() here: that redirects back to this same URL, looping forever
+// for a freshly-created staff login with no capabilities granted yet. Show
+// a friendly "ask the owner" message instead.
+if (!$canOperate) {
+    ob_start();
+    ?>
+    <div class="text-center text-muted py-5">
+      <i class="fas fa-lock fa-2x mb-3"></i>
+      <p>You don't have access to Operations yet.<br>Ask the owner to grant it from Permissions.</p>
+    </div>
+    <?php
+    $content = ob_get_clean();
+    rm_render('Operations', $content);
+    exit;
+}
 
 $employees = $RM->employees();
-$today = date('Y-m-d');
+$viewYesterday = ($_GET['day'] ?? '') === 'yesterday';
+$today = $viewYesterday ? $RM->businessYesterdayStart() : $RM->businessDayStart();
 $ops = $RM->operations($today, $today);
 $earnedToday = [];
 foreach ($ops as $o) {
@@ -43,7 +60,13 @@ ob_start();
 <?php endif; ?>
 
 <div class="card border-0 shadow-sm" style="border-radius:14px;"><div class="card-body p-4">
-  <h2 class="h6 fw-bold mb-3">Today's operations</h2>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h6 fw-bold mb-0"><?php echo $viewYesterday ? "Yesterday's operations" : "Today's operations"; ?></h2>
+    <div class="d-flex gap-2">
+      <a href="<?php echo public_url('super/recordmgmt/'); ?>" class="btn btn-sm <?php echo !$viewYesterday ? 'btn-primary' : 'btn-outline-secondary'; ?>">Today</a>
+      <a href="<?php echo public_url('super/recordmgmt/?day=yesterday'); ?>" class="btn btn-sm <?php echo $viewYesterday ? 'btn-primary' : 'btn-outline-secondary'; ?>">Yesterday</a>
+    </div>
+  </div>
   <div class="table-responsive"><table class="table align-middle">
     <thead><tr><th>Time</th><th>Employee</th><th>Service</th><th>Amount</th><th>Mode</th><th>Commission</th></tr></thead>
     <tbody>
@@ -57,7 +80,7 @@ ob_start();
         <td class="text-success fw-semibold"><?php echo rm_money($o['commission']); ?></td>
       </tr>
     <?php endforeach; ?>
-    <?php if (!$ops): ?><tr><td colspan="6" class="text-center text-muted py-3">Nothing recorded yet today.</td></tr><?php endif; ?>
+    <?php if (!$ops): ?><tr><td colspan="6" class="text-center text-muted py-3">Nothing recorded <?php echo $viewYesterday ? 'yesterday' : 'yet today'; ?>.</td></tr><?php endif; ?>
     </tbody>
   </table></div>
 </div></div>

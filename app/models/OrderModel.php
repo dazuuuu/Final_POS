@@ -628,6 +628,15 @@ class OrderModel extends Model
             }
 
             $db->commit();
+            try {
+                $fresh2 = $db->prepare('SELECT total, discount_amount, amount_paid, payment_method, customer_phone, status FROM orders WHERE id = ? AND tenant_id = ?');
+                $fresh2->execute([$orderId, $tid]);
+                $after = $fresh2->fetch(\PDO::FETCH_ASSOC) ?: [];
+                $changes = \Models\AuditLogModel::diff($order, $after, \Models\AuditLogModel::ORDER_FIELDS);
+                if ($changes) {
+                    (new \Models\AuditLogModel($db))->record('order', $orderId, $receipt, 'edit', $changes);
+                }
+            } catch (\Throwable $ignored) {}
             return ['ok' => true, 'order_id' => $orderId, 'receipt_number' => $receipt, 'errors' => []];
         } catch (\Throwable $e) {
             if ($db->inTransaction()) { $db->rollBack(); }

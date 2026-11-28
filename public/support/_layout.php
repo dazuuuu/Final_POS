@@ -192,6 +192,7 @@ h1.h4{font-weight:600;letter-spacing:-.02em;}
       <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="border-radius:14px;">
         <li><span class="dropdown-item-text small text-muted"><?php echo htmlspecialchars(SupportAccount::currentEmail()); ?><br><?php echo SupportAccount::isOwner() ? 'Main admin' : 'Support team'; ?></span></li>
         <?php if (SupportAccount::isOwner()): ?><li><a class="dropdown-item" href="<?php echo public_url('support/team/'); ?>"><i class="fas fa-user-plus me-2"></i>Create support account</a></li><?php endif; ?>
+        <li><a class="dropdown-item" href="<?php echo public_url('support/account.php'); ?>"><i class="fas fa-key me-2"></i>Change password</a></li>
         <li><hr class="dropdown-divider"></li>
         <li><a class="dropdown-item" href="<?php echo public_url('support/settings/'); ?>"><i class="fas fa-envelope me-2"></i>Email (SMTP) settings</a></li>
         <li><a class="dropdown-item text-danger" href="<?php echo public_url('support/logout.php'); ?>"><i class="fas fa-arrow-right-from-bracket me-2"></i>Sign out</a></li>

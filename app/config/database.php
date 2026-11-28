@@ -5,8 +5,8 @@
 
 return array (
   'host' => 'localhost',
-  'dbname' => 'final_pos',
-  'username' => 'root',
-  'password' => '',
+  'dbname' => 'u635476255_Kazi',
+  'username' => 'u635476255_Kazi',
+  'password' => 'Alnahda@2027',
   'charset' => 'utf8mb4',
 );

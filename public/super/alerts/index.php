@@ -5,6 +5,17 @@ PageGuard::tenant();
 require_once APP_ROOT . '/helpers/uploads.php';
 $account = Features::accountId((int) TenantContext::tenantId());
 $list = Alerts::forAccount($account, (int) TenantContext::userId());
+// Opening this page is itself "reading" a plain notice — no need to also
+// click "Got it" on the pop-up elsewhere once they've seen it here.
+if (empty($_SESSION['support_preview'])) {
+    foreach ($list as &$__a) {
+        if ($__a['kind'] === 'notice' && empty($__a['closed_at'])) {
+            Alerts::respond((int) $__a['id'], $account, (int) TenantContext::userId(), []);
+            $__a['closed_at'] = date('Y-m-d H:i:s');
+        }
+    }
+    unset($__a);
+}
 $h = fn($v) => htmlspecialchars((string) $v, ENT_QUOTES);
 $page_title = 'News & alerts';
 ob_start();

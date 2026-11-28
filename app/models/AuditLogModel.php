@@ -32,6 +32,27 @@ class AuditLogModel extends Model
         'image_path'          => 'Product photo',
     ];
 
+    /** Fields we diff on a sale edit (receipt tracking: "what changed"). */
+    public const SALE_FIELDS = [
+        'sale_type'      => 'Sale type',
+        'payment_method' => 'Payment method',
+        'total'          => 'Total',
+        'discount_amount'=> 'Discount',
+        'amount_paid'    => 'Amount paid',
+        'customer_name'  => 'Customer name',
+        'customer_phone' => 'Customer phone',
+    ];
+
+    /** Fields we diff on an order edit. */
+    public const ORDER_FIELDS = [
+        'total'            => 'Total',
+        'discount_amount'  => 'Discount',
+        'amount_paid'      => 'Amount paid',
+        'payment_method'   => 'Payment method',
+        'customer_phone'   => 'Customer phone',
+        'status'           => 'Status',
+    ];
+
     /**
      * Write one entry. Actor (user/role) is taken from server-side context,
      * never from the caller, so attribution can't be forged from a form.

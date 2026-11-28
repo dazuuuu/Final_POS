@@ -173,16 +173,12 @@ class PosMenu
         if ($rmMode) {
             $g[] = ['recordmgmt', 'Record Management', 'fa-user-clock', [
                 ['Operations', 'fa-clipboard-list', 'super/recordmgmt/', $canOperate = $owner || $can(Capabilities::RM_OPERATIONS)],
-                ['Employees', 'fa-users-gear', 'super/recordmgmt/employees.php', $owner || $can(Capabilities::RM_MANAGE)],
                 ['Services', 'fa-list', 'super/recordmgmt/services.php', $owner || $can(Capabilities::RM_MANAGE)],
                 ['Products', 'fa-box', 'super/recordmgmt/products.php', $owner || $can(Capabilities::RM_MANAGE)],
                 ['Commissions', 'fa-percent', 'super/recordmgmt/commissions.php', $money || $canOperate],
                 ['Pay employees', 'fa-hand-holding-dollar', 'super/recordmgmt/payments.php', $owner || $can(Capabilities::RM_PAYOUT)],
                 ['Expenses', 'fa-file-invoice-dollar', 'super/recordmgmt/expenses.php', $owner || $can(Capabilities::RM_EXPENSES)],
                 ['Employee tracker', 'fa-chart-line', 'super/recordmgmt/tracker.php', $money],
-                ['Clean records', 'fa-broom', 'super/recordmgmt/cleanup.php', $owner],
-                ['Staff (logins)', 'fa-user-gear', 'super/staff/', $can(Capabilities::STAFF_MANAGE)],
-                ['Permissions', 'fa-key', 'super/staff/permissions.php', $can(Capabilities::STAFF_MANAGE)],
             ]];
         }
 
@@ -207,15 +203,24 @@ class PosMenu
             ['Expenses', 'fa-file-invoice-dollar', "$a/expenses/", $shop && $can(Capabilities::EXPENSES_RECORD)],
             ['Finances', 'fa-scale-balanced', 'super/finances/', $shop && $money],
             [$staff ? 'My sales' : 'Sales', 'fa-receipt', "$a/sales/", $staff ? $can(Capabilities::SALES_VIEW) : $money],
+            ['Receipts', 'fa-file-invoice', 'super/receipts/', $shop && $can(Capabilities::SALES_VIEW)],
+            ['Profits', 'fa-chart-pie', 'super/profits/', $shop && $money],
             ['Reports', 'fa-chart-line', 'super/reports/', $money && $can(Capabilities::REPORTS_VIEW)],
         ]];
 
-        $g[] = ['people', 'People', 'fa-users', !$common || $staff || $svcMode || $rmMode ? [] : [
+        $g[] = ['people', $rmMode ? 'My people' : 'People', 'fa-users', $rmMode ? [
+            ['Employees', 'fa-users-gear', 'super/recordmgmt/employees.php', $owner || $can(Capabilities::RM_MANAGE)],
+            ['Staff (logins)', 'fa-user-gear', 'super/staff/', $can(Capabilities::STAFF_MANAGE)],
+            ['Admins', 'fa-user-shield', 'super/admins/', $primary], // an admin created here can't create further admins
+            ['Permissions', 'fa-key', 'super/staff/permissions.php', $can(Capabilities::STAFF_MANAGE)],
+            ['Employees report', 'fa-file-lines', 'super/recordmgmt/employees-report.php', $money || $can(Capabilities::RM_MANAGE)],
+            ['Staff report', 'fa-file-lines', 'super/recordmgmt/staff-report.php', $owner],
+        ] : (!$common || $staff || $svcMode ? [] : [
             ['Customers', 'fa-address-book', 'super/customers/', $shop && $can(Capabilities::CUSTOMERS_MANAGE)],
             ['Staff', 'fa-user-gear', 'super/staff/', $can(Capabilities::STAFF_MANAGE)],
             ['Permissions', 'fa-key', 'super/staff/permissions.php', $can(Capabilities::STAFF_MANAGE)],
             ['Attendance', 'fa-clock', 'super/staff/attendance.php', $can(Capabilities::STAFF_MANAGE)],
-        ]];
+        ])];
 
         $updates = $shop && $main ? count(Updates::pending()) : 0;
         $g[] = ['business', $staff ? 'Account' : 'Business', 'fa-briefcase', ($svcMode || $rmMode) && !$staff ? [] : [
@@ -231,11 +236,14 @@ class PosMenu
         // Settings: every package, owner side.
         $g[] = ['settings', 'Settings', 'fa-gear', $staff ? [] : [
             ['Shop details', 'fa-store', 'super/settings/', $common && $can(Capabilities::SETTINGS_MANAGE)],
+            ['Change password', 'fa-key', 'super/settings/password.php', !$staff],
             ['Printer setup', 'fa-print', 'super/printer/', $common],
             ['Navigation menu', 'fa-arrow-down-up-across-line', 'super/settings/menu.php', $owner],
             ['Export & import', 'fa-right-left', 'super/backup/', $common && $primary],
             ['Add-ons', 'fa-puzzle-piece', 'super/settings/addons.php', $svcMode && $primary, $svcMode && !$shop ? 'Shop' : null],
             ['Website API', 'fa-plug', 'super/api/', $svcMode && $owner, $svcMode && $owner && !self::apiOn() ? 'Premium' : null],
+            ['Clean records', 'fa-broom', 'super/recordmgmt/cleanup.php', $rmMode && $owner],
+            ['Business hours', 'fa-clock', 'super/recordmgmt/hours.php', $rmMode && $owner],
         ]];
 
         $replies = self::ticketReplies();
@@ -248,8 +256,8 @@ class PosMenu
         if ($svcMode) { // Home, Operations, Management, Finances, then the shop (if added), Settings, Help
             $rank = array_flip(['home', 'operations', 'management', 'finances', 'shop', 'stock', 'business', 'settings', 'help']);
             usort($g, fn($x, $y) => ($rank[$x[0]] ?? 50) <=> ($rank[$y[0]] ?? 50));
-        } elseif ($rmMode) { // Home, Record Management, Settings, Help
-            $rank = array_flip(['home', 'recordmgmt', 'settings', 'help']);
+        } elseif ($rmMode) { // Home, Record Management, My people, Settings, Help
+            $rank = array_flip(['home', 'recordmgmt', 'people', 'settings', 'help']);
             usort($g, fn($x, $y) => ($rank[$x[0]] ?? 50) <=> ($rank[$y[0]] ?? 50));
         }
         $out = [];

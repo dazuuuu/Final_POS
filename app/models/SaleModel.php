@@ -397,6 +397,14 @@ class SaleModel extends Model
             }
 
             $db->commit();
+            try {
+                $after = ['sale_type' => $saleType, 'payment_method' => $method, 'total' => $total, 'discount_amount' => $discount,
+                    'amount_paid' => $amountPaid, 'customer_name' => $customerName, 'customer_phone' => $in['customer_phone'] ?? null];
+                $changes = \Models\AuditLogModel::diff($sale, $after, \Models\AuditLogModel::SALE_FIELDS);
+                if ($changes) {
+                    (new \Models\AuditLogModel($db))->record('sale', $saleId, $receipt, 'edit', $changes);
+                }
+            } catch (\Throwable $ignored) {}
             return ['ok' => true, 'sale_id' => $saleId, 'receipt_number' => $receipt, 'amount_due' => $amountDue, 'errors' => []];
         } catch (\Throwable $e) {
             if ($db->inTransaction()) { $db->rollBack(); }
@@ -929,6 +937,48 @@ class SaleModel extends Model
         unset($r);
 
         return $rows;
+    }
+
+    /**
+     * Daily retail-vs-wholesale profit between two dates (inclusive), for the
+     * Profits page graph. One row per day with both totals, so a day with
+     * only retail sales still shows a 0 wholesale bar (and vice versa).
+     */
+    public function profitByPriceType(string $from, string $to, ?string $costCol = null): array
+    {
+        $tid = \TenantContext::tenantId();
+        if ($tid === null) { return []; }
+        $costCol = $this->resolveCostColumn($costCol);
+        if ($costCol === null) {
+            throw new \RuntimeException('NO_COST_COLUMN');
+        }
+        $sql = "SELECT DATE(s.created_at) AS d, COALESCE(si.price_type, 'retail') AS price_type,
+                       SUM(si.line_total) AS revenue, SUM(si.quantity * COALESCE(p.`{$costCol}`, 0)) AS cost
+                  FROM sale_items si
+                  JOIN sales s ON s.id = si.sale_id AND s.tenant_id = si.tenant_id
+             LEFT JOIN products p ON p.id = si.product_id AND p.tenant_id = si.tenant_id
+                 WHERE si.tenant_id = ? AND s.status = 'completed'
+                   AND s.created_at >= ? AND s.created_at < ? + INTERVAL 1 DAY
+              GROUP BY DATE(s.created_at), COALESCE(si.price_type, 'retail')
+              ORDER BY d ASC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$tid, $from, $to]);
+
+        $byDay = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $d = $r['d'];
+            $byDay[$d] ??= ['date' => $d, 'retail_revenue' => 0.0, 'retail_cost' => 0.0, 'wholesale_revenue' => 0.0, 'wholesale_cost' => 0.0];
+            $key = $r['price_type'] === 'wholesale' ? 'wholesale' : 'retail';
+            $byDay[$d]["{$key}_revenue"] += round((float) $r['revenue'], 2);
+            $byDay[$d]["{$key}_cost"] += round((float) $r['cost'], 2);
+        }
+        $out = [];
+        foreach ($byDay as $row) {
+            $row['retail_profit'] = round($row['retail_revenue'] - $row['retail_cost'], 2);
+            $row['wholesale_profit'] = round($row['wholesale_revenue'] - $row['wholesale_cost'], 2);
+            $out[] = $row;
+        }
+        return $out;
     }
 
     /** Per-product revenue/cost/profit for one exact date. */

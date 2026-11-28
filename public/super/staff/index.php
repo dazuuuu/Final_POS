@@ -20,8 +20,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
     $res = $svc->createWithPin((int) $tenantId, $old);
 
     if ($res['ok']) {
-        $_SESSION['flash']['success'] = 'Staff account created for ' . $old['name'] . '. They log in with their name and PIN at the staff terminal.';
-        header('Location: ' . public_url('super/staff/'));
+        $_SESSION['flash']['success'] = 'Staff account created for ' . $old['name'] . '. They log in with their name and PIN at the staff terminal.'
+            . (Features::enabled(Features::RECORD_MGMT)
+                ? ' Now open Permissions for them below and switch on Operations (and Pay employees / Expenses if they need those) — a new login starts with none of those.'
+                : '');
+        header('Location: ' . public_url('super/staff/' . (Features::enabled(Features::RECORD_MGMT) ? '#perm-' . (int) $res['user_id'] : '')));
         exit;
     }
     $errors = $res['errors'];
@@ -115,7 +118,7 @@ ob_start();
               <thead><tr class="text-muted small text-uppercase"><th>Name</th><th>Position</th><th>Status</th><th></th></tr></thead>
               <tbody>
                 <?php foreach ($staff as $s): ?>
-                <tr>
+                <tr id="perm-<?php echo (int) $s['id']; ?>">
                   <td class="fw-semibold"><?php echo htmlspecialchars($s['username']); ?></td>
                   <td class="text-muted"><?php echo htmlspecialchars($s['position'] ?? '') ?: '—'; ?></td>
                   <td>

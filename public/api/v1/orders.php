@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     if (!$o) api_fail(404, 'No order with that number and phone.', 'not_found');
     $it = $pdo->prepare('SELECT product_id, name, unit_price, quantity, line_total FROM shop_web_order_items WHERE order_id = ?');
     $it->execute([(int) $o['id']]);
-    api_ok(['number' => $o['number'], 'status' => $o['status'], 'total' => $money($o['total']), 'created_at' => $o['created_at'],
+    api_ok(['number' => $o['number'], 'status' => $o['status'], 'payment_status' => $o['payment_status'] ?? 'unpaid', 'total' => $money($o['total']), 'created_at' => $o['created_at'],
             'items' => array_map(fn($r) => ['product_id' => (int) $r['product_id'], 'name' => $r['name'], 'unit_price' => $money($r['unit_price']),
                 'quantity' => (float) $r['quantity'], 'line_total' => $money($r['line_total'])], $it->fetchAll(PDO::FETCH_ASSOC))]);
 }

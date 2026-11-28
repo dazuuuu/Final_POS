@@ -183,7 +183,11 @@ class Signup
 
     /**
      * Create the owner for an invited account. Returns [userId, errors].
-     * Self-signup needs no activation key: the account is active straight away.
+     * Self-signup needs no activation key: the account is active straight away
+     * (the browser that just signed up is logged straight in), but a
+     * "Welcome — confirm your email" message still goes out via EmailConfirm,
+     * so a real email is on record and any OTHER device/browser trying to
+     * sign in later is held until that email is confirmed.
      */
     public static function complete(int $accountId, string $username, string $email, string $password): array
     {
@@ -226,7 +230,14 @@ class Signup
                         license_activated_at = COALESCE(license_activated_at, NOW())
                   WHERE id = ?'
             )->execute([$userId, $accountId]);
+            $slug = $pdo->prepare('SELECT slug FROM tenants WHERE id = ?');
+            $slug->execute([$accountId]);
             $pdo->commit();
+            try {
+                EmailConfirm::start('user', $userId, $email, $username, null, self::shopUrl((string) $slug->fetchColumn()) . '/', $accountId);
+            } catch (Throwable $ignored) {
+                // Never block account creation over a mail hiccup — support can resend the confirm link.
+            }
             return [$userId, []];
         } catch (Throwable $e) {
             $pdo->rollBack();

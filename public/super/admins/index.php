@@ -32,19 +32,28 @@ function admins_unique_username(PDO $pdo, string $email): string
 
 // What the primary owner can switch on/off for each admin. Stock value
 // starts OFF for an admin; everything else (finances included) starts ON.
+$rmOnly = Features::recordMgmtOnly();
 $adminToggles = [
-    ['key' => 'finance',   'label' => 'Finances, profit & reports', 'desc' => 'Sales totals, profit, statements, reports and every person\'s opening/closing sales.', 'caps' => [Capabilities::FINANCE_VIEW, Capabilities::REPORTS_VIEW]],
-    ['key' => 'stock_val', 'label' => 'Stock value & buying prices', 'desc' => 'See the value of stock and what products cost you.', 'caps' => [Capabilities::STOCK_VALUE]],
-    ['key' => 'sell',      'label' => 'Make sales',                 'desc' => 'Use the POS, held sales and documents.', 'caps' => [Capabilities::SALES_RECORD]],
-    ['key' => 'credit',    'label' => 'Credit sales & payments',    'desc' => 'Sell on credit, keep the credit book, take payments and returns.', 'caps' => [Capabilities::CREDIT_SALES, Capabilities::PAYMENTS_PROCESS]],
-    ['key' => 'inventory', 'label' => 'Edit inventory & record stock', 'desc' => 'Products, categories, subcategories, suppliers and stock deliveries.', 'caps' => [Capabilities::INVENTORY_EDIT, Capabilities::STOCK_ENTER]],
-    ['key' => 'expenses',  'label' => 'Record expenses',            'desc' => 'Log shop expenses.', 'caps' => [Capabilities::EXPENSES_RECORD]],
-    ['key' => 'customers', 'label' => 'Customers',                  'desc' => 'Manage the customer list.', 'caps' => [Capabilities::CUSTOMERS_MANAGE]],
-    ['key' => 'staff',     'label' => 'Manage staff',               'desc' => 'Add staff, set their permissions and see attendance.', 'caps' => [Capabilities::STAFF_MANAGE]],
-    ['key' => 'settings',  'label' => 'Shop settings',              'desc' => 'Shop details, catalogue sharing.', 'caps' => [Capabilities::SETTINGS_MANAGE, Capabilities::CATALOGUE_SEND]],
+    ['key' => 'finance',   'label' => 'Finances, profit & reports', 'desc' => 'Sales totals, profit, statements, reports and every person\'s opening/closing sales. (For Record Management: revenue, commissions and the employee tracker.)', 'caps' => [Capabilities::FINANCE_VIEW, Capabilities::REPORTS_VIEW]],
 ];
+if ($rmOnly) {
+    // Record Management package: its own set of toggles — no shop POS to gate.
+    $adminToggles[] = ['key' => 'rm_manage',   'label' => 'Manage employees, services & products', 'desc' => 'Add/edit employees, services, products and expense categories.', 'caps' => [Capabilities::RM_MANAGE]];
+    $adminToggles[] = ['key' => 'rm_operate',  'label' => 'Record operations',          'desc' => 'Record a service an employee performed on the Operations sheet.', 'caps' => [Capabilities::RM_OPERATIONS]];
+    $adminToggles[] = ['key' => 'rm_payout',   'label' => 'Pay employees',              'desc' => 'Pay employees what they are owed.', 'caps' => [Capabilities::RM_PAYOUT]];
+    $adminToggles[] = ['key' => 'rm_expenses', 'label' => 'Record expenses',            'desc' => 'Log expenses under a category, with proof.', 'caps' => [Capabilities::RM_EXPENSES]];
+} else {
+    $adminToggles[] = ['key' => 'stock_val', 'label' => 'Stock value & buying prices', 'desc' => 'See the value of stock and what products cost you.', 'caps' => [Capabilities::STOCK_VALUE]];
+    $adminToggles[] = ['key' => 'sell',      'label' => 'Make sales',                 'desc' => 'Use the POS, held sales and documents.', 'caps' => [Capabilities::SALES_RECORD]];
+    $adminToggles[] = ['key' => 'credit',    'label' => 'Credit sales & payments',    'desc' => 'Sell on credit, keep the credit book, take payments and returns.', 'caps' => [Capabilities::CREDIT_SALES, Capabilities::PAYMENTS_PROCESS]];
+    $adminToggles[] = ['key' => 'inventory', 'label' => 'Edit inventory & record stock', 'desc' => 'Products, categories, subcategories, suppliers and stock deliveries.', 'caps' => [Capabilities::INVENTORY_EDIT, Capabilities::STOCK_ENTER]];
+    $adminToggles[] = ['key' => 'expenses',  'label' => 'Record expenses',            'desc' => 'Log shop expenses.', 'caps' => [Capabilities::EXPENSES_RECORD]];
+    $adminToggles[] = ['key' => 'customers', 'label' => 'Customers',                  'desc' => 'Manage the customer list.', 'caps' => [Capabilities::CUSTOMERS_MANAGE]];
+}
+$adminToggles[] = ['key' => 'staff',    'label' => 'Manage staff', 'desc' => 'Add staff, set their permissions and see attendance.', 'caps' => [Capabilities::STAFF_MANAGE]];
+$adminToggles[] = ['key' => 'settings', 'label' => $rmOnly ? 'Settings' : 'Shop settings', 'desc' => 'Account details, catalogue sharing.', 'caps' => [Capabilities::SETTINGS_MANAGE, Capabilities::CATALOGUE_SEND]];
 $adminManageable = array_merge(...array_column($adminToggles, 'caps'));
-$adminDefaults = array_values(array_diff(Capabilities::allTenantCaps(), Capabilities::adminDefaultOff()));
+$adminDefaults = array_values(array_diff(Capabilities::allTenantCaps(), Capabilities::adminDefaultOff($tenantId)));
 $adminRoleId = (int) $pdo->query("SELECT id FROM roles WHERE role_name = 'tenant_owner' LIMIT 1")->fetchColumn();
 
 $errors = [];
@@ -84,7 +93,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
 
         // The new admin confirms their email first; their login details follow once they do.
         $success = 'Admin account created for ' . htmlspecialchars($old['email']) . ' — they confirm their email, then receive their login details.';
-        $cf = EmailConfirm::start('user', $newId, $old['email'], $old['name'], $old['password'], EmailConfirm::absolute('admin/'), Features::accountId((int) $tenantId));
+        $slug = (string) $pdo->query('SELECT slug FROM tenants WHERE id = ' . (int) Features::accountId((int) $tenantId))->fetchColumn();
+        $loginUrl = $slug !== '' ? Signup::shopUrl($slug) . '/' : EmailConfirm::absolute('admin/');
+        $cf = EmailConfirm::start('user', $newId, $old['email'], $old['name'], $old['password'], $loginUrl, Features::accountId((int) $tenantId));
         if ($cf['sent']) {
             $mailResult = 'ok';
         } else {
@@ -183,7 +194,7 @@ ob_start();
     <div class="card border-0 shadow-sm" style="border-radius:12px;">
       <div class="card-body p-4">
         <h2 class="h5 mb-1">Add an admin</h2>
-        <p class="text-muted small mb-3">They'll get access to <?php echo htmlspecialchars($shopName); ?> and their credentials by email. <strong>Stock value starts switched off</strong> — use <em>Permissions</em> next to their name to choose exactly what they can do. They can't add other admins.</p>
+        <p class="text-muted small mb-3">They'll get access to <?php echo htmlspecialchars($shopName); ?> and their credentials by email. <?php if ($rmOnly): ?><strong>Finances start switched off</strong> — it's your call whether an admin sees revenue and commissions.<?php else: ?><strong>Stock value starts switched off</strong><?php endif; ?> — use <em>Permissions</em> next to their name to choose exactly what they can do. They can't add other admins.</p>
         <?php if ($errors): ?><div class="alert alert-danger py-2"><ul class="mb-0 ps-3"><?php foreach ($errors as $e): ?><li><?php echo htmlspecialchars($e); ?></li><?php endforeach; ?></ul></div><?php endif; ?>
         <?php if ($success): ?><div class="alert alert-success py-2"><?php echo $success; ?></div><?php endif; ?>
         <?php if ($mailResult === 'ok'): ?><div class="alert alert-success py-2">✓ Credentials email sent.</div>

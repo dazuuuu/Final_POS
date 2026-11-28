@@ -526,17 +526,24 @@ class StockControl
     }
 
     /** Deliveries: receipts and transfers grouped by reference, with who delivered them. */
-    public static function deliveries(array $storeIds, int $limit = 200): array
+    public static function deliveries(array $storeIds, int $limit = 200, ?string $from = null, ?string $to = null): array
     {
         self::ensure();
         if (!$storeIds) return [];
         $in = implode(',', array_fill(0, count($storeIds), '?'));
+        $dateSql = '';
+        $params = array_values($storeIds);
+        if ($from && $to) {
+            $dateSql = ' AND m.created_at >= ? AND m.created_at < ? + INTERVAL 1 DAY';
+            $params[] = $from;
+            $params[] = $to;
+        }
         $st = Database::pdo()->prepare("SELECT m.ref, MIN(m.created_at) at, MAX(m.type) type, MAX(m.supplier) supplier, MAX(m.doc_no) doc_no,
                        MAX(m.delivered_by) delivered_by, MAX(m.vehicle) vehicle, MAX(m.note) note, COUNT(*) n_lines, SUM(ABS(m.qty)) units,
                        SUM(ABS(m.qty) * m.unit_cost) value, MAX(t.name) store, MAX(o.name) other, MAX(u.username) username
                   FROM stock_moves m LEFT JOIN tenants t ON t.id = m.tenant_id LEFT JOIN tenants o ON o.id = m.other_tenant_id LEFT JOIN users u ON u.id = m.user_id
-                 WHERE m.tenant_id IN ($in) AND m.type IN ('receive','transfer_out') GROUP BY m.ref ORDER BY at DESC LIMIT " . (int) $limit);
-        $st->execute(array_values($storeIds));
+                 WHERE m.tenant_id IN ($in) AND m.type IN ('receive','transfer_out'){$dateSql} GROUP BY m.ref ORDER BY at DESC LIMIT " . (int) $limit);
+        $st->execute($params);
         return $st->fetchAll();
     }
 

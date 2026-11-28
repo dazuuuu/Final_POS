@@ -65,9 +65,16 @@ class Capabilities
     }
 
     /** Off for an admin until the primary owner switches it on: stock value only. */
-    public static function adminDefaultOff(): array
+    public static function adminDefaultOff(?int $tenantId = null): array
     {
-        return [self::STOCK_VALUE];
+        $off = [self::STOCK_VALUE];
+        // Record Management: seeing revenue/commissions is the owner's call,
+        // so an admin they create starts without it (unlike shop admins,
+        // where finance stays on by default).
+        if (class_exists('Features') && Features::recordMgmtOnly($tenantId)) {
+            $off[] = self::FINANCE_VIEW;
+        }
+        return $off;
     }
 
     /** Is this user the shop's primary owner (tenants.owner_user_id)? */
@@ -113,7 +120,7 @@ class Capabilities
             if ($tenantId === null || self::isPrimaryOwner($db, $userId, $tenantId)) {
                 return array_keys($caps);
             }
-            foreach (self::adminDefaultOff() as $c) {
+            foreach (self::adminDefaultOff($tenantId) as $c) {
                 unset($caps[$c]);
             }
         }

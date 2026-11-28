@@ -238,9 +238,26 @@
 
   /* ---------- public API ---------- */
 
+  /** Fire-and-forget: tells the server a receipt was printed (for the Receipts tracking page). */
+  function trackPrint() {
+    try {
+      var m = document.querySelector('meta[name="taso-print-entity"]');
+      var ep = document.querySelector('meta[name="taso-print-track"]');
+      if (!m || !m.content || !ep || !ep.content) return;
+      var csrf = document.querySelector('meta[name="csrf-token"]');
+      fetch(ep.content, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity: m.content, csrf_token: csrf ? csrf.content : '' }),
+        keepalive: true
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
   /** Print the receipt. `user` = called from a tap (may open pickers/dialogs). */
   async function print(opts) {
     opts = opts || {};
+    trackPrint();
     var cfg = Object.assign(load(), opts.config || {});
     var sheet = opts.element || document.querySelector('.sheet');
     if (viaDevice(cfg.mode) || !sheet) { window.print(); return; }

@@ -144,6 +144,18 @@ class License
     public static function waive(int $accountId): int
     {
         self::forceActivate($accountId);
+        return self::activateUsers($accountId);
+    }
+
+    /**
+     * Switch on every login on this account (main shop + branches) and mark
+     * them email-verified — support activating the account IS the
+     * verification; an owner should never be asked to confirm an email on
+     * top of that. Logins renamed by a take-over (…_old<ID>) stay off.
+     * Returns how many logins were switched on.
+     */
+    public static function activateUsers(int $accountId): int
+    {
         $st = Database::pdo()->prepare(
             "UPDATE users u JOIN tenants t ON t.id = u.tenant_id
                 SET u.is_active = 1, u.email_verified = 1, u.activated_at = COALESCE(u.activated_at, NOW()),
@@ -152,6 +164,13 @@ class License
                 AND u.username NOT REGEXP '_old[0-9]+$'"
         );
         $st->execute([$accountId, $accountId]);
+        // Any pending "confirm your email" holds are done too — support activating covers it.
+        try {
+            Database::pdo()->prepare(
+                "UPDATE email_confirmations SET confirmed_at = NOW()
+                  WHERE kind = 'user' AND confirmed_at IS NULL AND account_id = ?"
+            )->execute([$accountId]);
+        } catch (\Throwable $ignored) { /* table not migrated yet — the users flip above is what matters */ }
         return $st->rowCount();
     }
 
@@ -194,7 +213,7 @@ class License
     public static function gate(): void
     {
         $tenantId = TenantContext::tenantId();
-        if ($tenantId === null || TenantContext::isPlatformAdmin()) {
+        if ($tenantId === null || TenantContext::isPlatformAdmin() || !empty($_SESSION['support_preview'])) {
             return;
         }
         $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');

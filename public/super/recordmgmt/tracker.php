@@ -5,9 +5,10 @@
 require_once __DIR__ . '/_common.php';
 rm_require($money);
 
-$range = in_array($_GET['range'] ?? 'month', ['week', 'month'], true) ? $_GET['range'] : 'month';
-$to = date('Y-m-d');
-$from = $range === 'week' ? date('Y-m-d', strtotime('-6 days')) : date('Y-m-01');
+$range = $_GET['range'] ?? 'month';
+$range = in_array($range, ['week', 'month'], true) ? $range : 'month';
+$to = $RM->businessDayStart();
+$from = $range === 'week' ? $RM->businessDayStart(date('Y-m-d', strtotime('-6 days'))) : $RM->businessDayStart(date('Y-m-01'));
 $t = $RM->trackerTotals($from, $to);
 $rows = $t['rows'];
 $avg = $t['average'];

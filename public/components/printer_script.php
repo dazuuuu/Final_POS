@@ -6,6 +6,10 @@ require_once ROOT_PATH . '/app/helpers/uploads.php';
 ?>
 <meta name="csrf-token" content="<?php echo htmlspecialchars(csrf_token(), ENT_QUOTES); ?>">
 <meta name="taso-print-endpoint" content="<?php echo htmlspecialchars(public_url('api/print/network.php')); ?>">
+<?php if (!empty($printEntity)): ?>
+<meta name="taso-print-entity" content="<?php echo htmlspecialchars($printEntity, ENT_QUOTES); ?>">
+<meta name="taso-print-track" content="<?php echo htmlspecialchars(public_url('api/print/track.php')); ?>">
+<?php endif; ?>
 <?php if (Features::isBasic()): ?><meta name="taso-print-basic" content="1"><?php endif; ?>
 <?php if (PrintLocal::server()): ?><meta name="taso-print-local" content="1"><?php endif; ?>
 <script src="<?php echo htmlspecialchars(public_url('assets/js/printer.js')); ?>"></script>

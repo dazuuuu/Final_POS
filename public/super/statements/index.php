@@ -142,13 +142,15 @@ ob_start();
 .st-sum div{background:#f8fafc;border-radius:10px;padding:10px 12px;}
 .st-sum small{display:block;color:#64748b;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
 .st-sum b{font-size:1.15rem;}
-.st-table{background:#fff;border:1px solid #e4e7ec;border-radius:12px;overflow:auto;}
+.st-table{background:#fff;border:1px solid #333;border-radius:0;overflow:auto;}
 .st-table table{width:100%;font-size:.86rem;border-collapse:collapse;min-width:760px;}
-.st-table th{background:#1f9a5f;color:#fff;font-weight:600;padding:9px 10px;text-align:left;white-space:nowrap;}
-.st-table td{padding:8px 10px;border-top:1px solid #f1f5f9;vertical-align:top;}
-.st-table tr:nth-child(even) td{background:#fafafa;}
+.st-table th{background:#fff;color:#111;font-weight:700;padding:10px 12px;text-align:left;white-space:nowrap;border-bottom:2px solid #333;}
+.st-table td{padding:9px 12px;border-top:1px solid #d7dbe0;border-right:1px solid #eef0f2;vertical-align:top;}
+.st-table tr:last-child td{border-bottom:1px solid #d7dbe0;}
 .st-in{color:#15803d;font-weight:600;} .st-out{color:#b91c1c;font-weight:600;}
-.st-table .num{text-align:right;white-space:nowrap;}
+.st-table .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.st-total-row td{border-top:2px solid #333;font-weight:700;background:#f8fafc;}
+.st-applied{font-size:.82rem;color:#374151;}
 @media (max-width:600px){.st-sum{grid-template-columns:1fr;}}
 @media print{.st-filter,.st-actions{display:none !important;}}
 </style>
@@ -178,24 +180,28 @@ ob_start();
 </div>
 <div class="st-table">
   <table>
-    <thead><tr><th>Receipt No.</th><th>Completion time</th><th>Details</th><th>Method</th><th class="num">Paid in</th><th class="num">Withdrawn</th><th class="num">Balance</th><th></th></tr></thead>
+    <thead><tr><th class="num">Amount paid</th><th>Mode of payment</th><th>Applied to</th><th>Date</th><th class="num">Balance</th><th></th></tr></thead>
     <tbody>
-    <?php if (!$rows): ?><tr><td colspan="8" class="text-center text-muted py-4">No transactions in this period.</td></tr><?php endif; ?>
+    <?php if (!$rows): ?><tr><td colspan="6" class="text-center text-muted py-4">No transactions in this period.</td></tr><?php endif; ?>
     <?php foreach ($rows as $r): ?>
       <tr>
-        <td class="fw-semibold"><?php echo $h($r['ref']); ?></td>
-        <td style="white-space:nowrap"><?php echo date('d-m-Y H:i', strtotime($r['at'])); ?></td>
-        <td><?php echo $h($r['what']); ?><?php if (!empty($r['by'])): ?><div class="small text-muted">by <?php echo $h($r['by']); ?></div><?php endif; ?></td>
+        <td class="num <?php echo $r['dir'] === 'in' ? 'st-in' : 'st-out'; ?>"><?php echo $h($currency); ?> <?php echo $r['dir'] === 'out' ? '-' : ''; ?><?php echo $m($r['amount']); ?></td>
         <td><?php echo $h($r['method']); ?></td>
-        <td class="num st-in"><?php echo $r['dir'] === 'in' ? $m($r['amount']) : ''; ?></td>
-        <td class="num st-out"><?php echo $r['dir'] === 'out' ? '-' . $m($r['amount']) : ''; ?></td>
-        <td class="num"><?php echo $m($r['balance']); ?></td>
+        <td class="st-applied"><?php echo $h($r['ref']); ?> — <?php echo $h($r['what']); ?><?php if (!empty($r['by'])): ?><div class="small text-muted">by <?php echo $h($r['by']); ?></div><?php endif; ?></td>
+        <td style="white-space:nowrap"><?php echo date('d-m-Y H:i', strtotime($r['at'])); ?></td>
+        <td class="num"><?php echo $h($currency); ?> <?php echo $m($r['balance']); ?></td>
         <td class="st-actions"><?php if (!empty($r['receipt'])): ?>
           <?php if (!empty($r['file'])): ?><a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener" href="<?php echo $h(public_url($r['receipt'])); ?>">Receipt</a>
           <?php else: ?><a class="btn btn-sm btn-outline-secondary" data-receipt-popup href="<?php echo $h(public_url($r['receipt'])); ?>">Receipt</a><?php endif; ?>
         <?php endif; ?></td>
       </tr>
     <?php endforeach; ?>
+    <?php if ($rows): ?>
+      <tr class="st-total-row">
+        <td class="num"><?php echo $h($currency); ?> <?php echo $m($totIn - $totOut); ?></td>
+        <td colspan="5">Net total for the period</td>
+      </tr>
+    <?php endif; ?>
     </tbody>
   </table>
 </div>

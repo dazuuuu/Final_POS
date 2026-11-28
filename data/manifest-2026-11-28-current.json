@@ -1,0 +1,1130 @@
+{
+    "generated_at": "2026-11-28T11:31:12+03:00",
+    "tenants": [
+        {
+            "id": 1,
+            "name": "Organicbloom",
+            "slug": "organicbloom",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 1630,
+                "max_id": 5925,
+                "max_created_at": "2026-11-28 10:59:48"
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 665,
+                "max_id": 2811,
+                "max_created_at": "2026-11-28 10:59:48"
+            },
+            "rm_operations": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_employees": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_services": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 186,
+                "max_id": 5055,
+                "max_created_at": "2026-11-23 09:55:15"
+            },
+            "users": {
+                "count": 5,
+                "max_id": 8,
+                "max_created_at": "2026-10-14 18:58:24"
+            },
+            "manual_credits": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        },
+        {
+            "id": 2,
+            "name": "Demo POS",
+            "slug": "demo-pos",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_operations": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_employees": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_services": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "users": {
+                "count": 4,
+                "max_id": 11,
+                "max_created_at": "2026-10-14 20:16:58"
+            },
+            "manual_credits": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        },
+        {
+            "id": 3,
+            "name": "Archimedes",
+            "slug": "archimedes",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 2302,
+                "max_id": 5927,
+                "max_created_at": "2026-11-28 11:27:41"
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 754,
+                "max_id": 2813,
+                "max_created_at": "2026-11-28 11:27:41"
+            },
+            "rm_operations": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_employees": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_services": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 2284,
+                "max_id": 5247,
+                "max_created_at": "2026-11-28 10:58:59"
+            },
+            "users": {
+                "count": 5,
+                "max_id": 16,
+                "max_created_at": "2026-10-16 17:53:07"
+            },
+            "manual_credits": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        },
+        {
+            "id": 4,
+            "name": "BaddiesSzn",
+            "slug": "baddiesszn",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_operations": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_employees": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_services": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "users": {
+                "count": 4,
+                "max_id": 20,
+                "max_created_at": "2026-10-16 18:08:36"
+            },
+            "manual_credits": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        },
+        {
+            "id": 5,
+            "name": "NJAX Motocycle Spares",
+            "slug": "njax-motocycle-spares",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 12,
+                "max_id": 5863,
+                "max_created_at": "2026-11-26 15:11:02"
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 19,
+                "max_id": 2759,
+                "max_created_at": "2026-11-26 15:11:02"
+            },
+            "rm_operations": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_employees": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_services": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 336,
+                "max_id": 4426,
+                "max_created_at": "2026-11-08 07:20:58"
+            },
+            "users": {
+                "count": 3,
+                "max_id": 32,
+                "max_created_at": "2026-10-21 13:19:34"
+            },
+            "manual_credits": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        },
+        {
+            "id": 6,
+            "name": "DENMAR AGRO",
+            "slug": "denmar-agro",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 656,
+                "max_id": 5905,
+                "max_created_at": "2026-11-26 09:02:14"
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 295,
+                "max_id": 2793,
+                "max_created_at": "2026-11-26 09:02:14"
+            },
+            "rm_operations": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_employees": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_services": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 341,
+                "max_id": 5022,
+                "max_created_at": "2026-11-21 07:32:54"
+            },
+            "users": {
+                "count": 5,
+                "max_id": 27,
+                "max_created_at": "2026-10-19 12:21:55"
+            },
+            "manual_credits": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        },
+        {
+            "id": 7,
+            "name": "Taso Motor Spares",
+            "slug": "taso-motor-spares",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 1014,
+                "max_id": 5922,
+                "max_created_at": "2026-11-28 10:45:15"
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 812,
+                "max_id": 2808,
+                "max_created_at": "2026-11-28 10:45:15"
+            },
+            "rm_operations": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_employees": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_services": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 636,
+                "max_id": 5224,
+                "max_created_at": "2026-11-26 18:40:42"
+            },
+            "users": {
+                "count": 4,
+                "max_id": 31,
+                "max_created_at": "2026-10-20 14:49:52"
+            },
+            "manual_credits": {
+                "count": 5,
+                "max_id": 7,
+                "max_created_at": "2026-11-25 10:04:17"
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        },
+        {
+            "id": 9,
+            "name": "Demo restaurant",
+            "slug": "demo-restaurant",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_operations": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_employees": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_services": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "users": {
+                "count": 2,
+                "max_id": 42,
+                "max_created_at": "2026-10-27 12:58:30"
+            },
+            "manual_credits": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        },
+        {
+            "id": 12,
+            "name": "Abudance Auto Spare",
+            "slug": "abudance-auto-spare",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 140,
+                "max_id": 5913,
+                "max_created_at": "2026-11-27 22:16:03"
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 136,
+                "max_id": 2801,
+                "max_created_at": "2026-11-27 22:16:03"
+            },
+            "rm_operations": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_employees": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_services": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 469,
+                "max_id": 5242,
+                "max_created_at": "2026-11-27 23:04:33"
+            },
+            "users": {
+                "count": 3,
+                "max_id": 39,
+                "max_created_at": "2026-10-23 18:51:58"
+            },
+            "manual_credits": {
+                "count": 1,
+                "max_id": 5,
+                "max_created_at": "2026-11-05 14:55:51"
+            },
+            "finance_expenses": {
+                "count": 7,
+                "max_id": 9,
+                "max_created_at": "2026-11-23 22:30:31"
+            }
+        },
+        {
+            "id": 14,
+            "name": "Pentagon Collections",
+            "slug": "pentagon-collections",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 1,
+                "max_id": 4319,
+                "max_created_at": "2026-08-16 04:30:01"
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 2,
+                "max_id": 517,
+                "max_created_at": "2026-09-21 19:02:42"
+            },
+            "rm_operations": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_employees": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_services": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 100,
+                "max_id": 5074,
+                "max_created_at": "2026-11-23 13:01:50"
+            },
+            "users": {
+                "count": 2,
+                "max_id": 71,
+                "max_created_at": "2026-11-12 13:05:37"
+            },
+            "manual_credits": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        },
+        {
+            "id": 18,
+            "name": "Hom Apps",
+            "slug": "hom-apps",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 89,
+                "max_id": 5906,
+                "max_created_at": "2026-11-27 08:20:26"
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 89,
+                "max_id": 2794,
+                "max_created_at": "2026-11-27 08:20:26"
+            },
+            "rm_operations": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_employees": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_services": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 422,
+                "max_id": 5223,
+                "max_created_at": "2026-11-26 12:53:09"
+            },
+            "users": {
+                "count": 2,
+                "max_id": 47,
+                "max_created_at": "2026-11-02 13:06:19"
+            },
+            "manual_credits": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        },
+        {
+            "id": 21,
+            "name": "Demo stock",
+            "slug": "demo-stock",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_operations": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_employees": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_services": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "users": {
+                "count": 1,
+                "max_id": 50,
+                "max_created_at": "2026-11-08 09:25:35"
+            },
+            "manual_credits": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        },
+        {
+            "id": 22,
+            "name": "Autogen",
+            "slug": "autogen",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_operations": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_employees": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_services": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "users": {
+                "count": 1,
+                "max_id": 51,
+                "max_created_at": "2026-11-08 09:56:33"
+            },
+            "manual_credits": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        },
+        {
+            "id": 41,
+            "name": "Services basics",
+            "slug": "services-basics",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 1,
+                "max_id": 5781,
+                "max_created_at": "2026-11-25 17:23:11"
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 1,
+                "max_id": 2683,
+                "max_created_at": "2026-11-25 17:23:11"
+            },
+            "rm_operations": {
+                "count": 81,
+                "max_id": 157,
+                "max_created_at": "2026-11-27 22:12:05"
+            },
+            "rm_payments": {
+                "count": 12,
+                "max_id": 13,
+                "max_created_at": "2026-11-27 06:13:22"
+            },
+            "rm_employees": {
+                "count": 13,
+                "max_id": 13,
+                "max_created_at": "2026-11-26 18:29:01"
+            },
+            "rm_services": {
+                "count": 21,
+                "max_id": 21,
+                "max_created_at": "2026-11-26 19:24:22"
+            },
+            "rm_products": {
+                "count": 24,
+                "max_id": 24,
+                "max_created_at": "2026-11-26 20:36:29"
+            },
+            "rm_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "products": {
+                "count": 1,
+                "max_id": 5202,
+                "max_created_at": "2026-11-25 16:27:22"
+            },
+            "users": {
+                "count": 2,
+                "max_id": 80,
+                "max_created_at": "2026-11-25 16:49:28"
+            },
+            "manual_credits": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        },
+        {
+            "id": 44,
+            "name": "MAXIMUM BARBERSHOP",
+            "slug": "maximum-barbershop",
+            "sales": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "orders": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "sale_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "order_payments": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "rm_operations": {
+                "count": 136,
+                "max_id": 220,
+                "max_created_at": "2026-11-28 03:28:23"
+            },
+            "rm_payments": {
+                "count": 25,
+                "max_id": 38,
+                "max_created_at": "2026-11-28 06:51:55"
+            },
+            "rm_employees": {
+                "count": 13,
+                "max_id": 26,
+                "max_created_at": "2026-11-26 15:29:01"
+            },
+            "rm_services": {
+                "count": 21,
+                "max_id": 42,
+                "max_created_at": "2026-11-26 16:24:22"
+            },
+            "rm_products": {
+                "count": 24,
+                "max_id": 48,
+                "max_created_at": "2026-11-26 17:36:29"
+            },
+            "rm_expenses": {
+                "count": 5,
+                "max_id": 7,
+                "max_created_at": "2026-11-28 00:03:41"
+            },
+            "products": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "users": {
+                "count": 3,
+                "max_id": 83,
+                "max_created_at": "2026-11-28 07:09:52"
+            },
+            "manual_credits": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            },
+            "finance_expenses": {
+                "count": 0,
+                "max_id": null,
+                "max_created_at": null
+            }
+        }
+    ]
+}

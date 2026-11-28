@@ -5,11 +5,16 @@
 // for accounts with no shop/services/restaurant package alongside this one.
 require_once __DIR__ . '/_common.php';
 
-$today = date('Y-m-d');
+$today = $RM->businessDayStart();
 $totals = $RM->companyTotals($today, $today);
 $lowStock = $RM->lowStock();
 $expensesToday = array_sum(array_column($RM->expenses($today, $today), 'amount'));
 $ops = $RM->operations($today, $today);
+$yesterday = $RM->businessYesterdayStart();
+$totalsYesterday = $RM->companyTotals($yesterday, $yesterday);
+$trend = $RM->dailyTrend(7);
+$maxCash = max(1.0, (float) max(array_merge(array_column($trend, 'cash_in'), array_column($trend, 'cash_out'))));
+$netCash = array_sum(array_column($trend, 'net'));
 
 ob_start();
 ?>
@@ -18,6 +23,44 @@ ob_start();
   <div class="col-6 col-md-3"><div class="card border-0 shadow-sm p-3" style="border-radius:14px;"><div class="small text-muted">Today's commissions</div><div class="h5 fw-bold text-success mb-0"><?php echo rm_money($totals['commissions']); ?></div></div></div>
   <div class="col-6 col-md-3"><div class="card border-0 shadow-sm p-3" style="border-radius:14px;"><div class="small text-muted">Today's expenses</div><div class="h5 fw-bold text-danger mb-0"><?php echo rm_money($expensesToday); ?></div></div></div>
   <div class="col-6 col-md-3"><div class="card border-0 shadow-sm p-3" style="border-radius:14px;"><div class="small text-muted">Jobs today</div><div class="h5 fw-bold mb-0"><?php echo (int) $totals['jobs']; ?></div></div></div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4" style="border-radius:14px;"><div class="card-body p-3">
+  <div class="small text-muted text-uppercase fw-bold mb-2">Yesterday (<?php echo date('j M', strtotime($yesterday)); ?>)</div>
+  <div class="row g-3">
+    <div class="col-4"><div class="small text-muted">Revenue</div><div class="fw-bold"><?php echo rm_money($totalsYesterday['revenue']); ?></div></div>
+    <div class="col-4"><div class="small text-muted">Commissions</div><div class="fw-bold text-success"><?php echo rm_money($totalsYesterday['commissions']); ?></div></div>
+    <div class="col-4"><div class="small text-muted">Jobs</div><div class="fw-bold"><?php echo (int) $totalsYesterday['jobs']; ?></div></div>
+  </div>
+</div></div>
+
+<div class="row g-4 mb-4">
+  <div class="col-12 col-lg-7">
+    <div class="card border-0 shadow-sm" style="border-radius:14px;"><div class="card-body p-4">
+      <h2 class="h6 fw-bold mb-3">Performance — last 7 days</h2>
+      <?php foreach ($trend as $t): $pct = round($t['revenue'] / $maxCash * 100); ?>
+        <div class="mb-2">
+          <div class="d-flex justify-content-between small"><span><?php echo rm_h(date('D j M', strtotime($t['date']))); ?></span><span><?php echo rm_money($t['revenue']); ?> revenue · <span class="text-success"><?php echo rm_money($t['commissions']); ?> commission</span></span></div>
+          <div class="progress" style="height:8px;"><div class="progress-bar bg-primary" style="width:<?php echo $pct; ?>%"></div></div>
+        </div>
+      <?php endforeach; ?>
+      <a href="<?php echo public_url('super/recordmgmt/tracker.php'); ?>" class="btn btn-sm btn-outline-primary mt-2">Full employee tracker</a>
+    </div></div>
+  </div>
+  <div class="col-12 col-lg-5">
+    <div class="card border-0 shadow-sm" style="border-radius:14px;"><div class="card-body p-4">
+      <h2 class="h6 fw-bold mb-3">Cash flow — last 7 days</h2>
+      <div class="small text-muted mb-2">Net: <span class="fw-bold <?php echo $netCash >= 0 ? 'text-success' : 'text-danger'; ?>"><?php echo rm_money($netCash); ?></span> (revenue minus expenses and payouts)</div>
+      <?php foreach ($trend as $t): $inPct = round($t['cash_in'] / $maxCash * 100); $outPct = round($t['cash_out'] / $maxCash * 100); ?>
+        <div class="mb-2">
+          <div class="d-flex justify-content-between small"><span><?php echo rm_h(date('D j M', strtotime($t['date']))); ?></span><span class="text-success">+<?php echo rm_money($t['cash_in']); ?></span></div>
+          <div class="progress mb-1" style="height:6px;"><div class="progress-bar bg-success" style="width:<?php echo $inPct; ?>%"></div></div>
+          <div class="d-flex justify-content-between small"><span></span><span class="text-danger">−<?php echo rm_money($t['cash_out']); ?></span></div>
+          <div class="progress" style="height:6px;"><div class="progress-bar bg-danger" style="width:<?php echo $outPct; ?>%"></div></div>
+        </div>
+      <?php endforeach; ?>
+    </div></div>
+  </div>
 </div>
 
 <div class="row g-4">
